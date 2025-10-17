@@ -186,7 +186,7 @@ def get_acts_list(
     act_type: Annotated[str | None, "Document type (e.g., 'Rozporządzenie', 'Ustawa')"] = None,
     pub_date_from: Annotated[str | None, "Start date for publication period (YYYY-MM-DD)"] = None,
     pub_date_to: Annotated[str | None, "End date for publication period (YYYY-MM-DD)"] = None,
-    in_force: Annotated[bool | None, "Only return currently active acts"] = None,
+    in_force: Annotated[Union[bool, str], "Only return currently active acts. Type 'true' for active, 'false' for inactive"] = None,
     limit: Annotated[Union[int, str, None], "Maximum number of results (default: all matching)"] = None,
     offset: Annotated[Union[int, str, None], "Skip first N results for pagination"] = None
 ) -> list:
@@ -198,13 +198,13 @@ def get_acts_list(
         keywords (list, optional): List of keywords to filter the acts
         date_from (str, optional): Starting date of effectiveness (YYYY-MM-DD)
         date_to (str, optional): Ending date of effectiveness (YYYY-MM-DD)
-        title (str, optional): Fragment of title to search for
+        title (Union[str, list[str]], optional): Fragment of title to search for
         act_type (str, optional): Type of act (e.g., 'Rozporządzenie', 'Ustawa')
         pub_date_from (str, optional): Starting publication date (YYYY-MM-DD)
         pub_date_to (str, optional): Ending publication date (YYYY-MM-DD)
-        in_force (bool, optional): Only return acts that are currently in force
-        limit (int, optional): Maximum number of results to return
-        offset (int, optional): Starting index for pagination
+        in_force (Union[bool, str], optional): Only return acts that are currently in force. Type 'true' for active, 'false' for inactive
+        limit (Union[int, str], optional): Maximum number of results to return
+        offset (Union[int, str], optional): Starting index for pagination
 
     Returns:
         list: A list of legal acts matching the criteria.
@@ -244,7 +244,7 @@ def get_acts_list(
         if (pub_date_to):
             params["dateTo"] = pub_date_to
         if (in_force is not None):
-            params["inForce"] = "1" if in_force else "0"
+            params["inForce"] = bool(in_force)
         if (limit):
             params["limit"] = int(limit) if isinstance(limit, str) else limit
         if (offset):

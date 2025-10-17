@@ -53,6 +53,10 @@ app = FastMCP(
     3. Analyze legal act structures and references
     4. Access system metadata for legal document classification
 
+    IMPORTANT SEARCH NOTE: When searching with multiple keywords, ALL keywords must be present
+    in the act (AND logic). If you get no results, try using fewer keywords or different combinations.
+    TIP: If you want to find acts related to multiple categories/topics, search for them one keyword at a time.
+
     Always prefer specific searches over broad queries. When analyzing legal acts,
     consider their status, effective dates, and relationships to other documents.
 
@@ -209,12 +213,12 @@ def get_keywords_list() -> list[str]:
 
 @app.tool(
     name="search_legal_acts",
-    description="Advanced search for Polish legal acts with multiple filters. Use this for finding specific documents by criteria like date, type, keywords, or title.",
+    description="Advanced search for Polish legal acts with multiple filters. Use this for finding specific documents by criteria like date, type, keywords, or title. Note: When using multiple keywords, ALL keywords must be present in the act (AND logic).",
     tags={"search", "acts", "filtering", "legal-research"}
 )
 def get_acts_list(
     year: Annotated[Union[int, str, None], "Publication year (e.g., 2020, 2023)"] = None,
-    keywords: Annotated[list[str] | None, "List of keywords to search in act content"] = None,
+    keywords: Annotated[list[str] | None, "List of keywords to search in act content. ALL keywords must be present (AND logic)"] = None,
     date_from: Annotated[str | None, "Start date for effectiveness period (YYYY-MM-DD)"] = None,
     date_to: Annotated[str | None, "End date for effectiveness period (YYYY-MM-DD)"] = None,
     title: Annotated[str | None, "Text fragment to search in act titles"] = None,
@@ -231,9 +235,13 @@ def get_acts_list(
     allowing filtering by multiple criteria including publication year, keywords,
     effective dates, document types, and current legal status.
 
+    IMPORTANT: When providing multiple keywords, ALL keywords must be present in the act
+    (AND logic). If no results are found, try using fewer or different keywords.
+    TIP: If you want to find acts related to multiple categories/topics, search for them one keyword at a time.
+
     Args:
         year: Publication year (e.g., 2020, 2023).
-        keywords: List of keywords to search in act content.
+        keywords: List of keywords to search in act content. ALL keywords must be present (AND logic).
         date_from: Start date for effectiveness period (YYYY-MM-DD).
         date_to: End date for effectiveness period (YYYY-MM-DD).
         title: Text fragment to search in act titles.
@@ -254,6 +262,7 @@ def get_acts_list(
             Parameters: year = 2020, act_type = 'Rozporządzenie'
         User asks: "Please fetch all acts with keywords 'sąd' and 'prawnik'":
             Parameters: keywords = ['sąd', 'prawnik']
+            Note: This will find acts containing BOTH 'sąd' AND 'prawnik'
         User asks: "Please fetch all currently active acts from 2020":
             Parameters: year = 2020, in_force = True
         User asks: "Please fetch acts containing 'zmieniające' in title from 2020":

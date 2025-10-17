@@ -1,0 +1,25 @@
+[project]
+name = "law-scrapper-mcp"
+version = "0.1.0"
+description = "LawScrapper MCP is an MCP server to monitoring and fetching Polish law acts published by the Polish Sejm, filters them by topic. Then with AI you can summarizes their content using an LLM."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datetime>=5.5",
+    "fastmcp>=2.12.4",
+    "requests>=2.32.5",
+]
+
+[project.scripts]
+law-scrapper = "app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+scripts = { main = "uv run app.py" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]

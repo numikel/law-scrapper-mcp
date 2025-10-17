@@ -43,7 +43,8 @@ def get_keywords_list() -> list[str]:
         print(f"Error: {e}")
         return []
 
-def get_acts_list(self, year: int = None, keywords: list = None, date_from: str = None, date_to: str = None) -> list:
+@app.tool()
+def get_acts_list(year: int = None, keywords: list = None, date_from: str = None, date_to: str = None) -> list:
     """
     Fetches a list of legal acts from the Sejm API based on specified filters.
 

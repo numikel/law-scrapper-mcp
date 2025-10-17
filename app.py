@@ -4,6 +4,11 @@ Law Scrapper MCP Server
 A comprehensive Model Context Protocol server for accessing Polish legal acts (akty prawne)
 from the Sejm API. Provides tools for searching, retrieving, and analyzing legal documents.
 
+This server implements the MCP (Model Context Protocol) specification to enable AI assistants
+to interact with Polish legal databases through structured tool calls. It serves as a bridge
+between language models and the official Sejm API, providing access to historical and current
+Polish legislation.
+
 Features:
 - Date and time utilities for legal document analysis
 - System metadata for publishers, statuses, types, and institutions
@@ -27,6 +32,7 @@ from typing import Annotated, Union
 import logging
 import traceback
 
+# Configure logging with structured format for better debugging and monitoring
 logging.basicConfig(
     stream=sys.stderr,
     level=logging.DEBUG,
@@ -35,7 +41,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server with comprehensive description
+# Initialize FastMCP server with comprehensive description and usage instructions
 app = FastMCP(
     name="law-scrapper-mcp",
     instructions="""
@@ -68,11 +74,14 @@ app = FastMCP(
     tags={"dates", "utility"}
 )
 def get_actual_date() -> str:
-    """
-    Returns the current date in YYYY-MM-DD format for legal research and document analysis.
+    """Returns the current date in YYYY-MM-DD format for legal research and document analysis.
+
+    This function provides the current system date, which is essential for legal
+    document analysis, calculating effective dates, and determining document validity
+    periods in legal research contexts.
 
     Returns:
-        str: Current date string in YYYY-MM-DD format
+        str: Current date string in YYYY-MM-DD format, or empty string if an error occurs.
 
     Examples:
         User asks: "What is today's date?":
@@ -106,18 +115,20 @@ def calculate_previous_date(
     months: Annotated[int, "Number of months to subtract (use negative for future dates)"] = 0,
     years: Annotated[int, "Number of years to subtract (use negative for future dates)"] = 0
 ) -> str:
-    """
-    Calculates a date by adding or subtracting specified time periods from a given date.
-    Essential for legal analysis of effective dates, deadlines, and document validity periods.
+    """Calculates a date by adding or subtracting specified time periods from a given date.
 
-    Parameters:
-        actual_date: Starting date in YYYY-MM-DD format
-        days: Number of days to add/subtract (negative = future, positive = past)
-        months: Number of months to add/subtract (negative = future, positive = past)
-        years: Number of years to add/subtract (negative = future, positive = past)
+    Essential for legal analysis of effective dates, deadlines, and document validity periods.
+    This function uses dateutil's relativedelta for accurate calendar calculations,
+    handling month/year boundaries correctly.
+
+    Args:
+        actual_date: Starting date in YYYY-MM-DD format.
+        days: Number of days to add/subtract (negative = future, positive = past).
+        months: Number of months to add/subtract (negative = future, positive = past).
+        years: Number of years to add/subtract (negative = future, positive = past).
 
     Returns:
-        str: Calculated date in YYYY-MM-DD format
+        str: Calculated date in YYYY-MM-DD format, or original date if calculation fails.
 
     Examples:
         User asks: "What was the date 30 days ago from 2025-01-01?":
@@ -154,11 +165,14 @@ def calculate_previous_date(
     tags={"metadata", "keywords", "reference", "search-filters"}
 )
 def get_keywords_list() -> list[str]:
-    """
-    Retrieves a list of all available keywords for law acts from the Sejm API.
+    """Retrieves a list of all available keywords for law acts from the Sejm API.
+
+    Keywords are used to categorize and filter legal acts by topic, subject matter,
+    and legal domain. This function provides the complete vocabulary for advanced
+    legal document searches and classification.
 
     Returns:
-        list[str]: List of keywords used to categorize law acts
+        list[str]: List of keywords used to categorize law acts, or empty list if request fails.
 
     Examples:
         User asks: "What keywords are available for searching law acts?":
@@ -180,7 +194,8 @@ def get_keywords_list() -> list[str]:
     try:
         url = "https://api.sejm.gov.pl/eli/keywords"
         logger.debug(f"Making GET request to: {url}")
-        response = requests.get(url)
+        response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()  # Raise exception for bad status codes
         data = response.json()
         logger.info(f"get_keywords_list retrieved {len(data)} keywords")
         return data
@@ -210,24 +225,27 @@ def get_acts_list(
     limit: Annotated[Union[int, str, None], "Maximum number of results (default: all matching)"] = None,
     offset: Annotated[Union[int, str, None], "Skip first N results for pagination"] = None
 ) -> list:
-    """
-    Fetches a list of legal acts from the Sejm API based on specified filters.
+    """Fetches a list of legal acts from the Sejm API based on specified filters.
 
-    Parameters:
-        year (int, optional): Year of publication
-        keywords (list, optional): List of keywords to filter the acts
-        date_from (str, optional): Starting date of effectiveness (YYYY-MM-DD)
-        date_to (str, optional): Ending date of effectiveness (YYYY-MM-DD)
-        title (Union[str, list[str]], optional): Fragment of title to search for
-        act_type (str, optional): Type of act (e.g., 'Rozporządzenie', 'Ustawa')
-        pub_date_from (str, optional): Starting publication date (YYYY-MM-DD)
-        pub_date_to (str, optional): Ending publication date (YYYY-MM-DD)
-        in_force (Union[bool, str], optional): Only return acts that are currently in force. Type 'true' for active, 'false' for inactive
-        limit (Union[int, str], optional): Maximum number of results to return
-        offset (Union[int, str], optional): Starting index for pagination
+    This function provides comprehensive search capabilities for Polish legal acts,
+    allowing filtering by multiple criteria including publication year, keywords,
+    effective dates, document types, and current legal status.
+
+    Args:
+        year: Publication year (e.g., 2020, 2023).
+        keywords: List of keywords to search in act content.
+        date_from: Start date for effectiveness period (YYYY-MM-DD).
+        date_to: End date for effectiveness period (YYYY-MM-DD).
+        title: Text fragment to search in act titles.
+        act_type: Document type (e.g., 'Rozporządzenie', 'Ustawa').
+        pub_date_from: Start date for publication period (YYYY-MM-DD).
+        pub_date_to: End date for publication period (YYYY-MM-DD).
+        in_force: Only return currently active acts ('true' for active, 'false' for inactive).
+        limit: Maximum number of results to return.
+        offset: Skip first N results for pagination.
 
     Returns:
-        list: A list of legal acts matching the criteria.
+        list: A list of legal acts matching the criteria, or empty list if no matches or error.
 
     Examples:
         User asks: "Please fetch all acts from the year 2020":
@@ -245,42 +263,40 @@ def get_acts_list(
     """
     logger.debug(f"get_acts_list called with filters: year={year}, keywords={keywords}, date_from={date_from}, date_to={date_to}, title={title}, act_type={act_type}, pub_date_from={pub_date_from}, pub_date_to={pub_date_to}, in_force={in_force}, limit={limit}, offset={offset}")
     try:
+        # Build API request parameters from function arguments
         params = {
-            "publisher": "DU",
+            "publisher": "DU",  # Default to Dziennik Ustaw (primary legal gazette)
         }
-        if (year):
+        if year:
             params["year"] = int(year) if isinstance(year, str) else year
-        if (keywords):
+        if keywords:
             params["keyword"] = ",".join(keywords)
-        if (date_from):
+        if date_from:
             params["dateEffectFrom"] = date_from
-        if (date_to):
+        if date_to:
             params["dateEffectTo"] = date_to
-        if (title):
+        if title:
             params["title"] = title
-        if (act_type):
+        if act_type:
             params["type"] = act_type
-        if (pub_date_from):
+        if pub_date_from:
             params["dateFrom"] = pub_date_from
-        if (pub_date_to):
+        if pub_date_to:
             params["dateTo"] = pub_date_to
-        if (in_force is not None):
+        if in_force is not None:
             params["inForce"] = bool(in_force)
-        if (limit):
+        if limit:
             params["limit"] = int(limit) if isinstance(limit, str) else limit
-        if (offset):
+        if offset:
             params["offset"] = int(offset) if isinstance(offset, str) else offset
 
         url = "https://api.sejm.gov.pl/eli/acts/search"
 
-        # Log the full URL with parameters for debugging purposes, but use the original requests.get with params
-        full_url = requests.Request('GET', url, params=params).prepare().url
+        # Make API request with constructed parameters
         response = requests.get(url, params=params, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            data = response.json().get("items", [])
-        else:
-            data = []
+        data = response.json().get("items", [])
 
         if not data:
             logger.info("get_acts_list returned no results")
@@ -298,11 +314,15 @@ def get_acts_list(
     tags={"metadata", "publishers", "reference", "sources"}
 )
 def get_publishers_list() -> list:
-    """
-    Fetches a list of all available legal act publishers (journals) from the Sejm API.
+    """Fetches a list of all available legal act publishers (journals) from the Sejm API.
+
+    Publishers are the official gazettes where legal acts are published in Poland.
+    The main publishers are Dziennik Ustaw (DU) and Monitor Polski (MP), each containing
+    different types of legal documents with their own numbering systems.
 
     Returns:
         list: A list of publisher objects containing code, name, shortName, actsCount, and years.
+              Returns empty list if request fails.
 
     Examples:
         User asks: "What publishers are available?":
@@ -321,14 +341,11 @@ def get_publishers_list() -> list:
         url = "https://api.sejm.gov.pl/eli/acts"
         logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(f"get_publishers_list retrieved {len(data)} publishers")
-            return data
-        else:
-            logger.warning(f"get_publishers_list received status code: {response.status_code}")
-            return []
+        data = response.json()
+        logger.info(f"get_publishers_list retrieved {len(data)} publishers")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return []
@@ -341,14 +358,18 @@ def get_publishers_list() -> list:
 def get_publisher_info(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"]
 ) -> dict:
-    """
-    Fetches detailed information about a specific legal act publisher.
+    """Fetches detailed information about a specific legal act publisher.
 
-    Parameters:
-        publisher (str): Publisher code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski)
+    Provides comprehensive metadata about a legal publisher including publication
+    statistics, available years, and document counts. This information is useful
+    for understanding the scope and coverage of different legal gazettes.
+
+    Args:
+        publisher: Publisher code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
 
     Returns:
-        dict: Detailed information about the publisher, or empty dict if not found.
+        dict: Detailed information about the publisher containing code, name, shortName,
+              actsCount, and years array. Returns empty dict if publisher not found or error.
 
     Examples:
         User asks: "Tell me about DU publisher":
@@ -368,14 +389,11 @@ def get_publisher_info(
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}"
         logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(f"get_publisher_info retrieved details for publisher: {publisher}")
-            return data
-        else:
-            logger.warning(f"get_publisher_info received status code {response.status_code} for publisher: {publisher}")
-            return {}
+        data = response.json()
+        logger.info(f"get_publisher_info retrieved details for publisher: {publisher}")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return {}
@@ -389,15 +407,19 @@ def get_year_acts(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
     year: Annotated[Union[int, str], "Publication year (e.g., 2020, 2023)"]
 ) -> dict:
-    """
-    Fetches a list of all legal acts for a specific publisher and year.
+    """Fetches a list of all legal acts for a specific publisher and year.
 
-    Parameters:
-        publisher (str): Publisher code (e.g., 'DU' for Dziennik Ustaw)
-        year (int): Year of publication
+    Retrieves the complete collection of legal acts published in a specific year
+    by a given publisher. This is useful for annual reviews, statistical analysis,
+    and browsing complete yearly publications.
+
+    Args:
+        publisher: Publisher code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
+        year: Publication year as integer or string (e.g., 2020, 2023).
 
     Returns:
-        dict: Object containing totalCount, items array, and searchQuery info.
+        dict: Object containing totalCount, items array with act details, and searchQuery info.
+              Returns dict with zero counts and empty items array if year not found or error.
 
     Examples:
         User asks: "Show me all acts from DU in 2020":
@@ -412,14 +434,15 @@ def get_year_acts(
         User asks: "Browse acts from MP published in 2024":
             Parameters: publisher = 'MP', year = 2024
     """
+    logger.debug(f"get_year_acts called with publisher: {publisher}, year: {year}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"totalCount": 0, "items": [], "count": 0}
+        data = response.json()
+        logger.info(f"get_year_acts retrieved {data.get('totalCount', 0)} acts for {publisher}/{year}")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return {"totalCount": 0, "items": [], "count": 0}
@@ -438,16 +461,20 @@ def get_act_details(
     year: Annotated[int, "Publication year"],
     num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> dict:
-    """
-    Fetches detailed information about a specific legal act from the Sejm API.
+    """Fetches detailed information about a specific legal act from the Sejm API.
 
-    Parameters:
-        publisher (str): Publication code (e.g., 'DU' for Dziennik Ustaw)
-        year (int): Year of publication
-        num (int): Act number/position
+    Retrieves comprehensive metadata for a specific legal act including its title,
+    type, publication dates, effective dates, current status, and other legal attributes.
+    This is essential for legal research and document analysis.
+
+    Args:
+        publisher: Publication code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
+        year: Year of publication as integer.
+        num: Act number/position within the year as integer or string.
 
     Returns:
-        dict: Detailed information about the legal act, or empty dict if not found
+        dict: Detailed information about the legal act containing ELI identifier, title,
+              type, status, dates, and other metadata. Returns empty dict if act not found.
 
     Examples:
         User asks: "Get details for DU/2020/1280":
@@ -467,14 +494,11 @@ def get_act_details(
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}"
         logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(f"get_act_details retrieved details for act: {publisher}/{year}/{num}")
-            return data
-        else:
-            logger.warning(f"get_act_details received status code {response.status_code} for act: {publisher}/{year}/{num}")
-            return {}
+        data = response.json()
+        logger.info(f"get_act_details retrieved details for act: {publisher}/{year}/{num}")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return {}
@@ -490,17 +514,21 @@ def get_act_text(
     num: Annotated[Union[int, str], "Act number/position within the year"],
     format_type: Annotated[str, "Content format: 'pdf' or 'html' (default: pdf)"] = "pdf"
 ) -> str:
-    """
-    Fetches the text content of a specific legal act in PDF or HTML format.
+    """Fetches the text content of a specific legal act in PDF or HTML format.
 
-    Parameters:
-        publisher (str): Publication code (e.g., 'DU' for Dziennik Ustaw)
-        year (int): Year of publication
-        num (int): Act number/position
-        format_type (str, optional): Format type - 'pdf' or 'html'. Defaults to 'pdf'.
+    Retrieves the actual textual content of a legal act for reading and analysis.
+    For PDF format, returns a download URL. For HTML format, returns the full
+    HTML content of the document.
+
+    Args:
+        publisher: Publication code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
+        year: Year of publication as integer.
+        num: Act number/position within the year as integer or string.
+        format_type: Content format - 'pdf' or 'html'. Defaults to 'pdf'.
 
     Returns:
-        str: Text content of the act, or empty string if not found.
+        str: For PDF format, returns download URL string. For HTML format, returns
+             the full HTML content. Returns empty string if content not found or error.
 
     Examples:
         User asks: "Get the PDF text of DU/2020/1280":
@@ -520,18 +548,17 @@ def get_act_text(
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}/text.{format_type}"
         logger.debug(f"Making GET request to: {url}")
         response = requests.get(url)
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            if format_type == "pdf":
-                result = f"PDF content available at: {url}"
-                logger.info(f"get_act_text retrieved PDF for act: {publisher}/{year}/{num}")
-                return result
-            else:
-                logger.info(f"get_act_text retrieved HTML content for act: {publisher}/{year}/{num}")
-                return response.text
+        if format_type == "pdf":
+            # For PDF, return download URL since binary content can't be displayed directly
+            result = f"PDF content available at: {url}"
+            logger.info(f"get_act_text retrieved PDF for act: {publisher}/{year}/{num}")
+            return result
         else:
-            logger.warning(f"get_act_text received status code {response.status_code} for act: {publisher}/{year}/{num}")
-            return ""
+            # For HTML, return the actual content
+            logger.info(f"get_act_text retrieved HTML content for act: {publisher}/{year}/{num}")
+            return response.text
     except Exception as e:
         logger.error(f"Error: {e}")
         return ""
@@ -546,16 +573,20 @@ def get_act_structure(
     year: Annotated[int, "Publication year"],
     num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> list:
-    """
-    Fetches the structure/table of contents of a specific legal act.
+    """Fetches the structure/table of contents of a specific legal act.
 
-    Parameters:
-        publisher (str): Publication code (e.g., 'DU' for Dziennik Ustaw)
-        year (int): Year of publication
-        num (int): Act number/position
+    Retrieves the hierarchical organization of a legal act, including parts, chapters,
+    articles, sections, and other structural elements. This helps understand the
+    document's organization and navigate to specific sections.
+
+    Args:
+        publisher: Publication code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
+        year: Year of publication as integer.
+        num: Act number/position within the year as integer or string.
 
     Returns:
-        list: List of structure elements (parts, chapters, articles, etc.)
+        list: List of structure elements with hierarchical organization, each containing
+              id, title, type, and children arrays. Returns empty list if structure not found.
 
     Examples:
         User asks: "Show me the structure of DU/2020/1":
@@ -570,14 +601,15 @@ def get_act_structure(
         User asks: "Give me the outline of legal act DU/2021/30":
             Parameters: publisher = 'DU', year = 2021, num = 30
     """
+    logger.debug(f"get_act_structure called with: publisher={publisher}, year={year}, num={num}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}/struct"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return []
+        data = response.json()
+        logger.info(f"get_act_structure retrieved structure for act: {publisher}/{year}/{num}")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return []
@@ -592,16 +624,21 @@ def get_act_references(
     year: Annotated[int, "Publication year"],
     num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> dict:
-    """
-    Fetches references to/from a specific legal act (acts that reference this act or are referenced by this act).
+    """Fetches references to/from a specific legal act (acts that reference this act or are referenced by this act).
 
-    Parameters:
-        publisher (str): Publication code (e.g., 'DU' for Dziennik Ustaw)
-        year (int): Year of publication
-        num (int): Act number/position
+    Analyzes the legal relationships and dependencies of a specific act, showing which
+    acts it amends, references, or is referenced by. This helps understand the legal
+    context and impact of the document within the broader legal framework.
+
+    Args:
+        publisher: Publication code (e.g., 'DU' for Dziennik Ustaw, 'MP' for Monitor Polski).
+        year: Year of publication as integer.
+        num: Act number/position within the year as integer or string.
 
     Returns:
-        dict: Dictionary of reference types with arrays of referenced acts.
+        dict: Dictionary organized by reference types (e.g., 'Akty zmienione', 'Akty uchylone')
+              with arrays of referenced acts and their relationship details. Returns empty dict
+              if no references found or error occurs.
 
     Examples:
         User asks: "What acts reference DU/2020/1?":
@@ -616,14 +653,15 @@ def get_act_references(
         User asks: "What is the legal basis for act DU/2021/75?":
             Parameters: publisher = 'DU', year = 2021, num = 75
     """
+    logger.debug(f"get_act_references called with: publisher={publisher}, year={year}, num={num}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}/references"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {}
+        data = response.json()
+        logger.info(f"get_act_references retrieved references for act: {publisher}/{year}/{num}")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return {}
@@ -634,11 +672,15 @@ def get_act_references(
     tags={"metadata", "statuses", "reference", "legal-analysis"}
 )
 def get_statuses_list() -> list[str]:
-    """
-    Fetches a list of all possible legal act statuses.
+    """Fetches a list of all possible legal act statuses.
+
+    Retrieves the complete vocabulary of legal act statuses used in the Polish legal system,
+    including active, repealed, consolidated, and other status classifications. This is
+    essential for filtering and understanding the current legal standing of documents.
 
     Returns:
-        list: List of status strings.
+        list[str]: List of status strings in Polish, representing all possible legal act statuses.
+                   Returns empty list if request fails.
 
     Examples:
         User asks: "What are the possible act statuses?":
@@ -652,14 +694,15 @@ def get_statuses_list() -> list[str]:
         User asks: "What are the different states a law can be in?":
             Returns: ['obowiązujący', 'uchylony', 'wygaśnięty', ...]
     """
+    logger.debug("get_statuses_list called")
     try:
         url = "https://api.sejm.gov.pl/eli/statuses"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return []
+        data = response.json()
+        logger.info(f"get_statuses_list retrieved {len(data)} statuses")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return []
@@ -670,11 +713,15 @@ def get_statuses_list() -> list[str]:
     tags={"metadata", "types", "reference", "legal-analysis"}
 )
 def get_types_list() -> list[str]:
-    """
-    Fetches a list of all possible legal act document types.
+    """Fetches a list of all possible legal act document types.
+
+    Retrieves the complete classification of legal document types used in the Polish
+    legal system, including laws, regulations, ordinances, announcements, and other
+    legal instruments. This vocabulary is essential for filtering and categorizing documents.
 
     Returns:
-        list: List of document type strings.
+        list[str]: List of document type strings in Polish, representing all possible legal act types.
+                   Returns empty list if request fails.
 
     Examples:
         User asks: "What types of legal acts exist?":
@@ -688,14 +735,15 @@ def get_types_list() -> list[str]:
         User asks: "What categories of laws exist in Poland?":
             Returns: ['akty normatywne', 'akty indywidualne', 'akty prawa wewnętrznego', ...]
     """
+    logger.debug("get_types_list called")
     try:
         url = "https://api.sejm.gov.pl/eli/types"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return []
+        data = response.json()
+        logger.info(f"get_types_list retrieved {len(data)} types")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return []
@@ -706,11 +754,15 @@ def get_types_list() -> list[str]:
     tags={"metadata", "institutions", "reference", "legal-analysis"}
 )
 def get_institutions_list() -> list[str]:
-    """
-    Fetches a list of all institutions involved in legal acts.
+    """Fetches a list of all institutions involved in legal acts.
+
+    Retrieves the complete list of institutions, ministries, authorities, and organizations
+    that are involved in creating, issuing, or being affected by Polish legal acts. This
+    includes government bodies, ministries, regulatory authorities, and other entities.
 
     Returns:
-        list: List of institution names.
+        list[str]: List of institution names in Polish, representing all entities involved
+                   in the legal process. Returns empty list if request fails.
 
     Examples:
         User asks: "What institutions are involved in legal acts?":
@@ -724,20 +776,30 @@ def get_institutions_list() -> list[str]:
         User asks: "What bodies can pass laws in Poland?":
             Returns: ['PARLAMENT', 'PREZYDENT', 'RADA MINISTRÓW', 'MINISTERSTWA', ...]
     """
+    logger.debug("get_institutions_list called")
     try:
         url = "https://api.sejm.gov.pl/eli/institutions"
         response = requests.get(url, headers={"Accept": "application/json"})
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return []
+        data = response.json()
+        logger.info(f"get_institutions_list retrieved {len(data)} institutions")
+        return data
     except Exception as e:
         logger.error(f"Error: {e}")
         return []
 
 
 def main():
+    """Main entry point for the Law Scrapper MCP Server.
+
+    Initializes and starts the FastMCP server, which provides MCP tools for
+    accessing Polish legal acts through the Sejm API. The server runs indefinitely
+    until interrupted, handling tool calls from MCP clients.
+
+    The function sets up comprehensive logging and handles graceful shutdown
+    on errors, ensuring the server terminates cleanly.
+    """
     logger.info("Starting Law Scrapper MCP Server")
     try:
         logger.info("Initializing FastMCP application")

@@ -24,6 +24,16 @@ import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Annotated, Union
+import logging
+import traceback
+
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.DEBUG,
+    format='%(asctime)s - MCP Server - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server with comprehensive description
 app = FastMCP(
@@ -76,10 +86,13 @@ def get_actual_date() -> str:
         User asks: "I need the current date for my legal report":
             Returns: "2025-01-17"
     """
+    logger.debug("get_actual_date called")
     try:
-        return datetime.now().strftime("%Y-%m-%d")
+        result = datetime.now().strftime("%Y-%m-%d")
+        logger.info(f"get_actual_date returned: {result}")
+        return result
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return ""
 
 @app.tool(
@@ -122,10 +135,13 @@ def calculate_previous_date(
         User asks: "What date was it 1 year, 2 months, and 5 days ago from 2024-12-25?":
             Parameters: actual_date='2024-12-25', days=5, months=2, years=1
     """
+    logger.debug(f"calculate_previous_date called with: actual_date={actual_date}, days={days}, months={months}, years={years}")
     try:
-        return (datetime.strptime(actual_date, "%Y-%m-%d") - relativedelta(days=days, months=months, years=years)).strftime("%Y-%m-%d")
+        result = (datetime.strptime(actual_date, "%Y-%m-%d") - relativedelta(days=days, months=months, years=years)).strftime("%Y-%m-%d")
+        logger.info(f"calculate_previous_date calculated: {actual_date} -> {result} (days={days}, months={months}, years={years})")
+        return result
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return actual_date
 
 # ========================================
@@ -160,13 +176,16 @@ def get_keywords_list() -> list[str]:
         User asks: "Show me keywords related to education":
             Returns: ['szkolnictwo', 'edukacja', 'nauka', 'uczelnie', ...]
     """
+    logger.debug("get_keywords_list called")
     try:
         url = "https://api.sejm.gov.pl/eli/keywords"
+        logger.debug(f"Making GET request to: {url}")
         response = requests.get(url)
         data = response.json()
+        logger.info(f"get_keywords_list retrieved {len(data)} keywords")
         return data
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 # ========================================
@@ -224,6 +243,7 @@ def get_acts_list(
         User asks: "Please fetch first 10 acts from 2020":
             Parameters: year = 2020, limit = 10
     """
+    logger.debug(f"get_acts_list called with filters: year={year}, keywords={keywords}, date_from={date_from}, date_to={date_to}, title={title}, act_type={act_type}, pub_date_from={pub_date_from}, pub_date_to={pub_date_to}, in_force={in_force}, limit={limit}, offset={offset}")
     try:
         params = {
             "publisher": "DU",
@@ -263,11 +283,13 @@ def get_acts_list(
             data = []
 
         if not data:
+            logger.info("get_acts_list returned no results")
             return []
 
+        logger.info(f"get_acts_list returned {len(data)} acts")
         return data
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 @app.tool(
@@ -294,16 +316,21 @@ def get_publishers_list() -> list:
         User asks: "What sources contain Polish legal acts?":
             Returns: [{'code': 'DU', 'name': 'Dziennik Ustaw', 'actsCount': 96086}, {'code': 'MP', 'name': 'Monitor Polski', 'actsCount': 65485}]
     """
+    logger.debug("get_publishers_list called")
     try:
         url = "https://api.sejm.gov.pl/eli/acts"
+        logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
 
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            logger.info(f"get_publishers_list retrieved {len(data)} publishers")
+            return data
         else:
+            logger.warning(f"get_publishers_list received status code: {response.status_code}")
             return []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 @app.tool(
@@ -336,16 +363,21 @@ def get_publisher_info(
         User asks: "What years are covered by MP?":
             Parameters: publisher = 'MP'
     """
+    logger.debug(f"get_publisher_info called with publisher: {publisher}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}"
+        logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
 
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            logger.info(f"get_publisher_info retrieved details for publisher: {publisher}")
+            return data
         else:
+            logger.warning(f"get_publisher_info received status code {response.status_code} for publisher: {publisher}")
             return {}
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return {}
 
 @app.tool(
@@ -389,7 +421,7 @@ def get_year_acts(
         else:
             return {"totalCount": 0, "items": [], "count": 0}
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return {"totalCount": 0, "items": [], "count": 0}
 
 # ========================================
@@ -430,16 +462,21 @@ def get_act_details(
         User asks: "Tell me about the legal act DU/2021/250":
             Parameters: publisher = 'DU', year = 2021, num = 250
     """
+    logger.debug(f"get_act_details called with: publisher={publisher}, year={year}, num={num}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}"
+        logger.debug(f"Making GET request to: {url}")
         response = requests.get(url, headers={"Accept": "application/json"})
 
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            logger.info(f"get_act_details retrieved details for act: {publisher}/{year}/{num}")
+            return data
         else:
+            logger.warning(f"get_act_details received status code {response.status_code} for act: {publisher}/{year}/{num}")
             return {}
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return {}
 
 @app.tool(
@@ -478,19 +515,25 @@ def get_act_text(
         User asks: "I need the text of act DU/2022/200 in PDF":
             Parameters: publisher = 'DU', year = 2022, num = 200, format_type = 'pdf'
     """
+    logger.debug(f"get_act_text called with: publisher={publisher}, year={year}, num={num}, format_type={format_type}")
     try:
         url = f"https://api.sejm.gov.pl/eli/acts/{publisher}/{year}/{num}/text.{format_type}"
+        logger.debug(f"Making GET request to: {url}")
         response = requests.get(url)
 
         if response.status_code == 200:
             if format_type == "pdf":
-                return f"PDF content available at: {url}"
+                result = f"PDF content available at: {url}"
+                logger.info(f"get_act_text retrieved PDF for act: {publisher}/{year}/{num}")
+                return result
             else:
+                logger.info(f"get_act_text retrieved HTML content for act: {publisher}/{year}/{num}")
                 return response.text
         else:
+            logger.warning(f"get_act_text received status code {response.status_code} for act: {publisher}/{year}/{num}")
             return ""
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return ""
 
 @app.tool(
@@ -536,7 +579,7 @@ def get_act_structure(
         else:
             return []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 @app.tool(
@@ -582,7 +625,7 @@ def get_act_references(
         else:
             return {}
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return {}
 
 @app.tool(
@@ -618,7 +661,7 @@ def get_statuses_list() -> list[str]:
         else:
             return []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 @app.tool(
@@ -654,7 +697,7 @@ def get_types_list() -> list[str]:
         else:
             return []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 @app.tool(
@@ -690,15 +733,17 @@ def get_institutions_list() -> list[str]:
         else:
             return []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return []
 
 
 def main():
+    logger.info("Starting Law Scrapper MCP Server")
     try:
+        logger.info("Initializing FastMCP application")
         app.run()
     except Exception as e:
-        print(f"Error running MCP server: {e}", file=sys.stderr)
+        logger.error(f"Error running MCP server: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

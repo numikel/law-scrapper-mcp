@@ -20,6 +20,27 @@ def get_actual_date() -> str:
 def calculate_previous_date(actual_date: str, days: int = 0, months: int = 0, years: int = 0) -> str:
     """
     Calculates the previous date based on the actual date and the number of days, months, and years.
+
+    Parameters:
+        actual_date (str): The actual date (YYYY-MM-DD)
+        days (int, optional): The number of days to subtract from the actual date
+        months (int, optional): The number of months to subtract from the actual date
+        years (int, optional): The number of years to subtract from the actual date
+
+    Returns:
+        str: The previous date (YYYY-MM-DD)
+
+    Examples:
+        User asks: "Please calculate the previous date of the actual date 2025-01-01":
+            Parameters: actual_date = '2025-01-01', days = 0, months = 0, years = 0
+        User asks: "Please calculate the previous date of the actual date 2025-01-01 by 1 day":
+            Parameters: actual_date = '2025-01-01', days = 1, months = 0, years = 0
+        User asks: "Please calculate the previous date of the actual date 2025-01-01 by 1 month":
+            Parameters: actual_date = '2025-01-01', days = 0, months = 1, years = 0
+        User asks: "Please calculate the previous date of the actual date 2025-01-01 by 1 year":
+            Parameters: actual_date = '2025-01-01', days = 0, months = 0, years = 1
+        User asks: "Please calculate the previous date of the actual date 2025-01-01 by 1 day, 1 month and 1 year":
+            Parameters: actual_date = '2025-01-01', days = 1, months = 1, years = 1
     """
     try:
         return (datetime.strptime(actual_date, "%Y-%m-%d") - relativedelta(days=days, months=months, years=years)).strftime("%Y-%m-%d")
@@ -31,8 +52,16 @@ def calculate_previous_date(actual_date: str, days: int = 0, months: int = 0, ye
 def get_keywords_list() -> list[str]:
     """
     Retrieves a list of available keywords for law acts from the Sejm API.
+
+    Parameters:
+        None
+
     Returns:
         list: List of keywords.
+
+    Examples:
+        User asks: "Please fetch the list of keywords":
+            Parameters: None
     """
     try:
         url = "https://api.sejm.gov.pl/eli/keywords"

@@ -22,7 +22,7 @@ from fastmcp import FastMCP
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from typing import Annotated
+from typing import Annotated, Union
 
 # Initialize FastMCP server with comprehensive description
 app = FastMCP(
@@ -178,7 +178,7 @@ def get_keywords_list() -> list[str]:
     tags={"search", "acts", "filtering", "legal-research"}
 )
 def get_acts_list(
-    year: Annotated[int | None, "Publication year (e.g., 2020, 2023)"] = None,
+    year: Annotated[Union[int, str, None], "Publication year (e.g., 2020, 2023)"] = None,
     keywords: Annotated[list[str] | None, "List of keywords to search in act content"] = None,
     date_from: Annotated[str | None, "Start date for effectiveness period (YYYY-MM-DD)"] = None,
     date_to: Annotated[str | None, "End date for effectiveness period (YYYY-MM-DD)"] = None,
@@ -187,8 +187,8 @@ def get_acts_list(
     pub_date_from: Annotated[str | None, "Start date for publication period (YYYY-MM-DD)"] = None,
     pub_date_to: Annotated[str | None, "End date for publication period (YYYY-MM-DD)"] = None,
     in_force: Annotated[bool | None, "Only return currently active acts"] = None,
-    limit: Annotated[int | None, "Maximum number of results (default: all matching)"] = None,
-    offset: Annotated[int | None, "Skip first N results for pagination"] = None
+    limit: Annotated[Union[int, str, None], "Maximum number of results (default: all matching)"] = None,
+    offset: Annotated[Union[int, str, None], "Skip first N results for pagination"] = None
 ) -> list:
     """
     Fetches a list of legal acts from the Sejm API based on specified filters.
@@ -228,7 +228,7 @@ def get_acts_list(
             "publisher": "DU",
         }
         if (year):
-            params["year"] = year
+            params["year"] = int(year) if isinstance(year, str) else year
         if (keywords):
             params["keyword"] = ",".join(keywords)
         if (date_from):
@@ -246,9 +246,9 @@ def get_acts_list(
         if (in_force is not None):
             params["inForce"] = "1" if in_force else "0"
         if (limit):
-            params["limit"] = limit
+            params["limit"] = int(limit) if isinstance(limit, str) else limit
         if (offset):
-            params["offset"] = offset
+            params["offset"] = int(offset) if isinstance(offset, str) else offset
 
         url = "https://api.sejm.gov.pl/eli/acts/search"
 
@@ -354,7 +354,7 @@ def get_publisher_info(
 )
 def get_year_acts(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
-    year: Annotated[int, "Publication year (e.g., 2020, 2023)"]
+    year: Annotated[Union[int, str], "Publication year (e.g., 2020, 2023)"]
 ) -> dict:
     """
     Fetches a list of all legal acts for a specific publisher and year.
@@ -403,7 +403,7 @@ def get_year_acts(
 def get_act_details(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
     year: Annotated[int, "Publication year"],
-    num: Annotated[int, "Act number/position within the year"]
+    num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> dict:
     """
     Fetches detailed information about a specific legal act from the Sejm API.
@@ -449,7 +449,7 @@ def get_act_details(
 def get_act_text(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
     year: Annotated[int, "Publication year"],
-    num: Annotated[int, "Act number/position within the year"],
+    num: Annotated[Union[int, str], "Act number/position within the year"],
     format_type: Annotated[str, "Content format: 'pdf' or 'html' (default: pdf)"] = "pdf"
 ) -> str:
     """
@@ -500,7 +500,7 @@ def get_act_text(
 def get_act_structure(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
     year: Annotated[int, "Publication year"],
-    num: Annotated[int, "Act number/position within the year"]
+    num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> list:
     """
     Fetches the structure/table of contents of a specific legal act.
@@ -546,7 +546,7 @@ def get_act_structure(
 def get_act_references(
     publisher: Annotated[str, "Publisher code (DU for Dziennik Ustaw, MP for Monitor Polski)"],
     year: Annotated[int, "Publication year"],
-    num: Annotated[int, "Act number/position within the year"]
+    num: Annotated[Union[int, str], "Act number/position within the year"]
 ) -> dict:
     """
     Fetches references to/from a specific legal act (acts that reference this act or are referenced by this act).

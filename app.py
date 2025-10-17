@@ -45,17 +45,29 @@ def get_keywords_list() -> list[str]:
 
 @app.tool()
 def get_acts_list(year: int = None, keywords: list = None, date_from: str = None, date_to: str = None) -> list:
-    """
-    Fetches a list of legal acts from the Sejm API based on specified filters.
+    f"""
+    Fetches a list of legal acts from the Sejm API based on specified filters. To collect all acts from the year, use the year parameter. To collect all acts with the keywords, use the keywords parameter. To collect all acts starting from the date, use the date_from parameter. To collect all acts ending to the date, use the date_to parameter.
 
     Parameters:
-        year (int, optional): Year of publication.
-        keywords (list, optional): List of keywords to filter the acts.
-        date_from (str, optional): Starting date of effectiveness (YYYY-MM-DD).
-        date_to (str, optional): Ending date of effectiveness (YYYY-MM-DD).
+        year (int, optional): Year of publication (use to collect all acts from the year)
+        keywords (list, optional): List of keywords to filter the acts (use to collect all acts with the keywords)
+        date_from (str, optional): Starting date of effectiveness (YYYY-MM-DD) (use to collect all acts starting from the date)
+        date_to (str, optional): Ending date of effectiveness (YYYY-MM-DD) (use to collect all acts ending to the date)
 
     Returns:
         list: A list of legal acts matching the criteria.
+
+    Examples:
+        User asks: "Please fetch all acts from the year 2025":
+            Parameters: year = 2025
+        User asks: "Please fetch all acts with the keywords 'keyword1' and 'keyword2'":
+            Parameters: keywords = ['keyword1', 'keyword2']
+        User asks: "Please fetch all acts starting from the date 2025-01-01":
+            Parameters: date_from = '2025-01-01'
+        User asks: "Please fetch all acts ending to the date 2025-01-01":
+            Parameters: date_to = '2025-01-01'
+        User asks: "Please fetch all acts from the year 2025 with the keywords 'keyword1' and 'keyword2' starting from the date 2025-01-01 ending to the date 2025-01-01":
+            Parameters: year = 2025, keywords = ['keyword1', 'keyword2'], date_from = '2025-01-01', date_to = '2025-01-01'
     """
     try:
         params = {

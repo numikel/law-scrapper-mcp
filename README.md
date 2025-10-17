@@ -113,7 +113,7 @@ Once configured, you can start using the legal research tools:
 
 ### Available tool categories
 
-The server provides 13 specialized tools organized in 4 categories:
+The server provides 14 specialized tools organized in 4 categories:
 
 #### 🕒 **Dates & time** (2 tools)
 - `get_current_date` - Get current date for legal analysis
@@ -141,7 +141,7 @@ The server provides 13 specialized tools organized in 4 categories:
 
 ```
 law-scrapper-mcp/
-├── app.py                    # Main MCP server implementation with 13 legal research tools
+├── app.py                    # Main MCP server implementation with 14 legal research tools
 ├── pyproject.toml           # Project configuration, dependencies, and CLI scripts
 ├── uv.lock                  # Lock file ensuring reproducible builds
 ├── README.md               # Project documentation

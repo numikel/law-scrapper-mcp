@@ -22,7 +22,7 @@ from fastmcp import FastMCP
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from typing import Annotated, Optional
+from typing import Annotated
 
 # Initialize FastMCP server with comprehensive description
 app = FastMCP(
@@ -178,17 +178,17 @@ def get_keywords_list() -> list[str]:
     tags={"search", "acts", "filtering", "legal-research"}
 )
 def get_acts_list(
-    year: Annotated[Optional[int], "Publication year (e.g., 2020, 2023)"] = None,
-    keywords: Annotated[Optional[list[str]], "List of keywords to search in act content"] = None,
-    date_from: Annotated[Optional[str], "Start date for effectiveness period (YYYY-MM-DD)"] = None,
-    date_to: Annotated[Optional[str], "End date for effectiveness period (YYYY-MM-DD)"] = None,
-    title: Annotated[Optional[str], "Text fragment to search in act titles"] = None,
-    act_type: Annotated[Optional[str], "Document type (e.g., 'Rozporządzenie', 'Ustawa')"] = None,
-    pub_date_from: Annotated[Optional[str], "Start date for publication period (YYYY-MM-DD)"] = None,
-    pub_date_to: Annotated[Optional[str], "End date for publication period (YYYY-MM-DD)"] = None,
-    in_force: Annotated[Optional[bool], "Only return currently active acts"] = None,
-    limit: Annotated[Optional[int], "Maximum number of results (default: all matching)"] = None,
-    offset: Annotated[Optional[int], "Skip first N results for pagination"] = None
+    year: Annotated[int | None, "Publication year (e.g., 2020, 2023)"] = None,
+    keywords: Annotated[list[str] | None, "List of keywords to search in act content"] = None,
+    date_from: Annotated[str | None, "Start date for effectiveness period (YYYY-MM-DD)"] = None,
+    date_to: Annotated[str | None, "End date for effectiveness period (YYYY-MM-DD)"] = None,
+    title: Annotated[str | None, "Text fragment to search in act titles"] = None,
+    act_type: Annotated[str | None, "Document type (e.g., 'Rozporządzenie', 'Ustawa')"] = None,
+    pub_date_from: Annotated[str | None, "Start date for publication period (YYYY-MM-DD)"] = None,
+    pub_date_to: Annotated[str | None, "End date for publication period (YYYY-MM-DD)"] = None,
+    in_force: Annotated[bool | None, "Only return currently active acts"] = None,
+    limit: Annotated[int | None, "Maximum number of results (default: all matching)"] = None,
+    offset: Annotated[int | None, "Skip first N results for pagination"] = None
 ) -> list:
     """
     Fetches a list of legal acts from the Sejm API based on specified filters.

@@ -18,6 +18,7 @@ Tags:
 - analysis: Detailed act content and structure analysis
 """
 
+import sys
 from fastmcp import FastMCP
 import requests
 from datetime import datetime
@@ -694,7 +695,11 @@ def get_institutions_list() -> list[str]:
 
 
 def main():
-    app.run()
+    try:
+        app.run()
+    except Exception as e:
+        print(f"Error running MCP server: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -19,7 +19,6 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = []
-scripts = { main = "uv run app.py" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]

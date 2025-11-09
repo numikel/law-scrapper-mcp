@@ -6,6 +6,10 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Version](https://img.shields.io/badge/version-1.0.1-orange.svg)
 
+<a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
+</a>
+
 ## ✨ Features
 
 ✅ **Comprehensive legal act access** - Full access to Polish legal acts from Dziennik Ustaw and Monitor Polski

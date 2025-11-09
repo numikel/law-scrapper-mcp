@@ -141,31 +141,6 @@ The server provides 14 specialized tools organized in 4 categories:
 - `get_act_table_of_contents` - Document structure analysis
 - `get_act_relationships` - Legal references and amendments
 
-## Client mcp configuration
-
-Your `law-scrapper-mcp` server acts as a tool provider for ai assistants compatible with the mcp (model context protocol) standard.
-
-For an ai assistant (like the one built into the cursor editor or connected via glama) to use your tools, you must configure it to know where your server is located.
-
-### Configuration steps
-
-1.  **Run the server:** Ensure the `law-scrapper-mcp` server is running as per the `Usage` section instructions (e.g., locally at `http://localhost:8000`).
-
-2.  **Add the server in the client:** Open your mcp client's settings (e.g., in the cursor editor, this is typically the panel for managing context or mcp providers).
-    * Add a new server (provider).
-    * Paste the url where your server is running. If you are running it locally, this address will be:
-        ```
-        http://localhost:8000
-        ```
-
-3.  **Verify the connection:** After adding, the client should automatically query the server for its manifest (the `/mcp/manifest` endpoint) and display the available tools (in this case, `law-scrapper`).
-
-    Alternatively, in some clients, you can use a special command in the chat (if your client supports it) to load the server:
-
-    > /mcp load http://localhost:8000
-
-This will make the ai assistant aware of the `law-scrapper` tool and allow it to use it for answering queries that require scraping legal data.
-
 ## 📁 Project structure
 
 ```

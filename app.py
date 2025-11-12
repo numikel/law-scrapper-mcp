@@ -218,7 +218,7 @@ def get_keywords_list() -> list[str]:
 )
 def get_acts_list(
     year: Annotated[Union[int, str, None], "Publication year (e.g., 2020, 2023)"] = None,
-    keywords: Annotated[list[str] | None, "List of keywords to search in act content. ALL keywords must be present (AND logic)"] = None,
+    keywords: Annotated[list[str] | None, "List of keywords to search in act content. ALL keywords must be present in the act (AND logic)"] = None,
     date_from: Annotated[str | None, "Start date for effectiveness period (YYYY-MM-DD)"] = None,
     date_to: Annotated[str | None, "End date for effectiveness period (YYYY-MM-DD)"] = None,
     title: Annotated[str | None, "Text fragment to search in act titles"] = None,
@@ -237,11 +237,11 @@ def get_acts_list(
 
     IMPORTANT: When providing multiple keywords, ALL keywords must be present in the act
     (AND logic). If no results are found, try using fewer or different keywords.
-    TIP: If you want to find acts related to multiple categories/topics, search for them one keyword at a time.
+    IMPORTANT: If you want to find acts related to multiple categories/topics, search for them one keyword at a time.
 
     Args:
         year: Publication year (e.g., 2020, 2023).
-        keywords: List of keywords to search in act content. ALL keywords must be present (AND logic).
+        keywords: List of keywords to search in act content. ALL keywords must be present in the act (AND logic).
         date_from: Start date for effectiveness period (YYYY-MM-DD).
         date_to: End date for effectiveness period (YYYY-MM-DD).
         title: Text fragment to search in act titles.
@@ -261,8 +261,14 @@ def get_acts_list(
         User asks: "Please fetch all regulations from 2020":
             Parameters: year = 2020, act_type = 'Rozporządzenie'
         User asks: "Please fetch all acts with keywords 'sąd' and 'prawnik'":
+            IMPORTANT: This will find acts containing BOTH 'sąd' AND 'prawnik'
             Parameters: keywords = ['sąd', 'prawnik']
-            Note: This will find acts containing BOTH 'sąd' AND 'prawnik'
+            If you want to find acts containing 'sąd' OR 'prawnik', you need to search for them one keyword at a time.
+            User asks: "Please fetch all acts with keywords 'sąd' or 'prawnik'":
+            1st run:
+            Parameters: keywords = ['sąd']
+            2nd run:
+            Parameters: keywords = ['prawnik']
         User asks: "Please fetch all currently active acts from 2020":
             Parameters: year = 2020, in_force = True
         User asks: "Please fetch acts containing 'zmieniające' in title from 2020":
@@ -812,7 +818,7 @@ def main():
     logger.info("Starting Law Scrapper MCP Server")
     try:
         logger.info("Initializing FastMCP application")
-        app.run()
+        app.run(host="0.0.0.0", port=7683, transport="sse")
     except Exception as e:
         logger.error(f"Error running MCP server: {e}")
         sys.exit(1)

@@ -18,6 +18,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 - **Date & time utilities** - Specialized date calculations for legal document analysis
 - **System metadata access** - Keywords, statuses, document types, and institution data
 - **FastMCP integration** - Built with FastMCP framework following best practices
+- **SSE transport** - Server-Sent Events for reliable real-time communication
 - **Professional documentation** - Extensive examples and clear parameter descriptions
 - **RESTful API integration** - Direct connection to official Sejm API endpoints
 
@@ -56,6 +57,13 @@ pip install -e .
 
 ### MCP server configuration
 
+This server uses **Server-Sent Events (SSE)** transport for better performance and reliability. The server runs on `http://localhost:7683/sse` and provides real-time communication with MCP clients.
+
+**Important notes:**
+- Make sure port 7683 is available before starting the server
+- The server must be running before connecting MCP clients
+- SSE provides better error handling and connection management than STDIO
+
 Add the following configuration to your MCP client's configuration file:
 
 #### For Cursor IDE (`.cursor/mcp.json`):
@@ -63,13 +71,8 @@ Add the following configuration to your MCP client's configuration file:
 {
   "mcpServers": {
     "law-scrapper-mcp": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/numikel/law-scrapper-mcp",
-        "law-scrapper"
-      ],
-      "transport": "stdio"
+      "url": "http://localhost:7683/sse",
+      "transport": "sse"
     }
   }
 }
@@ -79,19 +82,15 @@ Add the following configuration to your MCP client's configuration file:
 ```bash
 claude mcp add law-scrapper-mcp uvx '--from' 'git+https://github.com/numikel/law-scrapper-mcp' 'law-scrapper'
 ```
+*Note: The server automatically uses SSE transport and runs on port 7683*
 
 #### For other MCP tools (`.mcp.json` or `mcp_config.json`):
 ```json
 {
   "mcpServers": {
     "law-scrapper-mcp": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/numikel/law-scrapper-mcp",
-        "law-scrapper"
-      ],
-      "transport": "stdio"
+      "url": "http://localhost:7683/sse",
+      "transport": "sse"
     }
   }
 }
@@ -160,12 +159,18 @@ law-scrapper-mcp/
 # Install in development mode
 uv sync
 
-# Run the server directly
+# Run the server directly (SSE transport on port 7683)
 uv run app.py
 
 # Or use the installed script
 law-scrapper
 ```
+
+**Server information:**
+- **Transport**: Server-Sent Events (SSE)
+- **Host**: 0.0.0.0 (accessible from any network interface)
+- **Port**: 7683
+- **Endpoint**: `http://localhost:7683/sse`
 
 ### Running tests
 

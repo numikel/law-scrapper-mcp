@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.2] - 2025-11-09
 
 ### Changed
+- **Transport migration**: Migrated from STDIO to Server-Sent Events (SSE) transport for better performance and reliability
+- **Configuration updates**: Updated all MCP client configurations to use SSE transport
+- **Server configuration**: Server now runs on port 7683 with SSE endpoint at `http://localhost:7683/sse`
 - Improved LICENSE and README files
 
 

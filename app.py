@@ -818,7 +818,7 @@ def main():
     logger.info("Starting Law Scrapper MCP Server")
     try:
         logger.info("Initializing FastMCP application")
-        app.run(host="0.0.0.0", port=7683, transport="sse")
+        app.run()
     except Exception as e:
         logger.error(f"Error running MCP server: {e}")
         sys.exit(1)

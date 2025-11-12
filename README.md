@@ -53,6 +53,17 @@ cd law-scrapper-mcp
 pip install -e .
 ```
 
+### Using uvx (no installation required)
+
+For quick testing or development without cloning the repository:
+
+```bash
+# Run the server directly from GitHub
+uvx --from git+https://github.com/numikel/law-scrapper-mcp law-scrapper
+```
+
+This will download and run the server with SSE transport on port 7683.
+
 ## ⚙️ Configuration
 
 ### MCP server configuration
@@ -82,7 +93,7 @@ Add the following configuration to your MCP client's configuration file:
 ```bash
 claude mcp add law-scrapper-mcp uvx '--from' 'git+https://github.com/numikel/law-scrapper-mcp' 'law-scrapper'
 ```
-*Note: The server automatically uses SSE transport and runs on port 7683*
+*Note: Claude Code will run the server process automatically. The server uses SSE transport and runs on port 7683*
 
 #### For other MCP tools (`.mcp.json` or `mcp_config.json`):
 ```json
@@ -164,6 +175,9 @@ uv run app.py
 
 # Or use the installed script
 law-scrapper
+
+# Or run directly with uvx (from local directory)
+uvx . --python python
 ```
 
 **Server information:**

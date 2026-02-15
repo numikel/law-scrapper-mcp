@@ -1,18 +1,33 @@
 [project]
 name = "law-scrapper-mcp"
-version = "1.0.2"
+version = "2.3.0"
 description = "LawScrapper MCP is an MCP server to monitoring and fetching Polish law acts published by the Polish Sejm, filters them by topic. Then with AI you can summarizes their content using an LLM."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "fastmcp>=2.12.4",
-    "logging>=0.4.9.6",
-    "python-dateutil>=2.9.0",
-    "requests>=2.32.5",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-dateutil>=2.9",
+    "markdownify>=0.14",
+    "pdfplumber>=0.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "respx>=0.22",
+    "pytest-timeout>=2.3",
+    "ruff>=0.9",
+    "mypy>=1.14",
 ]
 
 [project.scripts]
-law-scrapper = "app:main"
+law-scrapper = "law_scrapper_mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -22,4 +37,43 @@ build-backend = "hatchling.build"
 dev-dependencies = []
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["src/law_scrapper_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "N815",    # mixedCase variable in class scope (required by Sejm API field names)
+    "A002",    # argument shadowing builtin (format, type — intentional)
+    "UP046",   # Generic subclass style (kept for clarity)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["law_scrapper_mcp"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+packages = ["law_scrapper_mcp"]
+strict = false
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = false
+
+[[tool.mypy.overrides]]
+module = "law_scrapper_mcp.tools.*"
+disable_error_code = ["assignment"]

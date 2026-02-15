@@ -1,0 +1,16 @@
+[
+  {
+    "code": "DU",
+    "name": "Dziennik Ustaw",
+    "shortName": "Dz.U.",
+    "actsCount": 96086,
+    "years": [2020, 2021, 2022, 2023, 2024]
+  },
+  {
+    "code": "MP",
+    "name": "Monitor Polski",
+    "shortName": "M.P.",
+    "actsCount": 65485,
+    "years": [2020, 2021, 2022, 2023, 2024]
+  }
+]

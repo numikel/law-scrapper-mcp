@@ -1,0 +1,28 @@
+{
+  "Akty zmienione": [
+    {
+      "act": {
+        "ELI": "DU/2020/100",
+        "publisher": "DU",
+        "year": 2020,
+        "pos": 100,
+        "title": "Ustawa zmieniona",
+        "status": "akt obowiązujący"
+      },
+      "date": "2024-01-01"
+    }
+  ],
+  "Podstawa prawna": [
+    {
+      "act": {
+        "ELI": "DU/2019/50",
+        "publisher": "DU",
+        "year": 2019,
+        "pos": 50,
+        "title": "Ustawa bazowa",
+        "status": "akt obowiązujący"
+      },
+      "date": null
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "part_1",
+    "title": "Przepisy ogólne",
+    "type": "part",
+    "children": [
+      {
+        "id": "art_1",
+        "title": "Art. 1.",
+        "type": "article",
+        "children": []
+      },
+      {
+        "id": "art_2",
+        "title": "Art. 2.",
+        "type": "article",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "part_2",
+    "title": "Przepisy szczególne",
+    "type": "part",
+    "children": [
+      {
+        "id": "art_3",
+        "title": "Art. 3.",
+        "type": "article",
+        "children": []
+      }
+    ]
+  }
+]

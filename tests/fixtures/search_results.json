@@ -1,0 +1,41 @@
+{
+  "count": 3,
+  "items": [
+    {
+      "ELI": "DU/2024/1",
+      "publisher": "DU",
+      "year": 2024,
+      "pos": 1,
+      "title": "Ustawa testowa 1",
+      "status": "akt obowiązujący",
+      "type": "Ustawa",
+      "promulgation": "2024-01-05",
+      "dateEffect": "2024-02-01",
+      "inForce": "YES"
+    },
+    {
+      "ELI": "DU/2024/2",
+      "publisher": "DU",
+      "year": 2024,
+      "pos": 2,
+      "title": "Rozporządzenie testowe 2",
+      "status": "akt obowiązujący",
+      "type": "Rozporządzenie",
+      "promulgation": "2024-01-10",
+      "dateEffect": "2024-03-01",
+      "inForce": "YES"
+    },
+    {
+      "ELI": "DU/2024/3",
+      "publisher": "DU",
+      "year": 2024,
+      "pos": 3,
+      "title": "Ustawa testowa 3",
+      "status": "uchylony",
+      "type": "Ustawa",
+      "promulgation": "2024-02-01",
+      "dateEffect": "2024-04-01",
+      "inForce": "NO"
+    }
+  ]
+}

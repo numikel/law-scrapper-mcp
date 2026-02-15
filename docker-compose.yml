@@ -1,0 +1,18 @@
+services:
+  law-scrapper-mcp:
+    build: .
+    ports:
+      - "7683:7683"
+    environment:
+      - LAW_MCP_TRANSPORT=streamable-http
+      - LAW_MCP_HOST=0.0.0.0
+      - LAW_MCP_PORT=7683
+      - LAW_MCP_LOG_LEVEL=INFO
+      - LAW_MCP_LOG_FORMAT=json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7683/health', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

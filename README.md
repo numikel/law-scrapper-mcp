@@ -99,7 +99,7 @@ Configure in your MCP client (e.g., Cursor `.cursor/mcp.json`):
 For Claude Code:
 
 ```bash
-claude mcp add law-scrapper-mcp uvx '--from' 'git+https://github.com/numikel/law-scrapper-mcp' 'law-scrapper'
+claude mcp add law-scrapper "uvx --from git+https://github.com/numikel/law-scrapper-mcp law-scrapper"
 ```
 
 ### HTTP transport (streamable-http)

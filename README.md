@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-2.3.0-orange.svg)
+![Version](https://img.shields.io/badge/version-2.3.1-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -584,6 +584,10 @@ If upgrading from v1.0.2, note these breaking changes:
 | ELI format | Single string "DU/2024/1" | Changed from separate parameters |
 | SSE transport | STDIO (default) | STDIO is default, HTTP via streamable-http |
 | Port 7683 | Port 7683 | Same default HTTP port |
+
+## What's new in v2.3.1
+
+- **uvx / FastMCP fix** — Fixed `NameError: name 'Annotated' is not defined` when running via `uvx --from "git+https://github.com/numikel/law-scrapper-mcp" law-scrapper`. Removed `from __future__ import annotations` from `compare.py` so parameter type hints resolve correctly during tool registration.
 
 ## What's new in v2.3.0
 

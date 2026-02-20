@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v2.3 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with FastMCP, it supports STDIO (default) and streamable-http transport on port 7683.
+Law Scrapper MCP v2.3.1 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with FastMCP, it supports STDIO (default) and streamable-http transport on port 7683.
 
 ## Development commands
 

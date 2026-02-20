@@ -1,7 +1,5 @@
 """Compare metadata of two legal acts."""
 
-from __future__ import annotations
-
 import logging
 from typing import Annotated, Any
 

@@ -1,6 +1,6 @@
 [project]
 name = "law-scrapper-mcp"
-version = "2.3.0"
+version = "2.3.1"
 description = "LawScrapper MCP is an MCP server to monitoring and fetching Polish law acts published by the Polish Sejm, filters them by topic. Then with AI you can summarizes their content using an LLM."
 readme = "README.md"
 requires-python = ">=3.13"

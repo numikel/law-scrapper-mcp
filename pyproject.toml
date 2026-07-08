@@ -5,7 +5,7 @@ description = "LawScrapper MCP is an MCP server to monitoring and fetching Polis
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fastmcp>=2.12.4",
+    "fastmcp>=3.2.0",
     "httpx>=0.28",
     "tenacity>=9.0",
     "pydantic>=2.10",
@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
     "respx>=0.22",

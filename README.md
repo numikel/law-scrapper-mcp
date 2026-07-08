@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-2.3.1-orange.svg)
+![Version](https://img.shields.io/badge/version-2.4.0-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -514,6 +514,10 @@ law-scrapper-mcp/
 
 ## Docker
 
+### Security and deployment
+
+When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
+
 ### Dockerfile
 
 The included `Dockerfile` builds a containerized Law Scrapper MCP server:
@@ -585,6 +589,13 @@ If upgrading from v1.0.2, note these breaking changes:
 | SSE transport | STDIO (default) | STDIO is default, HTTP via streamable-http |
 | Port 7683 | Port 7683 | Same default HTTP port |
 
+## What's new in v2.4.0
+
+- **Security hardening** — FastMCP 3.x upgrade and dependency overrides close 51 Dependabot alerts (cryptography, urllib3, pillow, starlette, and others)
+- **FastMCP 3.x** — `ctx.lifespan_context` API, `app.run()` for HTTP transport, `@custom_route` for `/health`
+- **Integration tests** — In-memory FastMCP `Client` tests for core tools (metadata, search, dates, act details)
+- **CI and Dependabot** — Automated quality gates and weekly dependency updates
+
 ## What's new in v2.3.1
 
 - **uvx / FastMCP fix** — Fixed `NameError: name 'Annotated' is not defined` when running via `uvx --from "git+https://github.com/numikel/law-scrapper-mcp" law-scrapper`. Removed `from __future__ import annotations` from `compare.py` so parameter type hints resolve correctly during tool registration.
@@ -627,6 +638,48 @@ uv run pytest --cov=law_scrapper_mcp --cov-report=term-missing
 # Run with timeout for slow tests
 uv run pytest --timeout=10 -v
 ```
+
+### MCP integration testing
+
+Law Scrapper MCP uses automated integration tests to verify all 13 tools and their MCP protocol interaction. **The tests do NOT use Playwright or MCP Inspector** — they use a fast, lightweight in-memory testing approach:
+
+**What it is:**
+- FastMCP in-memory `Client(app)` calling tools via the MCP protocol without an external server
+- Mock HTTP responses via `respx` (intercepting calls to `api.sejm.gov.pl`)
+- 41 integration tests covering all 13 tools, EnrichedResponse validation, and error handling
+- Tests verify: tool registration, parameter validation, response structure, stateful workflows (search → filter → read), and graceful error degradation
+
+**What it is NOT:**
+- NOT browser automation (no Playwright, Selenium, or headless browsers)
+- NOT MCP Inspector or any GUI-based testing
+- NOT requiring a running server process
+- NOT real API calls (all Sejm API endpoints are mocked with `respx`)
+
+**How to run:**
+```bash
+# Run integration tests
+uv run pytest tests/integration/ -v -m integration
+
+# Run specific test class
+uv run pytest tests/integration/test_tools_e2e.py::TestSearchTools -v
+
+# Run with coverage
+uv run pytest tests/integration/ -m integration --cov=law_scrapper_mcp
+```
+
+**Architecture:**
+- **Test framework**: pytest with async support (pytest-asyncio)
+- **HTTP mocking**: respx intercepts httpx calls before they reach the network
+- **MCP protocol**: FastMCP `Client(app)` simulates in-process STDIO transport
+- **Fixtures** (`tests/conftest.py`): Load JSON/HTML samples, mock API responses, provide `mcp_client` fixture
+- **Test file**: `tests/integration/test_tools_e2e.py` (41 tests)
+
+**Key test patterns:**
+1. **Tool listing** — Verify all 13 tools are registered and have descriptions
+2. **Smoke tests** — Each tool returns valid JSON with `{data, hints}` envelope
+3. **Data validation** — Results contain expected fields matching fixture values
+4. **Stateful workflows** — Chain tools: search → filter → load act → read sections → search in content
+5. **Error handling** — Invalid inputs return graceful errors in the response, not exceptions
 
 ### Code quality
 

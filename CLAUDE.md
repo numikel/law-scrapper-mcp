@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v2.3.1 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with FastMCP, it supports STDIO (default) and streamable-http transport on port 7683.
+Law Scrapper MCP v2.4.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with FastMCP 3.x, it supports STDIO (default) and streamable-http transport on port 7683.
 
 ## Development commands
 
@@ -36,6 +36,10 @@ uv run ruff check src/
 uv run mypy src/law_scrapper_mcp/
 ```
 
+## Testing strategy
+
+The project uses pytest with FastMCP in-memory Client for integration tests (41 tests covering all 13 tools). See README.md "MCP integration testing" section for architecture details.
+
 ## Architecture
 
 The project follows a layered architecture with src/ layout:
@@ -59,6 +63,7 @@ src/law_scrapper_mcp/
 - **TTL cache**: Async API response cache with configurable TTL (metadata=24h, search=10min)
 - **Error handling**: `@handle_tool_errors` decorator with error classification and traceback logging
 - **Async throughout**: httpx.AsyncClient with retry (tenacity), semaphore rate limiting, asyncio.Lock
+- **FastMCP 3.x**: Tools access lifespan resources via `ctx.lifespan_context`; HTTP via `app.run(transport=...)`
 
 **Tool categories** (13 tools total):
 - `metadata` — `get_system_metadata` (consolidates 6 old metadata tools)

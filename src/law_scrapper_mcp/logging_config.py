@@ -7,9 +7,7 @@ import sys
 from typing import Literal
 
 
-def setup_logging(
-    level: str = "INFO", format: Literal["text", "json"] = "text"
-) -> None:
+def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text") -> None:
     """Setup structured logging for the application.
 
     Args:
@@ -39,9 +37,7 @@ def setup_logging(
         formatter: logging.Formatter = JsonFormatter()
     else:
         # Text format for development
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Configure root logger
     root_logger = logging.getLogger()

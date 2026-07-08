@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "2.3.0"
+    server_version: str = "2.4.0"
 
 
 settings = Settings()

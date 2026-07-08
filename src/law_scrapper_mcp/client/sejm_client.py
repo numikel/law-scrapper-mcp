@@ -44,9 +44,7 @@ class SejmApiClient:
         """Initialize the HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(
-                    connect=5.0, read=self._timeout, write=10.0, pool=10.0
-                ),
+                timeout=httpx.Timeout(connect=5.0, read=self._timeout, write=10.0, pool=10.0),
                 headers={
                     "User-Agent": "law-scrapper-mcp/2.0",
                     "Accept": "application/json",
@@ -65,9 +63,7 @@ class SejmApiClient:
         wait=wait_exponential(min=1, max=10),
         retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError)),
     )
-    async def _request(
-        self, method: str, path: str, **kwargs: Any
-    ) -> httpx.Response:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Make HTTP request with retry logic and circuit breaker.
 
         Args:
@@ -122,9 +118,7 @@ class SejmApiClient:
                         url=url,
                     ) from e
 
-    async def get_json(
-        self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None
-    ) -> Any:
+    async def get_json(self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None) -> Any:
         """Get JSON response from API with optional caching.
 
         Args:
@@ -160,9 +154,7 @@ class SejmApiClient:
         Returns:
             Response text
         """
-        response = await self._request(
-            "GET", path, headers={"Accept": "text/html, text/plain, */*"}
-        )
+        response = await self._request("GET", path, headers={"Accept": "text/html, text/plain, */*"})
         return response.text
 
     async def get_bytes(self, path: str) -> bytes:
@@ -204,9 +196,7 @@ class SejmApiClient:
         """
         return await self.get_json("acts/search", params=params)
 
-    async def get_act_structure(
-        self, publisher: str, year: int, pos: int
-    ) -> list[dict[str, Any]]:
+    async def get_act_structure(self, publisher: str, year: int, pos: int) -> list[dict[str, Any]]:
         """Get act table of contents structure.
 
         Args:
@@ -220,9 +210,7 @@ class SejmApiClient:
         path = f"acts/{publisher}/{year}/{pos}/struct"
         return await self.get_json(path)
 
-    async def get_act_references(
-        self, publisher: str, year: int, pos: int
-    ) -> dict[str, Any]:
+    async def get_act_references(self, publisher: str, year: int, pos: int) -> dict[str, Any]:
         """Get act references/relationships.
 
         Args:

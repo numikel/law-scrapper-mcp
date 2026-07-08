@@ -295,7 +295,7 @@ class TestLRUEviction:
 
         # Load 3 documents to fill the store
         for i in range(3):
-            await store.load(f"DU/2024/{i+1}", f"Content {i+1}", sections)
+            await store.load(f"DU/2024/{i + 1}", f"Content {i + 1}", sections)
 
         assert await store.is_loaded("DU/2024/1")
 
@@ -314,7 +314,7 @@ class TestLRUEviction:
 
         # Load 3 documents
         for i in range(3):
-            await store.load(f"DU/2024/{i+1}", f"Content {i+1}", sections)
+            await store.load(f"DU/2024/{i + 1}", f"Content {i + 1}", sections)
             time.sleep(0.1)
 
         # Access document 1 and 2, but not 3

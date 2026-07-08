@@ -253,7 +253,7 @@ class TestApiResponseModels:
             ActSummaryOutput(
                 eli="DU/2024/1",
                 publisher="DU",
-                year="invalid",  # Should be int
+                year="invalid",  # type: ignore[arg-type]  # Should be int
                 pos=1,
                 title="Test",
                 status="test",

@@ -19,13 +19,9 @@ class TestChangesService:
         return ChangesService(client=mock_client)
 
     @respx.mock
-    async def test_track_changes_basic(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_basic(self, service: ChangesService, search_results: dict):
         """Test basic changes tracking."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -37,13 +33,9 @@ class TestChangesService:
         assert date_range == "2024-01-01 to 2024-12-31"
 
     @respx.mock
-    async def test_track_changes_defaults_date_to_today(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_defaults_date_to_today(self, service: ChangesService, search_results: dict):
         """Test that date_to defaults to today when not provided."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -55,13 +47,9 @@ class TestChangesService:
         assert len(results) == 3
 
     @respx.mock
-    async def test_track_changes_with_keywords(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_with_keywords(self, service: ChangesService, search_results: dict):
         """Test changes tracking with keyword filter."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -73,13 +61,9 @@ class TestChangesService:
         assert len(results) > 0
 
     @respx.mock
-    async def test_track_changes_mp_publisher(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_mp_publisher(self, service: ChangesService, search_results: dict):
         """Test changes tracking for Monitor Polski."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="MP",
@@ -93,9 +77,7 @@ class TestChangesService:
     async def test_track_changes_empty_results(self, service: ChangesService):
         """Test changes tracking with no results."""
         empty_results = {"count": 0, "items": []}
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=empty_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=empty_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -107,13 +89,9 @@ class TestChangesService:
         assert "1900-01-01 to 1900-12-31" in date_range
 
     @respx.mock
-    async def test_track_changes_result_formatting(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_result_formatting(self, service: ChangesService, search_results: dict):
         """Test that results are properly formatted."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -134,13 +112,9 @@ class TestChangesService:
         assert results[0].in_force == "YES"
 
     @respx.mock
-    async def test_track_changes_multiple_keywords(
-        self, service: ChangesService, search_results: dict
-    ):
+    async def test_track_changes_multiple_keywords(self, service: ChangesService, search_results: dict):
         """Test changes tracking with multiple keywords."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=search_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",
@@ -154,9 +128,7 @@ class TestChangesService:
     @respx.mock
     async def test_track_changes_api_error(self, service: ChangesService):
         """Test handling of API errors."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(500)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(500))
 
         with pytest.raises(Exception):  # noqa: B017
             await service.track_changes(
@@ -165,9 +137,7 @@ class TestChangesService:
             )
 
     @respx.mock
-    async def test_track_changes_handles_missing_fields(
-        self, service: ChangesService
-    ):
+    async def test_track_changes_handles_missing_fields(self, service: ChangesService):
         """Test that missing fields in results are handled gracefully."""
         partial_results = {
             "count": 1,
@@ -183,9 +153,7 @@ class TestChangesService:
                 }
             ],
         }
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-            return_value=Response(200, json=partial_results)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=partial_results))
 
         results, date_range = await service.track_changes(
             publisher="DU",

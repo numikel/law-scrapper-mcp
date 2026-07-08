@@ -58,9 +58,7 @@ class DocumentStore:
         async with self._lock:
             doc_size = len(markdown.encode("utf-8"))
             if doc_size > self._max_size_bytes:
-                logger.warning(
-                    f"Document {eli} exceeds max size ({doc_size} > {self._max_size_bytes}), truncating"
-                )
+                logger.warning(f"Document {eli} exceeds max size ({doc_size} > {self._max_size_bytes}), truncating")
                 # Truncate to max size
                 markdown = markdown[: self._max_size_bytes]
                 # Re-index sections for truncated content
@@ -83,10 +81,7 @@ class DocumentStore:
             # Find section by ID (case-insensitive, flexible matching)
             section_id_lower = section_id.lower().replace(" ", "_")
             for section in doc.sections:
-                if (
-                    section.id.lower() == section_id_lower
-                    or section.title.lower().startswith(section_id.lower())
-                ):
+                if section.id.lower() == section_id_lower or section.title.lower().startswith(section_id.lower()):
                     return section.content
 
             # Try matching by "Art. X" pattern
@@ -94,9 +89,7 @@ class DocumentStore:
             if art_match:
                 art_num = art_match.group(1)
                 for section in doc.sections:
-                    if re.match(
-                        rf"Art\.?\s*{re.escape(art_num)}", section.title, re.IGNORECASE
-                    ):
+                    if re.match(rf"Art\.?\s*{re.escape(art_num)}", section.title, re.IGNORECASE):
                         return section.content
 
             return None
@@ -122,9 +115,7 @@ class DocumentStore:
                 section_id = "unknown"
                 section_title = "Unknown section"
                 for section in doc.sections:
-                    if section.start_pos <= match.start() < (
-                        section.end_pos or len(doc.markdown)
-                    ):
+                    if section.start_pos <= match.start() < (section.end_pos or len(doc.markdown)):
                         section_id = section.id
                         section_title = section.title
                         break
@@ -168,12 +159,8 @@ class DocumentStore:
                     "eli": doc.eli,
                     "size_bytes": doc.size_bytes,
                     "section_count": len(doc.sections),
-                    "loaded_at": time.strftime(
-                        "%Y-%m-%d %H:%M:%S", time.localtime(doc.loaded_at)
-                    ),
-                    "last_accessed": time.strftime(
-                        "%Y-%m-%d %H:%M:%S", time.localtime(doc.last_accessed)
-                    ),
+                    "loaded_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(doc.loaded_at)),
+                    "last_accessed": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(doc.last_accessed)),
                 }
                 for doc in self._store.values()
             ]

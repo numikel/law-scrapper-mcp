@@ -49,7 +49,7 @@ def register(mcp: FastMCP) -> None:
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
         assert ctx is not None
-        metadata_service = ctx.request_context.lifespan_context["metadata_service"]
+        metadata_service = ctx.lifespan_context["metadata_service"]
 
         # Convert string to enum
         try:
@@ -63,9 +63,7 @@ def register(mcp: FastMCP) -> None:
             data=MetadataOutput(
                 category=category,
                 metadata=metadata,
-                count=sum(
-                    len(v) if isinstance(v, list) else 1 for v in metadata.values()
-                ),
+                count=sum(len(v) if isinstance(v, list) else 1 for v in metadata.values()),
             ),
             hints=metadata_hints(category),
         )

@@ -106,7 +106,7 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych
         """
         assert ctx is not None
-        result_store = ctx.request_context.lifespan_context["result_store"]
+        result_store = ctx.lifespan_context["result_store"]
 
         # Normalize params (MCP clients may send int/bool as strings)
         year_int: int | None = None
@@ -119,11 +119,7 @@ def register(mcp: FastMCP) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 limit_int = int(limit)
 
-        sort_desc_bool = (
-            sort_desc.lower() in ("true", "1", "yes")
-            if isinstance(sort_desc, str)
-            else bool(sort_desc)
-        )
+        sort_desc_bool = sort_desc.lower() in ("true", "1", "yes") if isinstance(sort_desc, str) else bool(sort_desc)
 
         filtered, original_count = await result_store.filter_results(
             result_set_id,
@@ -215,7 +211,6 @@ def register(mcp: FastMCP) -> None:
 
         return response.model_dump_json()
 
-
     @mcp.tool(tags={"utility", "filter"})
     @handle_tool_errors(
         default_factory=lambda e, kw: ResultSetListOutput(sets=[], count=0),
@@ -237,7 +232,7 @@ def register(mcp: FastMCP) -> None:
         - list_result_sets() - Wyświetl wszystkie aktywne zestawy wyników
         """
         assert ctx is not None
-        result_store = ctx.request_context.lifespan_context["result_store"]
+        result_store = ctx.lifespan_context["result_store"]
 
         raw_sets = await result_store.list_sets()
         sets = [ResultSetInfo(**s) for s in raw_sets]

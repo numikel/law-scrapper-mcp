@@ -27,9 +27,9 @@ def register(mcp: FastMCP) -> None:
     async def analyze_act_relationships(
         eli: Annotated[
             str,
-            "Identyfikator ELI aktu. Format: \"{wydawca}/{rok}/{pozycja}\". "
+            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
             "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            "Przykłady: \"DU/2024/1716\", \"MP/2023/500\", \"DU/2024/1\".",
+            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".',
         ],
         relationship_type: Annotated[
             str | None,
@@ -55,7 +55,7 @@ def register(mcp: FastMCP) -> None:
         - analyze_act_relationships(eli="DU/2024/1", relationship_type="Akty uznane za uchylone") - Uchylone akty
         """
         assert ctx is not None
-        client = ctx.request_context.lifespan_context["client"]
+        client = ctx.lifespan_context["client"]
 
         # Parse ELI
         parts = eli.split("/")
@@ -64,9 +64,7 @@ def register(mcp: FastMCP) -> None:
         publisher, year, pos = parts
 
         # Get references
-        references_data = await client.get_json(
-            f"acts/{publisher}/{year}/{pos}/references"
-        )
+        references_data = await client.get_json(f"acts/{publisher}/{year}/{pos}/references")
 
         # Process relationships
         relationships = {}
@@ -77,9 +75,7 @@ def register(mcp: FastMCP) -> None:
         elif isinstance(references_data, list):
             relationships["references"] = references_data
 
-        total_count = sum(
-            len(v) if isinstance(v, list) else 1 for v in relationships.values()
-        )
+        total_count = sum(len(v) if isinstance(v, list) else 1 for v in relationships.values())
 
         response = EnrichedResponse(
             data=RelationshipsOutput(

@@ -45,9 +45,9 @@ class CircuitBreaker:
     def state(self) -> CircuitState:
         """Current circuit breaker state."""
         if self._state == CircuitState.OPEN and time.monotonic() - self._last_failure_time >= self._recovery_timeout:
-                self._state = CircuitState.HALF_OPEN
-                self._half_open_successes = 0
-                logger.info("Circuit breaker transitioning to HALF_OPEN")
+            self._state = CircuitState.HALF_OPEN
+            self._half_open_successes = 0
+            logger.info("Circuit breaker transitioning to HALF_OPEN")
         return self._state
 
     @property

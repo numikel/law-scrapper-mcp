@@ -62,8 +62,8 @@ def register(mcp: FastMCP) -> None:
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
         """
         assert ctx is not None
-        search_service = ctx.request_context.lifespan_context["search_service"]
-        result_store = ctx.request_context.lifespan_context["result_store"]
+        search_service = ctx.lifespan_context["search_service"]
+        result_store = ctx.lifespan_context["result_store"]
 
         # Normalize year (MCP clients may send string)
         year_int = 0

@@ -42,15 +42,30 @@ def store() -> ResultStore:
 def sample_results() -> list[ActSummaryOutput]:
     return [
         _make_act("DU/2024/1", "Ustawa o podatku dochodowym", act_type="Ustawa", promulgation_date="2024-01-10"),
-        _make_act("DU/2024/2", "Rozporządzenie Ministra Zdrowia", act_type="Rozporządzenie", promulgation_date="2024-03-15"),
+        _make_act(
+            "DU/2024/2", "Rozporządzenie Ministra Zdrowia", act_type="Rozporządzenie", promulgation_date="2024-03-15"
+        ),
         _make_act("DU/2024/3", "Ustawa o ochronie danych osobowych", act_type="Ustawa", promulgation_date="2024-06-01"),
-        _make_act("DU/2024/4", "Rozporządzenie w sprawie transportu", act_type="Rozporządzenie", promulgation_date="2024-07-20"),
-        _make_act("DU/2024/5", "Obwieszczenie Ministra Zdrowia", act_type="Obwieszczenie", promulgation_date="2024-09-01", status="akt jednorazowy"),
+        _make_act(
+            "DU/2024/4",
+            "Rozporządzenie w sprawie transportu",
+            act_type="Rozporządzenie",
+            promulgation_date="2024-07-20",
+        ),
+        _make_act(
+            "DU/2024/5",
+            "Obwieszczenie Ministra Zdrowia",
+            act_type="Obwieszczenie",
+            promulgation_date="2024-09-01",
+            status="akt jednorazowy",
+        ),
     ]
 
 
 class TestResultStore:
-    async def test_store_returns_incremental_ids(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_store_returns_incremental_ids(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         id1 = await store.store(sample_results[:2], "query1", 2)
         id2 = await store.store(sample_results[2:], "query2", 3)
         assert id1 == "rs_1"
@@ -112,7 +127,9 @@ class TestResultStoreFiltering:
         filtered, _ = await store.filter_results(rs_id, year_equals=2024)
         assert len(filtered) == 2
 
-    async def test_filter_by_regex_pattern_title(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_filter_by_regex_pattern_title(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, pattern="zdrow|Zdrowia")
         assert len(filtered) == 2  # Minister Zdrowia appears in 2 titles
@@ -151,7 +168,7 @@ class TestResultStoreFiltering:
         rs_id = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, sort_by="promulgation_date", sort_desc=True)
         dates = [r.promulgation_date for r in filtered]
-        assert dates == sorted(dates, reverse=True)
+        assert dates == sorted(dates, key=lambda d: d or "", reverse=True)
 
     async def test_filter_limit(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
         rs_id = await store.store(sample_results, "test", 5)
@@ -162,12 +179,16 @@ class TestResultStoreFiltering:
         with pytest.raises(ResultSetNotFoundError, match="Zestaw wyników 'rs_999' nie istnieje lub wygasł"):
             await store.filter_results("rs_999")
 
-    async def test_filter_invalid_regex_raises(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_filter_invalid_regex_raises(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
         with pytest.raises(ValueError, match="Invalid regex"):
             await store.filter_results(rs_id, pattern="[invalid")
 
-    async def test_filter_invalid_field_defaults_to_title(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_filter_invalid_field_defaults_to_title(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
         # Invalid field should default to title
         filtered, _ = await store.filter_results(rs_id, pattern="podatk", field="nonexistent")
@@ -178,7 +199,9 @@ class TestResultStoreFiltering:
         filtered, _ = await store.filter_results(rs_id, pattern="xyznonexistent")
         assert len(filtered) == 0
 
-    async def test_filter_no_filters_returns_all(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_filter_no_filters_returns_all(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
         filtered, original = await store.filter_results(rs_id)
         assert len(filtered) == 5

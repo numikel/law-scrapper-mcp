@@ -30,13 +30,9 @@ class TestActService:
         )
 
     @respx.mock
-    async def test_get_details_basic(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_basic(self, service: ActService, act_detail: dict):
         """Test getting basic act details."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
             return_value=Response(404)  # No structure available
         )
@@ -54,13 +50,9 @@ class TestActService:
         assert result.is_loaded is False
 
     @respx.mock
-    async def test_get_details_with_structure(
-        self, service: ActService, act_detail: dict, act_structure: list
-    ):
+    async def test_get_details_with_structure(self, service: ActService, act_detail: dict, act_structure: list):
         """Test getting details with structure/TOC."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
             return_value=Response(200, json=act_structure)
         )
@@ -72,16 +64,10 @@ class TestActService:
         assert result.toc[0]["title"] == "Przepisy ogólne"
 
     @respx.mock
-    async def test_get_details_with_keywords(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_with_keywords(self, service: ActService, act_detail: dict):
         """Test that keywords are properly extracted."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
         result = await service.get_details("DU/2024/1")
 
@@ -98,12 +84,8 @@ class TestActService:
         document_store: DocumentStore,
     ):
         """Test loading HTML content into document store."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.html").mock(
             return_value=Response(200, text=sample_act_html)
         )
@@ -130,12 +112,8 @@ class TestActService:
             [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)],
         )
 
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
         result = await service.get_details("DU/2024/1", load_content=True)
 
@@ -143,9 +121,7 @@ class TestActService:
         # Should not make additional HTTP requests for content
 
     @respx.mock
-    async def test_get_details_load_content_pdf_fallback(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_load_content_pdf_fallback(self, service: ActService, act_detail: dict):
         """Test loading PDF content when HTML is not available."""
         # Modify act_detail to not have HTML
         act_detail_no_html = act_detail.copy()
@@ -154,9 +130,7 @@ class TestActService:
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
             return_value=Response(200, json=act_detail_no_html)
         )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf").mock(
             return_value=Response(200, content=b"%PDF-1.4 fake pdf")
         )
@@ -167,9 +141,7 @@ class TestActService:
         assert result.has_pdf is True
 
     @respx.mock
-    async def test_get_details_handles_missing_content(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_handles_missing_content(self, service: ActService, act_detail: dict):
         """Test handling of missing content gracefully."""
         act_detail_no_content = act_detail.copy()
         act_detail_no_content["textHTML"] = None
@@ -178,9 +150,7 @@ class TestActService:
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
             return_value=Response(200, json=act_detail_no_content)
         )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
         result = await service.get_details("DU/2024/1", load_content=True)
 
@@ -188,34 +158,20 @@ class TestActService:
         assert result.has_pdf is False
 
     @respx.mock
-    async def test_get_details_from_url_eli(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_from_url_eli(self, service: ActService, act_detail: dict):
         """Test getting details using full URL ELI."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
-        result = await service.get_details(
-            "https://api.sejm.gov.pl/eli/DU/2024/1", load_content=False
-        )
+        result = await service.get_details("https://api.sejm.gov.pl/eli/DU/2024/1", load_content=False)
 
         assert result.eli == "DU/2024/1"
 
     @respx.mock
-    async def test_get_details_all_date_fields(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_all_date_fields(self, service: ActService, act_detail: dict):
         """Test that all date fields are properly extracted."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
         result = await service.get_details("DU/2024/1")
 
@@ -227,29 +183,19 @@ class TestActService:
         assert result.change_date is None
 
     @respx.mock
-    async def test_get_details_with_volume(
-        self, service: ActService, act_detail: dict
-    ):
+    async def test_get_details_with_volume(self, service: ActService, act_detail: dict):
         """Test that volume is properly extracted."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
 
         result = await service.get_details("DU/2024/1")
 
         assert result.volume == 1
 
     @respx.mock
-    async def test_format_toc_recursive(
-        self, service: ActService, act_detail: dict, act_structure: list
-    ):
+    async def test_format_toc_recursive(self, service: ActService, act_detail: dict, act_structure: list):
         """Test that TOC formatting handles nested children."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
-            return_value=Response(200, json=act_detail)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(
             return_value=Response(200, json=act_structure)
         )
@@ -264,9 +210,7 @@ class TestActService:
     @respx.mock
     async def test_get_details_api_error(self, service: ActService):
         """Test handling of API errors."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/999").mock(
-            return_value=Response(404)
-        )
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/999").mock(return_value=Response(404))
 
         with pytest.raises(Exception):  # noqa: B017
             await service.get_details("DU/2024/999")

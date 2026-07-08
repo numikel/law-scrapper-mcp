@@ -67,10 +67,7 @@ class ResultStore:
                 query_summary=query_summary,
                 total_count=total_count,
             )
-            logger.info(
-                f"Stored result set {result_set_id}: {len(results)} results "
-                f"(query: {query_summary})"
-            )
+            logger.info(f"Stored result set {result_set_id}: {len(results)} results (query: {query_summary})")
             return result_set_id
 
     async def get(self, result_set_id: str) -> StoredResultSet | None:
@@ -95,9 +92,7 @@ class ResultStore:
                     "query_summary": rs.query_summary,
                     "result_count": len(rs.results),
                     "total_count": rs.total_count,
-                    "created_at": time.strftime(
-                        "%Y-%m-%d %H:%M:%S", time.localtime(rs.created_at)
-                    ),
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rs.created_at)),
                 }
                 for rs in self._store.values()
             ]
@@ -143,11 +138,7 @@ class ResultStore:
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern: {e}") from e
 
-            filtered = [
-                r
-                for r in filtered
-                if _match_field(r, field, compiled)
-            ]
+            filtered = [r for r in filtered if _match_field(r, field, compiled)]
 
         # Date range filter
         if date_field and (date_from or date_to):
@@ -166,9 +157,7 @@ class ResultStore:
     def _evict_expired(self) -> None:
         """Remove expired result sets (called under lock)."""
         now = time.time()
-        expired = [
-            k for k, v in self._store.items() if now - v.last_accessed > self._ttl
-        ]
+        expired = [k for k, v in self._store.items() if now - v.last_accessed > self._ttl]
         for key in expired:
             del self._store[key]
 

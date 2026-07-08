@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-07-08
+
+### Security
+
+- **FastMCP 2.12.4 → 3.2.0+** — Resolves transitive vulnerabilities in starlette, mcp, authlib, python-multipart, and python-dotenv
+- **uv override-dependencies** — Force minimum versions for cryptography (≥48.0.1), urllib3 (≥2.7.0), idna (≥3.15), werkzeug (≥3.1.6), requests (≥2.33.0)
+- **pdfplumber 0.11.10+** — Pulls Pillow ≥12.2.0 to address image processing CVEs
+- **pytest 9.0.3+** — Dev dependency security update
+
+### Changed
+
+- **FastMCP 3.x migration** — Tools access lifespan resources via `ctx.lifespan_context` (was `ctx.request_context.lifespan_context`)
+- **HTTP server startup** — Replaced manual Starlette/uvicorn wiring with `app.run(transport=..., path="/mcp")` and `@app.custom_route("/health")`
+- **Integration tests** — FastMCP in-memory `Client` fixture enables end-to-end tool tests without network
+- **CI pipeline** — GitHub Actions workflow for ruff, mypy, pytest; Dependabot for pip and github-actions
+
+### Added
+
+- **`tests/unit/test_server.py`** — Verifies 13 tools registered and lifespan service keys
+- **`tests/integration/test_http_transport.py`** — ASGI smoke test for `/health` endpoint
+- **`.github/workflows/ci.yml`** and **`.github/dependabot.yml`**
+
 ## [2.3.1] - 2026-02-20
 
 ### Fixed

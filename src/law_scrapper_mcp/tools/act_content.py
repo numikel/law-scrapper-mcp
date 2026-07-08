@@ -32,9 +32,9 @@ def register(mcp: FastMCP) -> None:
     async def read_act_content(
         eli: Annotated[
             str,
-            "Identyfikator ELI aktu. Format: \"{wydawca}/{rok}/{pozycja}\". "
+            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
             "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            "Przykłady: \"DU/2024/1716\", \"MP/2023/500\", \"DU/2024/1\". "
+            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
             "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True).",
         ],
         section: Annotated[
@@ -66,14 +66,12 @@ def register(mcp: FastMCP) -> None:
         - read_act_content(eli="MP/2024/100") - Spis treści aktu z MP
         """
         assert ctx is not None
-        document_store = ctx.request_context.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context["document_store"]
 
         if section is None:
             # Return table of contents
             sections = await document_store.get_toc(eli)
-            toc = [
-                {"id": s.id, "title": s.title, "level": s.level} for s in sections
-            ]
+            toc = [{"id": s.id, "title": s.title, "level": s.level} for s in sections]
             response = EnrichedResponse(
                 data=ContentOutput(
                     eli=eli,
@@ -132,7 +130,7 @@ def register(mcp: FastMCP) -> None:
         - list_loaded_documents() - Wyświetl wszystkie załadowane dokumenty
         """
         assert ctx is not None
-        document_store = ctx.request_context.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context["document_store"]
 
         raw_docs = await document_store.list_documents()
         documents = [LoadedDocumentInfo(**d) for d in raw_docs]

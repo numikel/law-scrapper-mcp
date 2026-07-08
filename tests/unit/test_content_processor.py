@@ -17,9 +17,7 @@ class TestHtmlToMarkdown:
         assert "# Title" in md
         assert "Paragraph text." in md
 
-    def test_html_to_markdown_with_sample(
-        self, content_processor: ContentProcessor, sample_act_html: str
-    ):
+    def test_html_to_markdown_with_sample(self, content_processor: ContentProcessor, sample_act_html: str):
         """Test HTML to Markdown with sample act HTML."""
         md = content_processor.html_to_markdown(sample_act_html)
         assert "USTAWA z dnia 1 stycznia 2024 r." in md
@@ -37,9 +35,7 @@ class TestHtmlToMarkdown:
         assert "Text" in md
         assert "<script>" not in md
 
-    def test_html_to_markdown_normalizes_whitespace(
-        self, content_processor: ContentProcessor
-    ):
+    def test_html_to_markdown_normalizes_whitespace(self, content_processor: ContentProcessor):
         """Test that excessive blank lines are removed."""
         html = "<h1>Title</h1>\n\n\n\n<p>Text</p>"
         md = content_processor.html_to_markdown(html)
@@ -89,9 +85,7 @@ class TestPdfToText:
         assert "\n\n" in text  # Pages should be separated
 
     @patch("pdfplumber.open")
-    def test_pdf_to_text_extraction_failure(
-        self, mock_pdfplumber, content_processor: ContentProcessor
-    ):
+    def test_pdf_to_text_extraction_failure(self, mock_pdfplumber, content_processor: ContentProcessor):
         """Test that PDF extraction failures are handled gracefully."""
         mock_pdfplumber.side_effect = Exception("PDF parsing error")
 
@@ -101,9 +95,7 @@ class TestPdfToText:
         assert text == ""
 
     @patch("pdfplumber.open")
-    def test_pdf_to_text_no_text_on_page(
-        self, mock_pdfplumber, content_processor: ContentProcessor
-    ):
+    def test_pdf_to_text_no_text_on_page(self, mock_pdfplumber, content_processor: ContentProcessor):
         """Test PDF with pages that have no text."""
         mock_page = MagicMock()
         mock_page.extract_text.return_value = None
@@ -120,9 +112,7 @@ class TestPdfToText:
 class TestIndexSections:
     """Tests for section indexing."""
 
-    def test_index_sections_with_markdown_headings(
-        self, content_processor: ContentProcessor
-    ):
+    def test_index_sections_with_markdown_headings(self, content_processor: ContentProcessor):
         """Test indexing sections with standard Markdown headings."""
         markdown = """# Chapter 1
 Content of chapter 1
@@ -153,9 +143,7 @@ Art. 3. Third article content."""
         art_sections = [s for s in sections if s.title.startswith("Art.")]
         assert len(art_sections) >= 3
 
-    def test_index_sections_with_rozdzial_pattern(
-        self, content_processor: ContentProcessor
-    ):
+    def test_index_sections_with_rozdzial_pattern(self, content_processor: ContentProcessor):
         """Test indexing sections with Rozdział pattern."""
         markdown = """Rozdział 1 General provisions
 
@@ -170,9 +158,7 @@ More content here."""
         rozdzial_sections = [s for s in sections if "Rozdział" in s.title]
         assert len(rozdzial_sections) >= 2
 
-    def test_index_sections_with_sample_act(
-        self, content_processor: ContentProcessor, sample_act_html: str
-    ):
+    def test_index_sections_with_sample_act(self, content_processor: ContentProcessor, sample_act_html: str):
         """Test indexing sections with sample act HTML."""
         markdown = content_processor.html_to_markdown(sample_act_html)
         sections = content_processor.index_sections(markdown)

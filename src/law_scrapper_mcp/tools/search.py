@@ -21,9 +21,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"search"})
     @handle_tool_errors(
-        default_factory=lambda e, kw: SearchOutput(
-            results=[], total_count=0, query_summary="", returned_count=0
-        ),
+        default_factory=lambda e, kw: SearchOutput(results=[], total_count=0, query_summary="", returned_count=0),
     )
     async def search_legal_acts(
         publisher: Annotated[
@@ -106,8 +104,8 @@ def register(mcp: FastMCP) -> None:
         - search_legal_acts(title="budżet", year=2024) - Akty budżetowe z 2024
         """
         assert ctx is not None
-        search_service = ctx.request_context.lifespan_context["search_service"]
-        result_store = ctx.request_context.lifespan_context["result_store"]
+        search_service = ctx.lifespan_context["search_service"]
+        result_store = ctx.lifespan_context["result_store"]
 
         # Normalize params (MCP clients may send int/bool as strings)
         year_int: int | None = None
@@ -127,11 +125,7 @@ def register(mcp: FastMCP) -> None:
 
         in_force_bool: bool | None = None
         if in_force is not None:
-            in_force_bool = (
-                in_force.lower() in ("true", "1", "yes")
-                if isinstance(in_force, str)
-                else bool(in_force)
-            )
+            in_force_bool = in_force.lower() in ("true", "1", "yes") if isinstance(in_force, str) else bool(in_force)
 
         # Convert detail_level string to enum
         try:

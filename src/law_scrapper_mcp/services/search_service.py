@@ -68,9 +68,7 @@ class SearchService:
         if offset:
             params["offset"] = offset
 
-        data = await self._client.get_json(
-            "acts/search", params=params, cache_ttl=settings.cache_search_ttl
-        )
+        data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
         items = data.get("items", [])
         total_count = data.get("count", len(items))

@@ -39,8 +39,7 @@ def register(mcp: FastMCP) -> None:
         ] = None,
         keywords: Annotated[
             list[str] | None,
-            "Słowa kluczowe do filtrowania zmian (logika AND). "
-            "Np. ['podatek'], ['zdrowotny', 'ubezpieczenie'].",
+            "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie'].",
         ] = None,
         ctx: Context = None,
     ) -> str:
@@ -59,8 +58,8 @@ def register(mcp: FastMCP) -> None:
         - track_legal_changes(date_from="2024-01-01", keywords=["zdrowotny"]) - Zmiany zdrowotne
         """
         assert ctx is not None
-        changes_service = ctx.request_context.lifespan_context["changes_service"]
-        result_store = ctx.request_context.lifespan_context["result_store"]
+        changes_service = ctx.lifespan_context["changes_service"]
+        result_store = ctx.lifespan_context["result_store"]
 
         results, date_range = await changes_service.track_changes(
             publisher=publisher,

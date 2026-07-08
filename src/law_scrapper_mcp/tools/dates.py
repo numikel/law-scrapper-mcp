@@ -56,8 +56,7 @@ def register(mcp: FastMCP) -> None:
     async def calculate_legal_date(
         days: Annotated[
             str | int,
-            "Liczba dni do dodania (+) lub odjęcia (-). "
-            "Np. days=14 = za 14 dni, days=-14 = 14 dni temu. Domyślnie 0.",
+            "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. Domyślnie 0.",
         ] = 0,
         months: Annotated[
             str | int,
@@ -66,8 +65,7 @@ def register(mcp: FastMCP) -> None:
         ] = 0,
         years: Annotated[
             str | int,
-            "Liczba lat do dodania (+) lub odjęcia (-). "
-            "Np. years=1 = za rok, years=-5 = 5 lat temu. Domyślnie 0.",
+            "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. Domyślnie 0.",
         ] = 0,
         base_date: Annotated[
             str | None,

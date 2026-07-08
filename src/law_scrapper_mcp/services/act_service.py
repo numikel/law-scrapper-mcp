@@ -31,9 +31,7 @@ class ActService:
         publisher, year, pos = parse_eli(eli)
 
         # Get act details
-        data = await self._client.get_json(
-            f"acts/{publisher}/{year}/{pos}", cache_ttl=settings.cache_details_ttl
-        )
+        data = await self._client.get_json(f"acts/{publisher}/{year}/{pos}", cache_ttl=settings.cache_details_ttl)
 
         # Get structure/TOC
         toc_data = []
@@ -76,9 +74,7 @@ class ActService:
             is_loaded=is_loaded,
         )
 
-    async def _load_content(
-        self, eli: str, publisher: str, year: int, pos: int, has_html: bool
-    ) -> None:
+    async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool) -> None:
         """Load act content into document store."""
         try:
             if has_html:
@@ -87,9 +83,7 @@ class ActService:
             else:
                 # Try PDF
                 try:
-                    pdf_bytes = await self._client.get_bytes(
-                        f"acts/{publisher}/{year}/{pos}/text.pdf"
-                    )
+                    pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf")
                     markdown = self._content_processor.pdf_to_text(pdf_bytes)
                     if not markdown:
                         markdown = f"*Content extraction failed. PDF available at: {self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf*"

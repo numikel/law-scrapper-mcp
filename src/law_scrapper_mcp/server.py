@@ -2,8 +2,11 @@
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Literal, cast
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
@@ -142,33 +145,34 @@ UWAGI:
 register_all_tools(app)
 
 
+@app.custom_route("/health", methods=["GET"])
+async def health(_request: Request) -> JSONResponse:
+    """Health check endpoint for Docker and monitoring."""
+    return JSONResponse(
+        {
+            "status": "ok",
+            "version": settings.server_version,
+            "server": settings.server_name,
+        }
+    )
+
+
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
-
-    if settings.transport == "streamable-http":
-        import uvicorn
-        from starlette.applications import Starlette
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-        from starlette.routing import Mount, Route
-
-        async def health(_request: Request) -> JSONResponse:
-            return JSONResponse({
-                "status": "ok",
-                "version": settings.server_version,
-                "server": settings.server_name,
-            })
-
-        starlette_app = Starlette(
-            routes=[
-                Route("/health", health),
-                Mount("/", app=app.http_app(path="/mcp")),
-            ],
+    transport = cast(
+        Literal["stdio", "http", "sse", "streamable-http"],
+        settings.transport,
+    )
+    if transport == "streamable-http":
+        app.run(
+            transport=transport,
+            host=settings.host,
+            port=settings.port,
+            path="/mcp",
         )
-        uvicorn.run(starlette_app, host=settings.host, port=settings.port)
     else:
-        app.run(transport="stdio")
+        app.run(transport=transport)
 
 
 if __name__ == "__main__":

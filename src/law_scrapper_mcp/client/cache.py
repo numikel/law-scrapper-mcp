@@ -44,9 +44,7 @@ class TTLCache:
         """Set value in cache with TTL."""
         async with self._lock:
             now = time.time()
-            self._cache[key] = CacheEntry(
-                value=value, expires_at=now + ttl, created_at=now
-            )
+            self._cache[key] = CacheEntry(value=value, expires_at=now + ttl, created_at=now)
 
             # Evict if over capacity
             if len(self._cache) > self._max_entries:

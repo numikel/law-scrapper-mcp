@@ -14,9 +14,7 @@ class Hint(BaseModel):
 
     message: str = Field(description="Hint message")
     tool: str | None = Field(default=None, description="Related tool name")
-    parameters: dict[str, Any] | None = Field(
-        default=None, description="Suggested parameters"
-    )
+    parameters: dict[str, Any] | None = Field(default=None, description="Suggested parameters")
 
 
 class EnrichedResponse(BaseModel, Generic[T]):
@@ -25,9 +23,7 @@ class EnrichedResponse(BaseModel, Generic[T]):
     data: T = Field(description="The actual response data")
     hints: list[Hint] = Field(default_factory=list, description="Suggested next steps")
     error: str | None = Field(default=None, description="Error message if any")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class ActSummaryOutput(BaseModel):

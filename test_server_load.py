@@ -1,7 +1,8 @@
 """Quick test to verify server loads correctly."""
 
-import sys
 import importlib.util
+import sys
+
 
 def test_import(module_name):
     """Test if a module can be imported."""
@@ -11,13 +12,19 @@ def test_import(module_name):
             print(f"❌ Module {module_name} not found")
             return False
 
+        loader = spec.loader
+        if loader is None:
+            print(f"Module {module_name} has no loader")
+            return False
+
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        loader.exec_module(module)
         print(f"✓ Module {module_name} loaded successfully")
         return True
     except Exception as e:
         print(f"❌ Failed to load {module_name}: {e}")
         return False
+
 
 if __name__ == "__main__":
     print("Testing Law Scrapper MCP v2.0 imports...\n")
@@ -48,7 +55,7 @@ if __name__ == "__main__":
         if test_import(module):
             success_count += 1
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {success_count}/{len(modules_to_test)} modules loaded successfully")
 
     if success_count == len(modules_to_test):

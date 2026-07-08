@@ -27,9 +27,9 @@ def register(mcp: FastMCP) -> None:
     async def search_in_act(
         eli: Annotated[
             str,
-            "Identyfikator ELI aktu. Format: \"{wydawca}/{rok}/{pozycja}\". "
+            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
             "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            "Przykłady: \"DU/2024/1716\", \"MP/2023/500\", \"DU/2024/1\". "
+            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
             "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True).",
         ],
         query: Annotated[
@@ -59,7 +59,7 @@ def register(mcp: FastMCP) -> None:
         - search_in_act(eli="DU/2024/1692", query="termin") - Wszystkie wzmianki o terminach
         """
         assert ctx is not None
-        document_store = ctx.request_context.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context["document_store"]
 
         # Normalize int (MCP clients may send string)
         context_chars_int = 500

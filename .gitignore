@@ -50,3 +50,12 @@ htmlcov/
 
 # Docker
 docker-compose.override.yml
+
+# MCP inspector
+.inspector-log.txt
+.inspector-log.txt.err
+
+# QA
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/

@@ -28,14 +28,14 @@ def register(mcp: FastMCP) -> None:
     async def compare_acts(
         eli_a: Annotated[
             str,
-            "Identyfikator ELI pierwszego aktu. Format: \"{wydawca}/{rok}/{pozycja}\". "
-            "Przykłady: \"DU/2024/1716\", \"MP/2023/500\".",
+            'Identyfikator ELI pierwszego aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+            'Przykłady: "DU/2024/1716", "MP/2023/500".',
         ],
         eli_b: Annotated[
             str,
             "Identyfikator ELI drugiego aktu do porównania. "
-            "Format: \"{wydawca}/{rok}/{pozycja}\". "
-            "Przykłady: \"DU/2024/1692\", \"DU/2020/1444\".",
+            'Format: "{wydawca}/{rok}/{pozycja}". '
+            'Przykłady: "DU/2024/1692", "DU/2020/1444".',
         ],
         ctx: Context = None,
     ) -> str:
@@ -57,7 +57,7 @@ def register(mcp: FastMCP) -> None:
         - compare_acts(eli_a="DU/2021/1500", eli_b="DU/2021/1600") - Porównaj podobne akty
         """
         assert ctx is not None
-        act_service = ctx.request_context.lifespan_context["act_service"]
+        act_service = ctx.lifespan_context["act_service"]
 
         # Fetch details for both acts (no content loading needed)
         details_a = await act_service.get_details(eli=eli_a, load_content=False)
@@ -93,14 +93,10 @@ def register(mcp: FastMCP) -> None:
             differences.append("Tytuły różnią się")
 
         if (details_a.type or "N/A") != (details_b.type or "N/A"):
-            differences.append(
-                f"Typy różnią się: '{details_a.type or 'N/A'}' vs '{details_b.type or 'N/A'}'"
-            )
+            differences.append(f"Typy różnią się: '{details_a.type or 'N/A'}' vs '{details_b.type or 'N/A'}'")
 
         if details_a.status != details_b.status:
-            differences.append(
-                f"Statusy różnią się: '{details_a.status}' vs '{details_b.status}'"
-            )
+            differences.append(f"Statusy różnią się: '{details_a.status}' vs '{details_b.status}'")
 
         if details_a.promulgation_date != details_b.promulgation_date:
             differences.append(
@@ -120,13 +116,9 @@ def register(mcp: FastMCP) -> None:
             only_a = set_a - set_b
             only_b = set_b - set_a
             if only_a:
-                differences.append(
-                    f"Słowa kluczowe tylko w A: {', '.join(sorted(only_a))}"
-                )
+                differences.append(f"Słowa kluczowe tylko w A: {', '.join(sorted(only_a))}")
             if only_b:
-                differences.append(
-                    f"Słowa kluczowe tylko w B: {', '.join(sorted(only_b))}"
-                )
+                differences.append(f"Słowa kluczowe tylko w B: {', '.join(sorted(only_b))}")
 
         if not differences:
             differences.append("Brak istotnych różnic w metadanych")

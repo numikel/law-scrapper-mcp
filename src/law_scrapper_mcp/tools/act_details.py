@@ -33,9 +33,9 @@ def register(mcp: FastMCP) -> None:
     async def get_act_details(
         eli: Annotated[
             str,
-            "Identyfikator ELI aktu. Format: \"{wydawca}/{rok}/{pozycja}\". "
+            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
             "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            "Przykłady: \"DU/2024/1716\", \"MP/2023/500\", \"DU/2024/1\".",
+            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".',
         ],
         load_content: Annotated[
             str | bool,
@@ -66,7 +66,7 @@ def register(mcp: FastMCP) -> None:
         - get_act_details(eli="DU/2021/1500") - Sprawdź status i daty obowiązywania
         """
         assert ctx is not None
-        act_service = ctx.request_context.lifespan_context["act_service"]
+        act_service = ctx.lifespan_context["act_service"]
 
         # Normalize bool (MCP clients may send string)
         if isinstance(load_content, str):

@@ -35,9 +35,7 @@ class ChangesService:
         if keywords:
             params["keyword"] = ",".join(keywords)
 
-        data = await self._client.get_json(
-            "acts/search", params=params, cache_ttl=settings.cache_changes_ttl
-        )
+        data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_changes_ttl)
 
         items = data.get("items", [])
         results = []

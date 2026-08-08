@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Widełki limitu długości wzorca (D3.1). Wartość spoza zakresu jest przycinana
+# do najbliższej granicy, a nie odrzucana — start serwera nie może się nie udać.
+MAX_PATTERN_LENGTH_FLOOR = 64
+MAX_PATTERN_LENGTH_CEILING = 4096
+
 
 class Settings(BaseSettings):
     """Application settings with environment variable support."""

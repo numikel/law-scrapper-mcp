@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
-from law_scrapper_mcp.config import Settings
+from law_scrapper_mcp.config import (
+    FILTER_MAX_RECORDS_FLOOR,
+    MAX_PATTERN_LENGTH_CEILING,
+    MAX_PATTERN_LENGTH_FLOOR,
+    Settings,
+    log_pattern_limit_clamping,
+)
 
 
 class TestSettingsDefaults:
@@ -147,3 +155,91 @@ class TestSettingsValidation:
         monkeypatch.setenv("LAW_MCP_CACHE_SEARCH_TTL", "invalid")
         with pytest.raises((ValueError, TypeError)):
             Settings()
+
+
+class TestPatternFilterSettings:
+    """Testy parametrów filtrowania wyników (klaster 1, D3/D3.1)."""
+
+    def test_defaults(self):
+        settings = Settings()
+        assert settings.max_pattern_length == 512
+        assert settings.filter_max_records == 100
+        assert settings.effective_max_pattern_length == 512
+        assert settings.max_pattern_length_was_clamped is False
+
+    def test_value_within_range_is_used_as_is(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "1024")
+        settings = Settings()
+        assert settings.effective_max_pattern_length == 1024
+        assert settings.max_pattern_length_was_clamped is False
+
+    def test_value_above_ceiling_is_clamped_down(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "10000")
+        settings = Settings()
+        assert settings.max_pattern_length == 10000
+        assert settings.effective_max_pattern_length == MAX_PATTERN_LENGTH_CEILING == 4096
+        assert settings.max_pattern_length_was_clamped is True
+
+    def test_value_below_floor_is_clamped_up(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "8")
+        settings = Settings()
+        assert settings.effective_max_pattern_length == MAX_PATTERN_LENGTH_FLOOR == 64
+        assert settings.max_pattern_length_was_clamped is True
+
+    def test_out_of_range_value_does_not_block_startup(self, monkeypatch):
+        """Konfiguracja spoza widełek nie może przerwać startu serwera (D3.1)."""
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "10000")
+        settings = Settings()  # nie rzuca
+        assert settings.effective_max_pattern_length == 4096
+
+    def test_filter_max_records_from_env(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_FILTER_MAX_RECORDS", "250")
+        settings = Settings()
+        assert settings.filter_max_records == 250
+
+    @pytest.mark.parametrize("value", [MAX_PATTERN_LENGTH_FLOOR, MAX_PATTERN_LENGTH_CEILING])
+    def test_value_exactly_on_boundary_is_not_clamped(self, monkeypatch, value):
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", str(value))
+        settings = Settings()
+        assert settings.effective_max_pattern_length == value
+        assert settings.max_pattern_length_was_clamped is False
+
+    def test_filter_max_records_zero_is_clamped_to_floor(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_FILTER_MAX_RECORDS", "0")
+        settings = Settings()
+        assert settings.filter_max_records == 0
+        assert settings.effective_filter_max_records == FILTER_MAX_RECORDS_FLOOR == 1
+
+    def test_filter_max_records_negative_is_clamped_to_floor(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_FILTER_MAX_RECORDS", "-5")
+        settings = Settings()
+        assert settings.filter_max_records == -5
+        assert settings.effective_filter_max_records == 1
+
+    def test_filter_max_records_within_range_is_used_as_is(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_FILTER_MAX_RECORDS", "250")
+        settings = Settings()
+        assert settings.filter_max_records == 250
+        assert settings.effective_filter_max_records == 250
+
+
+class TestPatternLimitClampingLog:
+    def test_warning_lists_configured_and_effective_values(self, monkeypatch, caplog):
+        monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "10000")
+        settings = Settings()
+        log = logging.getLogger("test_clamping")
+
+        with caplog.at_level(logging.WARNING, logger="test_clamping"):
+            log_pattern_limit_clamping(settings, log)
+
+        assert "10000" in caplog.text
+        assert "wartości efektywnej 4096" in caplog.text
+
+    def test_no_warning_when_value_within_range(self, caplog):
+        settings = Settings()
+        log = logging.getLogger("test_clamping")
+
+        with caplog.at_level(logging.WARNING, logger="test_clamping"):
+            log_pattern_limit_clamping(settings, log)
+
+        assert caplog.text == ""

@@ -1,4 +1,16 @@
-"""Compile client-supplied regex patterns."""
+r"""Compile client-supplied regex patterns.
+
+RE2 provides linear-time matching, but its compilation work can still grow
+quickly for many concatenated variable range quantifiers. Before calling RE2,
+this module rejects patterns with more than four unescaped `{min,max}`
+quantifiers where `min != max`. Four was calibrated to keep the slow shape
+below 50 ms at the 2 MiB compiled-program budget; eight already takes about
+120 ms and twenty about 700 ms on the supported baseline.
+
+The 2 MiB `max_mem` budget is deliberately below RE2's 8 MiB default. The
+Python binding caches compiled patterns, so retaining the default would allow
+the cache to retain substantially more memory for client-supplied patterns.
+"""
 
 from __future__ import annotations
 
@@ -12,12 +24,14 @@ from law_scrapper_mcp.config import (
 )
 
 RE2_MAX_MEM_BYTES = 2 * 1024 * 1024
+MAX_VARIABLE_RANGE_QUANTIFIERS = 4
 
 CompiledPattern = Any
 
 SUPPORTED_SYNTAX_HINT = (
     "Obsługiwany podzbiór składni: alternatywa (a|b), klasy znaków "
-    r"([a-z], \d, \p{L}, [[:alpha:]]), kwantyfikatory (*, +, ?, {n,m}), "
+    r"([a-z], \d, \p{L}, [[:alpha:]]), kwantyfikatory (*, +, ?, {n,m}; "
+    f"maksymalnie {MAX_VARIABLE_RANGE_QUANTIFIERS} zmienne zakresy), "
     r"kotwice (^, $), grupy nieprzechwytujące. Lookaround ((?=...), (?<=...), "
     r"(?!...)) oraz backreferencje (\1) nie są obsługiwane."
 )
@@ -46,12 +60,54 @@ def _is_pattern_too_large(e: re2.error) -> bool:
 
     RE2 signals this with the same exception type as a syntax error (`re2.error`),
     so the message text must be inspected to avoid suggesting a syntax fix when
-    the only problem is pattern complexit.
+    the only problem is pattern complexity.
     """
     if not e.args:
         return False
     detail = e.args[0]
     return isinstance(detail, bytes) and b"pattern too large" in detail
+
+
+def _has_too_many_variable_range_quantifiers(pattern: str) -> bool:
+    r"""Count unescaped `{min,max}` quantifiers outside character classes.
+
+    This deliberately performs only lexical recognition; RE2 remains the
+    authority for regex syntax validation. Skipping escapes and character
+    classes prevents literals such as `\{1,900}` and `[{1,900}]` from being
+    counted as quantifiers.
+    """
+    quantifier_count = 0
+    in_character_class = False
+    index = 0
+
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "\\":
+            index += 2
+            continue
+        if character == "[" and not in_character_class:
+            in_character_class = True
+        elif character == "]" and in_character_class:
+            in_character_class = False
+        elif character == "{" and not in_character_class:
+            closing_brace = pattern.find("}", index + 1)
+            if closing_brace != -1:
+                minimum, separator, maximum = pattern[index + 1 : closing_brace].partition(",")
+                if (
+                    separator
+                    and minimum.isascii()
+                    and maximum.isascii()
+                    and minimum.isdecimal()
+                    and maximum.isdecimal()
+                    and minimum != maximum
+                ):
+                    quantifier_count += 1
+                    if quantifier_count > MAX_VARIABLE_RANGE_QUANTIFIERS:
+                        return True
+                index = closing_brace
+        index += 1
+
+    return False
 
 
 def _re2_error_detail(e: re2.error) -> str:
@@ -75,7 +131,8 @@ def _too_complex_message() -> str:
     return (
         "Wzorzec jest zbyt złożony: przekracza budżet pamięci kompilacji silnika "
         "wyszukiwania. Uprość wzorzec — zmniejsz liczbę alternatyw albo zawęź "
-        "kwantyfikatory takie jak {n,m}."
+        f"kwantyfikatory takie jak {{n,m}}. Dozwolone są najwyżej "
+        f"{MAX_VARIABLE_RANGE_QUANTIFIERS} zmienne kwantyfikatory zakresowe."
     )
 
 
@@ -112,6 +169,8 @@ def compile_pattern(
     """
     if len(pattern) > max_length:
         raise PatternValidationError(_too_long_message(len(pattern), max_length, limit_was_clamped))
+    if _has_too_many_variable_range_quantifiers(pattern):
+        raise PatternValidationError(_too_complex_message())
 
     try:
         return re2.compile(pattern, _build_options())

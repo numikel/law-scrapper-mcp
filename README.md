@@ -179,7 +179,7 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `60.0` | Seconds before trying recovery |
 | `LAW_MCP_CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | `3` | Test calls in half-open state |
 | `LAW_MCP_MAX_PATTERN_LENGTH` | `512` | Max `filter_results` pattern length, clamped to 64-4096 |
-| `LAW_MCP_FILTER_MAX_RECORDS` | `100` | Max records `filter_results` processes per call, floor 1 |
+| `LAW_MCP_FILTER_MAX_RECORDS` | `100` | Max records `filter_results` processes per call; floor 1, no ceiling (very high values lengthen the synchronous but linear scan) |
 | `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 

@@ -124,6 +124,20 @@ class TestCompilePatternRejections:
 
         assert "przycięcia" not in str(exc_info.value)
 
+    def test_many_bounded_ranges_are_rejected_before_compilation(self) -> None:
+        """Concatenated range quantifiers must not monopolize the event loop."""
+        pattern = "a{1,900}" * 62
+        start = perf_counter()
+
+        with pytest.raises(PatternValidationError, match="złożony"):
+            compile_pattern(pattern, max_length=512)
+
+        assert perf_counter() - start < 0.5
+
+    def test_four_variable_ranges_remain_supported(self) -> None:
+        """The structural guard permits the documented, bounded use case."""
+        assert compile_pattern("a{1,2}b{3,5}c{0,3}d{1,4}", max_length=512)
+
     def test_syntax_error_message_decodes_polish_diacritics(self) -> None:
         """The error message must show a readable character, not its byte repr.
 

@@ -33,7 +33,11 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 
 
 def _classify_error(exc: Exception) -> str:
-    """Classify exception into error category."""
+    """Classify an exception into an error category.
+
+    `_ERROR_CATEGORIES` is evaluated in insertion order. Subclasses must
+    appear before their base classes; otherwise a broader category wins first.
+    """
     for exc_type, category in _ERROR_CATEGORIES.items():
         if isinstance(exc, exc_type):
             return category

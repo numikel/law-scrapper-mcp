@@ -210,7 +210,7 @@ class TestResultStoreFiltering:
         assert original == 5
 
 
-# Tytuł o realnej długości — audyt zmierzył maks. 495 znaków na aktach z 2024 r.
+# Title of realistic length — audit measured max 495 characters on 2024 acts.
 _REALISTIC_LONG_TITLE = (
     "Rozporządzenie Ministra Rozwoju i Technologii z dnia 12 kwietnia 2024 r. "
     "zmieniające rozporządzenie w sprawie szczegółowego zakresu i formy projektu "
@@ -220,20 +220,20 @@ _REALISTIC_LONG_TITLE = (
 
 
 class TestResultStoreReDoSRegression:
-    """Regresja F01 — wzorzec katastroficzny nie może zamrozić procesu."""
+    """Catastrophic pattern must not freeze the process"""
 
     async def test_filter_engine_is_re2_not_re(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        """Asercja silnika na BEZPIECZNYM wzorcu, wykonana PRZED testem katastroficznym (U3b).
+        """Engine assertion on a SAFE pattern, run BEFORE the catastrophic test.
 
-        Umyślnie osobny test i osobny, nieszkodliwy wzorzec ("Ustawa"): gdyby
-        `compile_pattern` przestał być importowalny albo wewnętrznie wrócił do
-        `re`, ten test albo od razu rzuci `AttributeError` przy wejściu w
-        `patch(...)`, albo skończy się natychmiast — nie zawiesi joba CI, w
-        przeciwieństwie do umieszczenia tej samej asercji w środku bloku `with`
-        wokół wzorca katastroficznego (gdzie kod po `filter_results` nigdy nie
-        zostałby osiągnięty przy regresji do `re`).
+        Intentionally a separate test and a separate harmless pattern ("Ustawa"):
+        if `compile_pattern` became unimportable or fell back to `re` internally,
+        this test would either raise `AttributeError` immediately on entering
+        `patch(...)`, or finish at once — it would not hang the CI job, unlike
+        placing the same assertion inside the `with` block around the
+        catastrophic pattern (where code after `filter_results` would never be
+        reached on a regression to `re`).
         """
         rs_id = await store.store(sample_results, "test", 5)
 
@@ -250,7 +250,7 @@ class TestResultStoreReDoSRegression:
         ):
             await store.filter_results(rs_id, pattern="Ustawa")
 
-        assert captured, "compile_pattern nie został wywołany"
+        assert captured, "compile_pattern was not called"
         assert type(captured[0]).__module__.startswith("re2")
 
     @pytest.mark.timeout(5)
@@ -273,15 +273,15 @@ class TestResultStoreReDoSRegression:
         wildcard, _ = await store.filter_results(rs_id, pattern="Ustawa.*danych")
         taxes, _ = await store.filter_results(rs_id, pattern="podatek|VAT|akcyza")
 
-        assert len(health) == 2  # dwa tytuły z "Zdrowia" — dopasowanie bez względu na wielkość liter
+        assert len(health) == 2  # two titles with "Zdrowia" — case-insensitive match
         assert len(wildcard) == 1
-        # Fixture zawiera "Ustawa o podatku dochodowym", a wzorzec szuka "podatek".
-        # Zero trafień jest zachowaniem identycznym ze stanem sprzed zmiany silnika.
+        # Fixture has "Ustawa o podatku dochodowym"; the pattern looks for "podatek".
+        # Zero hits matches pre-engine-change behaviour.
         assert len(taxes) == 0
 
     @pytest.mark.timeout(5)
     async def test_alternation_matches_when_form_agrees(self, store: ResultStore) -> None:
-        """Kontrola pozytywna dla wzorca z alternatywą — bez niej test powyżej jest ślepy."""
+        """Positive control for an alternation pattern — without it the test above is blind."""
         results = [_make_act("DU/2024/9", "Ustawa o podatek akcyza VAT")]
         rs_id = await store.store(results, "test", 1)
 
@@ -307,7 +307,7 @@ class TestResultStoreReDoSRegression:
             await store.filter_results(rs_id, pattern="a" * 65)
 
     async def test_pattern_at_limit_is_accepted(self, sample_results: list[ActSummaryOutput]) -> None:
-        """Granica: wzorzec o długości dokładnie równej limitowi nie jest odrzucany."""
+        """Boundary: a pattern whose length equals the limit exactly is not rejected."""
         store = ResultStore(max_sets=5, ttl=60, max_pattern_length=64)
         rs_id = await store.store(sample_results, "test", 5)
 
@@ -317,7 +317,7 @@ class TestResultStoreReDoSRegression:
 
 
 class TestResultStoreRecordCap:
-    """D4 — odmowa wykonania zamiast wyniku częściowego."""
+    """Refuse the call instead of returning a partial result"""
 
     async def test_oversized_set_is_refused(self, sample_results: list[ActSummaryOutput]) -> None:
         store = ResultStore(max_sets=5, ttl=60, max_records=3)
@@ -331,7 +331,7 @@ class TestResultStoreRecordCap:
         assert "Zawęź" in str(exc_info.value)
 
     async def test_refusal_applies_without_pattern_too(self, sample_results: list[ActSummaryOutput]) -> None:
-        """Odmowa dotyczy wywołania, nie tylko ścieżki regex."""
+        """Refusal applies to the call, not only to the regex path."""
         store = ResultStore(max_sets=5, ttl=60, max_records=3)
         rs_id = await store.store(sample_results, "test", 5)
 

@@ -1,4 +1,4 @@
-"""Testy opisów narzędzi widocznych dla klienta MCP (klaster 1, D7)."""
+"""Tests for MCP-visible tool descriptions"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ async def _get_tool(mcp_client, name: str):
 
 
 def _parse_tool_result(result: Any) -> dict[str, Any]:
-    """Wydobądź payload JSON z wyniku `call_tool` FastMCP."""
+    """Extract the JSON payload from a FastMCP `call_tool` result."""
     if hasattr(result, "data") and result.data is not None:
         if isinstance(result.data, dict):
             return result.data
@@ -40,13 +40,14 @@ class TestFilterResultsDescriptions:
         assert "100" in (tool.description or "")
 
     async def test_unsupported_pattern_surfaces_polish_error(self, mcp_client) -> None:
-        """Kryterium 3 na poziomie protokołu: klient dostaje komunikat, nie ciszę.
+        """Criterion 3 at the protocol level: the client gets a message, not silence.
 
-        Zestaw wyników musi realnie istnieć (utworzony przez search_legal_acts),
-        bo `services/result_store.py` waliduje `result_set_id` przed kompilacją
-        wzorca — z nieistniejącym zestawem `compile_pattern` nigdy nie jest wołane
-        i test przechodzi wyłącznie gałęzią "zestaw nie istnieje", bez sprawdzenia
-        ścieżki, którą deklaruje (walidacja składni RE2 w PatternValidationError).
+        The result set must actually exist (created via search_legal_acts),
+        because `services/result_store.py` validates `result_set_id` before
+        compiling the pattern — with a missing set, `compile_pattern` is never
+        called and the test would pass only via the "set not found" branch,
+        without exercising the path it claims to cover (RE2 syntax validation
+        in PatternValidationError).
         """
         search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
         search_payload = _parse_tool_result(search)

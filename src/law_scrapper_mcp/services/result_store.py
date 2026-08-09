@@ -52,8 +52,6 @@ class ResultStore:
         self._ttl = ttl
         self._counter = 0
         self._lock = asyncio.Lock()
-        # Polityka filtrowania wstrzykiwana z konfiguracji (server.py). Publiczna,
-        # bo server i testy muszą móc sprawdzić, co faktycznie obowiązuje.
         self.max_pattern_length = max_pattern_length
         self.pattern_length_limit_clamped = pattern_length_limit_clamped
         self.max_records = max_records
@@ -131,8 +129,6 @@ class ResultStore:
         if rs is None:
             raise ResultSetNotFoundError(result_set_id)
 
-        # D4: odmowa wykonania zamiast wyniku częściowego. Dzięki temu brak
-        # dopasowania zawsze oznacza przeszukanie całego zestawu.
         if len(rs.results) > self.max_records:
             raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
 
@@ -149,7 +145,7 @@ class ResultStore:
         if year_equals is not None:
             filtered = [r for r in filtered if r.year == year_equals]
 
-        # Filtr wzorcem — silnik RE2, złożoność liniowa (F01, D1)
+        # Pattern filter — RE2 engine, linear-time matching
         if pattern is not None:
             compiled = compile_pattern(
                 pattern,
@@ -200,7 +196,7 @@ class ResultSetNotFoundError(Exception):
 
 
 class ResultSetTooLargeError(Exception):
-    """Zestaw wyników przekracza limit pojedynczego wywołania filter_results."""
+    """Raised when a result set exceeds the per-call filter_results limit."""
 
     def __init__(self, result_set_id: str, size: int, limit: int):
         self.result_set_id = result_set_id

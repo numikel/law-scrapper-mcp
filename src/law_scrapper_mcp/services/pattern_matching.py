@@ -1,12 +1,4 @@
-"""Kompilacja wzorców regex dostarczonych przez klienta.
-
-Jedyne miejsce w projekcie, które kompiluje wzorzec pochodzący od wywołującego
-narzędzie MCP. Silnikiem jest RE2 (`google-re2`), który gwarantuje złożoność
-liniową względem długości wejścia — katastroficzny nawrót jest tu niemożliwy
-strukturalnie, a nie mitygowany limitami czy timeoutem.
-
-Kontekst: ustalenie F01 audytu `docs/mcp-audit-2026-08-06.md`, decyzje D1-D3 i D5
-specyfikacji `docs/superpowers/specs/2026-08-07-klaster-1.md`.
+"""Compile client-supplied regex patterns.
 """
 
 from __future__ import annotations
@@ -20,27 +12,8 @@ from law_scrapper_mcp.config import (
     MAX_PATTERN_LENGTH_FLOOR,
 )
 
-# Parametr klasy "bezpieczeństwo" (D3): stała w kodzie, celowo NIE konfigurowalna
-# przez zmienną środowiskową. Domyślna wartość biblioteki RE2 to również 8 MiB
-# (`re2.Options().max_mem == 8388608`), więc ta stała musi być NIŻSZA od
-# domyślnej, żeby cokolwiek realnie ograniczać. Powód: skompilowane wzorce
-# trafiają do globalnego `functools.lru_cache(maxsize=128)` wewnątrz pakietu
-# `google-re2` — przy limicie 8 MiB sufit tego cache'u to ~1 GiB pamięci
-# utrzymywanej przez legalne, niezłośliwe wzorce klienta. Przy 2 MiB sufit
-# spada do ~256 MiB.
-#
-# 2 MiB (a nie 1 MiB) dobrane empirycznie: `\p{L}` to ogromna klasa Unicode,
-# więc powtórzenia tej klasy są dla RE2 najdroższe pamięciowo ze wszystkich
-# konstrukcji w obsługiwanym podzbiorze składni. Przy 1 MiB granica
-# `\p{L}{0,n}` leżała przy n≈55 — odrzucała niewinne wzorce w stylu
-# `\p{L}{0,200}(?:zdrow|apteka)\p{L}{0,200}`. Przy 2 MiB granica dla
-# `\p{L}{0,n}` to n≈111 (zmierzone: n=111 kompiluje się, n=112 już nie).
-# Wzorce klasy `.`, `\w`, `[a-ząćęłńóśźż]` uderzają najpierw we własny limit
-# powtórzeń RE2 (1000), więc dla nich obie wartości max_mem są równoważne.
 RE2_MAX_MEM_BYTES = 2 * 1024 * 1024
 
-# Skompilowany wzorzec RE2 (`re2._Regexp`). Pakiet `google-re2` nie dostarcza
-# stubów typów, więc alias jest jawnym `Any` zamiast fikcyjnej nazwy typu.
 CompiledPattern = Any
 
 SUPPORTED_SYNTAX_HINT = (
@@ -52,31 +25,29 @@ SUPPORTED_SYNTAX_HINT = (
 
 
 class PatternValidationError(ValueError):
-    """Wzorzec odrzucony przed uruchomieniem dopasowania.
+    """Raised when a pattern is rejected before matching runs.
 
-    Dziedziczy po ValueError, ponieważ warstwa narzędzi traktuje ValueError jako
-    błąd wejścia użytkownika, a nie awarię serwera.
+    Subclasses ValueError because the tools layer treats ValueError as a
+    user-input error rather than a server failure.
     """
 
 
 def _build_options() -> Any:
-    """Zbuduj opcje RE2 wspólne dla wszystkich wzorców od klienta."""
+    """Build RE2 options shared by all client-supplied patterns."""
     options = re2.Options()
-    # RE2 nie eksponuje stałej odpowiadającej re.IGNORECASE (D1).
+    # RE2 does not expose a constant equivalent to re.IGNORECASE.
     options.case_sensitive = False
-    # Warstwa absl zapisuje błędy parsowania bezpośrednio na stderr, omijając
-    # logging_config.py i zanieczyszczając logi JSON (D5).
     options.log_errors = False
     options.max_mem = RE2_MAX_MEM_BYTES
     return options
 
 
 def _is_pattern_too_large(e: re2.error) -> bool:
-    """Rozpoznaj przekroczenie budżetu pamięci kompilacji (`RE2_MAX_MEM_BYTES`).
+    """Detect a compilation memory-budget overrun (`RE2_MAX_MEM_BYTES`).
 
-    RE2 sygnalizuje to tym samym typem wyjątku co błąd składni (`re2.error`),
-    więc trzeba rozróżnić po treści komunikatu, żeby nie sugerować klientowi
-    poprawy składni, gdy problemem jest wyłącznie złożoność wzorca (U4).
+    RE2 signals this with the same exception type as a syntax error (`re2.error`),
+    so the message text must be inspected to avoid suggesting a syntax fix when
+    the only problem is pattern complexit.
     """
     if not e.args:
         return False
@@ -85,14 +56,13 @@ def _is_pattern_too_large(e: re2.error) -> bool:
 
 
 def _re2_error_detail(e: re2.error) -> str:
-    """Wydobądź czytelny opis błędu składni z wyjątku `re2.error`.
+    """Extract a readable syntax-error description from a `re2.error`.
 
-    Warstwa C++ RE2 zwraca komunikat jako `bytes` (`e.args[0]`), bo wzorzec
-    jest kodowany do UTF-8 zanim trafi poza Pythona — interpolowanie tego
-    surowo dawałoby polskim znakom repr w stylu `b'...\\xc5\\xbc...'` w
-    komunikacie błędu, co myli model językowy będący klientem tego narzędzia
-    (U3). Dekodujemy z `errors="replace"`, żeby formatowanie komunikatu błędu
-    nigdy samo nie rzuciło wyjątku.
+    The C++ RE2 layer returns the message as `bytes` (`e.args[0]`) because the
+    pattern is UTF-8-encoded before leaving Python — interpolating that raw
+    value would produce Polish-character reprs like `b'...\\xc5\\xbc...'` in the
+    error message, which confuses the language-model client of this tool.
+    Decode with `errors="replace"` so error formatting never raises on its own.
     """
     if not e.args:
         return str(e)
@@ -127,19 +97,19 @@ def compile_pattern(
     max_length: int,
     limit_was_clamped: bool = False,
 ) -> CompiledPattern:
-    """Zwaliduj i skompiluj wzorzec pochodzący od klienta.
+    """Validate and compile a client-supplied pattern.
 
     Args:
-        pattern: Surowy wzorzec przekazany przez wywołującego narzędzie.
-        max_length: Efektywny limit długości wzorca (po przycięciu do widełek).
-        limit_was_clamped: Czy `max_length` powstał z przycięcia konfiguracji.
-            Wpływa wyłącznie na treść komunikatu błędu (D3.1).
+        pattern: Raw pattern passed by the tool caller.
+        max_length: Effective pattern length limit (after clamping to the range).
+        limit_was_clamped: Whether `max_length` came from a clamped configuration.
+            Affects only the error message text (D3.1).
 
     Raises:
-        PatternValidationError: Wzorzec przekracza limit długości, używa składni
-            spoza podzbioru obsługiwanego przez RE2, przekracza budżet pamięci
-            kompilacji (`RE2_MAX_MEM_BYTES`), albo zawiera znaki, których nie
-            da się zakodować w UTF-8 — np. samotny surogat UTF-16 (U1).
+        PatternValidationError: Pattern exceeds the length limit, uses syntax
+            outside the RE2-supported subset, exceeds the compilation memory
+            budget (`RE2_MAX_MEM_BYTES`), or contains characters that cannot be
+            encoded as UTF-8 — e.g. a lone UTF-16 surrogate (U1).
     """
     if len(pattern) > max_length:
         raise PatternValidationError(_too_long_message(len(pattern), max_length, limit_was_clamped))
@@ -147,9 +117,6 @@ def compile_pattern(
     try:
         return re2.compile(pattern, _build_options())
     except (re2.error, UnicodeError) as e:
-        # `str.encode("utf-8")` wewnątrz `re2/__init__.py` rzuca UnicodeError
-        # (np. dla samotnych surogatów) zanim cokolwiek dotknie warstwy C++,
-        # więc ten wyjątek nigdy nie jest instancją `re2.error` (U1).
         if isinstance(e, re2.error):
             if _is_pattern_too_large(e):
                 raise PatternValidationError(_too_complex_message()) from e

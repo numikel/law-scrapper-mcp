@@ -158,7 +158,7 @@ class TestSettingsValidation:
 
 
 class TestPatternFilterSettings:
-    """Testy parametrów filtrowania wyników (klaster 1, D3/D3.1)."""
+    """Tests for result-filtering settings"""
 
     def test_defaults(self):
         settings = Settings()
@@ -187,9 +187,9 @@ class TestPatternFilterSettings:
         assert settings.max_pattern_length_was_clamped is True
 
     def test_out_of_range_value_does_not_block_startup(self, monkeypatch):
-        """Konfiguracja spoza widełek nie może przerwać startu serwera (D3.1)."""
+        """Out-of-range configuration must not abort server startup"""
         monkeypatch.setenv("LAW_MCP_MAX_PATTERN_LENGTH", "10000")
-        settings = Settings()  # nie rzuca
+        settings = Settings()  # must not raise
         assert settings.effective_max_pattern_length == 4096
 
     def test_filter_max_records_from_env(self, monkeypatch):

@@ -12,7 +12,7 @@ from law_scrapper_mcp.tools.error_handling import _classify_error, handle_tool_e
 
 
 class TestClassifyError:
-    """Regresja U1 — ResultSetTooLargeError musi klasyfikować się jak precondition."""
+    """ResultSetTooLargeError must classify as precondition"""
 
     def test_result_set_not_found_is_precondition(self) -> None:
         assert _classify_error(ResultSetNotFoundError("rs_1")) == "precondition"
@@ -22,12 +22,12 @@ class TestClassifyError:
 
 
 class TestHandleToolErrorsPublicSurface:
-    """U1b — test przez publiczną powierzchnię `handle_tool_errors`, nie przez `_classify_error`.
+    """Exercise the public `handle_tool_errors` surface, not `_classify_error`.
 
-    `_classify_error` łapie tylko przypadkowe usunięcie wpisu ze słownika.
-    Realnym objawem usterki był `exc_info=True` w logach (nadmiarowy traceback
-    dla sytuacji, którą klient może naprawić) i `error_category: "internal"`
-    widziany przez klienta zamiast `"precondition"` — obie rzeczy sprawdzane tu.
+    `_classify_error` alone only catches accidental removal of a dict entry.
+    The real failure mode was `exc_info=True` in logs (excess traceback for a
+    client-fixable situation) and `error_category: "internal"` seen by the
+    client instead of `"precondition"` — both are checked here.
     """
 
     async def test_result_set_too_large_is_precondition_without_traceback(
@@ -44,11 +44,11 @@ class TestHandleToolErrorsPublicSurface:
         assert payload["metadata"]["error_category"] == "precondition"
 
         assert caplog.records
-        # `handle_tool_errors` przekazuje `exc_info=(category == "internal")`.
-        # Stdlib `logging` przechowuje w `LogRecord.exc_info` dosłownie to, co
-        # przekazano, gdy jest falsy — czyli literalne `False`, nie `None`
-        # (zweryfikowane niezależnie: `Logger.error(..., exc_info=False)` daje
-        # `record.exc_info is False`). Funkcjonalny skutek jest ten sam —
-        # `Formatter.format` sprawdza `if record.exc_info:` i przy `False`
-        # nie dołącza tracebacku — dlatego sprawdzamy falsy, nie `is None`.
+        # `handle_tool_errors` passes `exc_info=(category == "internal")`.
+        # Stdlib `logging` stores in `LogRecord.exc_info` exactly what was
+        # passed when falsy — a literal `False`, not `None` (independently
+        # verified: `Logger.error(..., exc_info=False)` yields
+        # `record.exc_info is False`). The functional outcome is the same —
+        # `Formatter.format` checks `if record.exc_info:` and with `False`
+        # skips the traceback — so we assert falsy, not `is None`.
         assert not caplog.records[-1].exc_info

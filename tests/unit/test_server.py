@@ -68,14 +68,14 @@ async def test_lifespan_yields_services() -> None:
 
 
 async def test_lifespan_result_store_receives_configured_limits(monkeypatch) -> None:
-    """Wartości niedomyślne, celowo — z dwóch powodów naraz.
+    """Use non-default values on purpose.
 
-    512/False/100 to jednocześnie domyślne wartości `Settings` I domyślne argumenty
-    konstruktora `ResultStore`, więc test na wartościach domyślnych przechodzi
-    również po usunięciu wstrzyknięcia (fałszywy pozytyw) i jest wrażliwy na
-    ambientne `LAW_MCP_MAX_PATTERN_LENGTH`/`LAW_MCP_FILTER_MAX_RECORDS` w środowisku
-    uruchamiającym (fałszywy negatyw). Wartości 256/42 nie pokrywają się z żadnym
-    z tych dwóch źródeł, więc test pada, jeśli wstrzyknięcie zniknie z server.py.
+    512/False/100 are both the `Settings` defaults AND the `ResultStore`
+    constructor defaults, so a defaults-only test still passes after the
+    injection is removed (false positive) and is sensitive to ambient
+    `LAW_MCP_MAX_PATTERN_LENGTH`/`LAW_MCP_FILTER_MAX_RECORDS` in the runner
+    environment (false negative). Values 256/42 match neither source, so the
+    test fails if the injection disappears from server.py.
     """
     from law_scrapper_mcp import server as server_module
 
@@ -90,7 +90,7 @@ async def test_lifespan_result_store_receives_configured_limits(monkeypatch) -> 
 
 
 async def test_lifespan_result_store_uses_clamped_limit(monkeypatch) -> None:
-    """Konfiguracja spoza widełek dociera do ResultStore jako wartość efektywna."""
+    """Out-of-range configuration reaches ResultStore as the effective value."""
     from law_scrapper_mcp import server as server_module
 
     monkeypatch.setattr(server_module.settings, "max_pattern_length", 10000)
@@ -105,12 +105,12 @@ async def test_lifespan_result_store_uses_clamped_limit(monkeypatch) -> None:
 
 
 async def test_lifespan_result_store_floors_zero_record_limit(monkeypatch) -> None:
-    """Podłoga z Taska 3 musi zadziałać, a nie zostać obejściem surowego pola.
+    """The Task 3 floor must apply, not be bypassed via the raw field.
 
-    Bez niej `LAW_MCP_FILTER_MAX_RECORDS=0` czyniłby filter_results trwale
-    niesprawnym: każde wywołanie na niepustym zestawie kończyłoby się odmową.
-    Ten test pada, jeśli server.py wstrzyknie `settings.filter_max_records`
-    zamiast `settings.effective_filter_max_records`.
+    Without it, `LAW_MCP_FILTER_MAX_RECORDS=0` would permanently break
+    filter_results: every call on a non-empty set would be refused. This test
+    fails if server.py injects `settings.filter_max_records` instead of
+    `settings.effective_filter_max_records`.
     """
     from law_scrapper_mcp import server as server_module
 
@@ -121,7 +121,7 @@ async def test_lifespan_result_store_floors_zero_record_limit(monkeypatch) -> No
 
 
 async def test_lifespan_warns_about_clamped_pattern_limit(monkeypatch, caplog) -> None:
-    """Fakt przycięcia jest widoczny w logu przy starcie (D3.1, punkt 1)."""
+    """Clamping must be visible in the startup log"""
     import logging
 
     from law_scrapper_mcp import server as server_module
@@ -137,12 +137,12 @@ async def test_lifespan_warns_about_clamped_pattern_limit(monkeypatch, caplog) -
 
 
 async def test_lifespan_closes_client_when_body_raises() -> None:
-    """Wyjątek w ciele `async with lifespan(app)` nie może pominąć sprzątania.
+    """An exception inside `async with lifespan(app)` must not skip cleanup.
 
-    Bez `try/finally` wokół `yield` błąd wewnątrz bloku (np. nieudana asercja
-    w teście, albo awaria w produkcji) pomijał `await client.close()` i zostawiał
-    otwarty `httpx.AsyncClient`. Asercja sprawdza publiczny stan
-    `httpx.AsyncClient.is_closed`, nie sam fakt wywołania close().
+    Without `try/finally` around `yield`, an error in the block (e.g. a failed
+    assertion in a test, or a production failure) skipped `await client.close()`
+    and left an open `httpx.AsyncClient`. The assertion checks the public
+    `httpx.AsyncClient.is_closed` state, not merely that close() was called.
     """
     httpx_client: httpx.AsyncClient | None = None
 

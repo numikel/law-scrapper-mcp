@@ -19,9 +19,6 @@ from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, Resul
 
 logger = logging.getLogger(__name__)
 
-# _classify_error iteruje ten słownik w kolejności wstawienia i zwraca kategorię
-# przy PIERWSZYM pasującym isinstance — podklasy muszą więc stać PRZED swoimi
-# nadklasami (np. przed wpisem ValueError), inaczej staną się cicho nieosiągalne.
 _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ActNotFoundError: "not_found",
     InvalidEliError: "validation",

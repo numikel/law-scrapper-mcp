@@ -7,15 +7,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Widełki limitu długości wzorca (D3.1). Wartość spoza zakresu jest przycinana
-# do najbliższej granicy, a nie odrzucana — start serwera nie może się nie udać.
 MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
-
-# Dolna granica liczby rekordów, jakie filter_results może zwrócić. Wartość 0 (lub ujemna)
-# oznacza, że KAŻDE wywołanie na niepustym zestawie wyników skończy się odmową —
-# narzędzie stałoby się trwale niesprawne. Górnej granicy celowo nie ma: to pozostaje
-# w gestii operatora, podobnie jak reszta pól tego pliku (bez Field()).
 FILTER_MAX_RECORDS_FLOOR = 1
 
 
@@ -47,15 +40,13 @@ class Settings(BaseSettings):
     doc_store_max_size_bytes: int = 5 * 1024 * 1024
     doc_store_ttl: int = 7200
 
-    # Filtrowanie wyników (filter_results)
-    # Parametry operacyjne (D3): strojalne przez operatora. Nie są zabezpieczeniem
-    # przed ReDoS — tę rolę pełni silnik RE2 w services/pattern_matching.py.
+    # Filtering
     max_pattern_length: int = 512
     filter_max_records: int = 100
 
     @property
     def effective_max_pattern_length(self) -> int:
-        """Limit długości wzorca po przycięciu do widełek (D3.1)."""
+        """Return max pattern length clamped to the allowed range (D3.1)."""
         return min(
             max(self.max_pattern_length, MAX_PATTERN_LENGTH_FLOOR),
             MAX_PATTERN_LENGTH_CEILING,
@@ -63,16 +54,16 @@ class Settings(BaseSettings):
 
     @property
     def max_pattern_length_was_clamped(self) -> bool:
-        """Czy skonfigurowana wartość musiała zostać przycięta do widełek."""
+        """Return whether the configured max pattern length was clamped."""
         return self.effective_max_pattern_length != self.max_pattern_length
 
     @property
     def effective_filter_max_records(self) -> int:
-        """Limit rekordów po przycięciu do dolnej granicy.
+        """Return filter max records raised to the minimum allowed value.
 
-        Asymetrycznie wobec `max_pattern_length` — bez osobnego ostrzeżenia w logu:
-        wartość efektywna jest i tak obserwowalna w komunikacie ResultSetTooLargeError
-        przy pierwszym wywołaniu filter_results, więc cichy floor nie ukrywa problemu.
+        Asymmetric vs `max_pattern_length` — no separate log warning: the
+        effective value is already visible in the ResultSetTooLargeError message
+        on the first filter_results call, so a silent floor does not hide the issue.
         """
         return max(self.filter_max_records, FILTER_MAX_RECORDS_FLOOR)
 
@@ -91,7 +82,7 @@ class Settings(BaseSettings):
 
 
 def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:
-    """Zgłoś w logu fakt przycięcia limitu długości wzorca (D3.1, punkt 1)."""
+    """Log a warning when the max pattern length setting was clamped (D3.1)."""
     if not current.max_pattern_length_was_clamped:
         return
     log.warning(

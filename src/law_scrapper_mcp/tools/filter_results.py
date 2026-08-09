@@ -12,6 +12,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     ResultSetInfo,
     ResultSetListOutput,
 )
+from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -37,13 +38,13 @@ def register(mcp: FastMCP) -> None:
         ],
         pattern: Annotated[
             str | None,
-            "Wzorzec regex do przeszukania pola (obsługuje OR: 'podatek|VAT|akcyza'). "
-            "Wielkość liter jest ignorowana. Przykłady: "
-            "'zdrow|Minister Zdrowia|apteka|lekar', 'budżet.*państw', 'transport|drogow'",
+            f"Wzorzec wyszukiwania w składni RE2. Wielkość liter jest ignorowana. {SUPPORTED_SYNTAX_HINT} "
+            "Przykłady: 'zdrow|Minister Zdrowia|apteka|lekar', 'budżet.*państw', "
+            r"'transport|drogow', '\p{L}+ o ochronie'",
         ] = None,
         field: Annotated[
             str,
-            "Pole do przeszukania wzorcem regex. Dostępne: 'title' (domyślne), 'eli', 'status', 'type', 'publisher'.",
+            "Pole do przeszukania wzorcem RE2. Dostępne: 'title' (domyślne), 'eli', 'status', 'type', 'publisher'.",
         ] = "title",
         type_equals: Annotated[
             str | None,
@@ -95,6 +96,11 @@ def register(mcp: FastMCP) -> None:
         Wymaga result_set_id zwróconego przez te narzędzia. Przefiltrowane wyniki
         zapisywane są jako nowy zestaw (nowe result_set_id), który można filtrować dalej.
 
+        Limit rozmiaru wejścia: pojedyncze wywołanie przetwarza maksymalnie 100 rekordów
+        (wartość domyślna, konfigurowalna przez operatora). Większy zestaw kończy się
+        błędem, a nie wynikiem częściowym — dzięki temu brak dopasowania zawsze oznacza
+        przeszukanie całego zestawu. Zawęź wyszukiwanie przed filtrowaniem.
+
         Kiedy użyć: Po search_legal_acts/browse_acts/track_legal_changes aby zawęzić wyniki.
         Kiedy NIE używać: Gdy potrzebujesz nowych wyników z API → użyj search_legal_acts.
 
@@ -104,6 +110,7 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", pattern="podatek|VAT", type_equals="Ustawa") - Ustawy podatkowe
         - filter_results(result_set_id="rs_1", date_field="promulgation_date", date_from="2024-01-01", date_to="2024-06-30") - Ogłoszone w I połowie 2024
         - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych
+        - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
         """
         assert ctx is not None
         result_store = ctx.lifespan_context["result_store"]

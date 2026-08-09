@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **`filter_results`: fixed ReDoS vulnerability** — Client-supplied patterns now compile through a linear-time matching engine instead of Python's backtracking `re`; lookaround and backreferences are rejected with a validation error instead of executed. Previously, `pattern="(.+)+!"` could freeze the server indefinitely.
+
+### Fixed
+
+- **HTTP client resource leak on shutdown** — If the server exited through an exception or interruption while running, the HTTP client was never closed; shutdown now always releases it.
+
+### Changed
+
+- **`filter_results` breaking change: result set size cap** — Previously unlimited, calls on result sets larger than 100 records (`LAW_MCP_FILTER_MAX_RECORDS`) are now refused, even without a `pattern`; the response reports `error_category: precondition` so it's clear the request needs adjusting. Narrow the search or raise `LAW_MCP_FILTER_MAX_RECORDS` to work around it.
+- **`filter_results`: pattern compilation has bounded resource budgets** — Some simple-looking patterns, e.g. `\p{L}{0,112}`, are now rejected because their compiled size exceeds the limit. Patterns with more than four variable range quantifiers (such as `{1,900}`) are also rejected before compilation to avoid blocking the event loop. The preflight recognizes only exact RE2 POSIX tokens (`[[:name:]]` / `[[:^name:]]`); incomplete `[.` / `[=` forms cannot hide ranges from the guard.
+- **`filter_results` parameter description names the supported pattern syntax** — The `pattern` parameter description now documents the supported regex subset, matching the validation error message.
+
+### Added
+
+- **New dependency: `google-re2`** — Ships as prebuilt binary wheels for CPython 3.13 on Windows and manylinux; no compiler needed to install.
+- **`LAW_MCP_MAX_PATTERN_LENGTH`** (default 512, range 64-4096) — Out-of-range values are clamped with a startup warning instead of blocking the server.
+- **`LAW_MCP_FILTER_MAX_RECORDS`** (default 100, floor 1) — Limits records processed by a single `filter_results` call; operators may raise it, but very high values lengthen the synchronous scan.
+
+### Removed
+
+- **Dead exception handler in document search** — Removed an unreachable `try/except` around escaped-query compilation.
+
 ## [2.4.0] - 2026-07-08
 
 ### Security

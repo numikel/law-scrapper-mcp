@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
+from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,23 @@ class FilterHit:
 class ResultStore:
     """In-memory store for search/browse results with grep-like filtering."""
 
-    def __init__(self, max_sets: int = 20, ttl: int = 3600):
+    def __init__(
+        self,
+        max_sets: int = 20,
+        ttl: int = 3600,
+        *,
+        max_pattern_length: int = 512,
+        pattern_length_limit_clamped: bool = False,
+        max_records: int = 100,
+    ):
         self._store: dict[str, StoredResultSet] = {}
         self._max_sets = max_sets
         self._ttl = ttl
         self._counter = 0
         self._lock = asyncio.Lock()
+        self.max_pattern_length = max_pattern_length
+        self.pattern_length_limit_clamped = pattern_length_limit_clamped
+        self.max_records = max_records
 
     async def store(
         self,
@@ -118,6 +129,9 @@ class ResultStore:
         if rs is None:
             raise ResultSetNotFoundError(result_set_id)
 
+        if len(rs.results) > self.max_records:
+            raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
+
         filtered = list(rs.results)
         original_count = len(filtered)
 
@@ -131,13 +145,13 @@ class ResultStore:
         if year_equals is not None:
             filtered = [r for r in filtered if r.year == year_equals]
 
-        # Regex pattern filter
+        # Pattern filter — RE2 engine, linear-time matching
         if pattern is not None:
-            try:
-                compiled = re.compile(pattern, re.IGNORECASE)
-            except re.error as e:
-                raise ValueError(f"Invalid regex pattern: {e}") from e
-
+            compiled = compile_pattern(
+                pattern,
+                max_length=self.max_pattern_length,
+                limit_was_clamped=self.pattern_length_limit_clamped,
+            )
             filtered = [r for r in filtered if _match_field(r, field, compiled)]
 
         # Date range filter
@@ -181,6 +195,25 @@ class ResultSetNotFoundError(Exception):
         )
 
 
+class ResultSetTooLargeError(Exception):
+    """Raised when a result set exceeds the per-call filter_results limit."""
+
+    def __init__(self, result_set_id: str, size: int, limit: int):
+        self.result_set_id = result_set_id
+        self.size = size
+        self.limit = limit
+        super().__init__(
+            f"Zestaw wyników '{result_set_id}' zawiera {size} rekordów, "
+            f"a limit pojedynczego wywołania filter_results wynosi {limit}. "
+            f"Zawęź zestaw przy wyszukiwaniu: search_legal_acts z parametrem "
+            f"limit={limit}, węższe kryteria w browse_acts, albo — dla "
+            f"track_legal_changes, które nie ma parametru limit — zawęź "
+            f"date_from/date_to lub dodaj keywords. Wynik częściowy nie jest "
+            f"zwracany, aby brak dopasowania zawsze oznaczał przeszukanie "
+            f"całego zestawu."
+        )
+
+
 # --- Helper functions ---
 
 
@@ -189,7 +222,7 @@ _DATE_FIELDS = {"promulgation_date", "effective_date"}
 _SORTABLE_FIELDS = {"title", "eli", "year", "pos", "status", "type", "promulgation_date", "effective_date"}
 
 
-def _match_field(act: ActSummaryOutput, field: str, compiled: re.Pattern[str]) -> bool:
+def _match_field(act: ActSummaryOutput, field: str, compiled: CompiledPattern) -> bool:
     """Check if a field value matches the compiled regex."""
     if field not in _SEARCHABLE_FIELDS:
         # Default to searching title

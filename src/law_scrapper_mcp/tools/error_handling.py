@@ -15,7 +15,7 @@ from law_scrapper_mcp.client.exceptions import (
     InvalidEliError,
 )
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse
-from law_scrapper_mcp.services.result_store import ResultSetNotFoundError
+from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
     InvalidEliError: "validation",
     DocumentNotLoadedError: "precondition",
     ResultSetNotFoundError: "precondition",
+    ResultSetTooLargeError: "precondition",
     ContentNotAvailableError: "not_found",
     ApiUnavailableError: "unavailable",
     ValueError: "validation",
@@ -32,7 +33,11 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 
 
 def _classify_error(exc: Exception) -> str:
-    """Classify exception into error category."""
+    """Classify an exception into an error category.
+
+    `_ERROR_CATEGORIES` is evaluated in insertion order. Subclasses must
+    appear before their base classes; otherwise a broader category wins first.
+    """
     for exc_type, category in _ERROR_CATEGORIES.items():
         if isinstance(exc, exc_type):
             return category

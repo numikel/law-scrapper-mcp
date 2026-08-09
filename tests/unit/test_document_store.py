@@ -441,3 +441,36 @@ class TestEdgeCases:
 
         await document_store.load("DU/2024/1", "Second version", sections2)
         assert len(await document_store.get_toc("DU/2024/1")) == 2
+
+
+class TestSearchTreatsQueryLiterally:
+    """Regression guard — `query` must not be treated as a raw pattern."""
+
+    async def test_catastrophic_pattern_is_treated_as_literal_text(self, document_store: DocumentStore):
+        """The catastrophic pattern is INSIDE the document text; the assertion is
+        on the hit position — not merely on a miss. A regression that drops
+        `re.escape` then fails immediately on the wrong position instead of
+        hanging the run: `pytest.mark.timeout` cannot protect this case because
+        `re` does not release the GIL during backtracking, so the timer thread
+        never gets scheduled."""
+        markdown = "Art. 1. Zabroniony wzorzec (.+)+! jest tu zwykłym tekstem!"
+        sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
+        await document_store.load("DU/2024/1", markdown, sections)
+
+        hits = await document_store.search("DU/2024/1", "(.+)+!")
+
+        assert len(hits) == 1
+        assert hits[0].match_start == markdown.index("(.+)+!")
+
+    async def test_regex_metacharacters_match_only_literally(self, document_store: DocumentStore):
+        """Regex metacharacters ('(', '.') in query must act as literal characters —
+        the group and the dot must not be interpreted as a pattern."""
+        markdown = "Art. 1. Stawka wynosi 23% (dwadzieścia trzy procent)."
+        sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
+        await document_store.load("DU/2024/1", markdown, sections)
+
+        literal_hits = await document_store.search("DU/2024/1", "(dwadzieścia")
+        wildcard_hits = await document_store.search("DU/2024/1", "23.")
+
+        assert len(literal_hits) == 1
+        assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur

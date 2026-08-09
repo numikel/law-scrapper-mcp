@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import patch
 
 import pytest
 
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
-from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultStore
+from law_scrapper_mcp.services.pattern_matching import (
+    CompiledPattern,
+    PatternValidationError,
+    compile_pattern,
+)
+from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError, ResultStore
 
 
 def _make_act(
@@ -183,7 +189,7 @@ class TestResultStoreFiltering:
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
-        with pytest.raises(ValueError, match="Invalid regex"):
+        with pytest.raises(PatternValidationError, match="nie jest obsługiwany"):
             await store.filter_results(rs_id, pattern="[invalid")
 
     async def test_filter_invalid_field_defaults_to_title(
@@ -206,3 +212,150 @@ class TestResultStoreFiltering:
         filtered, original = await store.filter_results(rs_id)
         assert len(filtered) == 5
         assert original == 5
+
+
+# Title of realistic length — audit measured max 495 characters on 2024 acts.
+_REALISTIC_LONG_TITLE = (
+    "Rozporządzenie Ministra Rozwoju i Technologii z dnia 12 kwietnia 2024 r. "
+    "zmieniające rozporządzenie w sprawie szczegółowego zakresu i formy projektu "
+    "budowlanego oraz warunków technicznych, jakim powinny odpowiadać budynki "
+    "i ich usytuowanie, w zakresie wymagań ochrony przeciwpożarowej"
+)
+
+
+class TestResultStoreReDoSRegression:
+    """Catastrophic pattern must not freeze the process"""
+
+    async def test_filter_engine_is_re2_not_re(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        """Engine assertion on a SAFE pattern, run BEFORE the catastrophic test.
+
+        Intentionally a separate test and a separate harmless pattern ("Ustawa"):
+        if `compile_pattern` became unimportable or fell back to `re` internally,
+        this test would either raise `AttributeError` immediately on entering
+        `patch(...)`, or finish at once — it would not hang the CI job, unlike
+        placing the same assertion inside the `with` block around the
+        catastrophic pattern (where code after `filter_results` would never be
+        reached on a regression to `re`).
+        """
+        rs_id = await store.store(sample_results, "test", 5)
+
+        captured: list[CompiledPattern] = []
+
+        def _spy_compile_pattern(
+            pattern: str,
+            *,
+            max_length: int,
+            limit_was_clamped: bool = False,
+        ) -> CompiledPattern:
+            compiled = compile_pattern(
+                pattern,
+                max_length=max_length,
+                limit_was_clamped=limit_was_clamped,
+            )
+            captured.append(compiled)
+            return compiled
+
+        with patch(
+            "law_scrapper_mcp.services.result_store.compile_pattern",
+            side_effect=_spy_compile_pattern,
+        ):
+            await store.filter_results(rs_id, pattern="Ustawa")
+
+        assert captured, "compile_pattern was not called"
+        assert type(captured[0]).__module__.startswith("re2")
+
+    @pytest.mark.timeout(5)
+    async def test_catastrophic_pattern_returns_promptly(self, store: ResultStore) -> None:
+        results = [_make_act(f"DU/2024/{i}", _REALISTIC_LONG_TITLE) for i in range(1, 11)]
+        rs_id = await store.store(results, "test", len(results))
+
+        filtered, original = await store.filter_results(rs_id, pattern="(.+)+!", field="title")
+
+        assert filtered == []
+        assert original == 10
+
+    @pytest.mark.timeout(5)
+    async def test_documented_patterns_still_work(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        rs_id = await store.store(sample_results, "test", 5)
+
+        health, _ = await store.filter_results(rs_id, pattern="zdrow|Minister Zdrowia|apteka|lekar")
+        wildcard, _ = await store.filter_results(rs_id, pattern="Ustawa.*danych")
+        taxes, _ = await store.filter_results(rs_id, pattern="podatek|VAT|akcyza")
+
+        assert len(health) == 2  # two titles with "Zdrowia" — case-insensitive match
+        assert len(wildcard) == 1
+        # Fixture has "Ustawa o podatku dochodowym"; the pattern looks for "podatek".
+        # Zero hits matches pre-engine-change behaviour.
+        assert len(taxes) == 0
+
+    @pytest.mark.timeout(5)
+    async def test_alternation_matches_when_form_agrees(self, store: ResultStore) -> None:
+        """Positive control for an alternation pattern — without it the test above is blind."""
+        results = [_make_act("DU/2024/9", "Ustawa o podatek akcyza VAT")]
+        rs_id = await store.store(results, "test", 1)
+
+        filtered, _ = await store.filter_results(rs_id, pattern="podatek|VAT|akcyza")
+
+        assert len(filtered) == 1
+
+    async def test_lookaround_is_rejected_with_polish_message(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        rs_id = await store.store(sample_results, "test", 5)
+
+        with pytest.raises(PatternValidationError) as exc_info:
+            await store.filter_results(rs_id, pattern="(?<=Ustawa)o")
+
+        assert "nie jest obsługiwany" in str(exc_info.value)
+
+    async def test_pattern_over_limit_is_rejected(self, sample_results: list[ActSummaryOutput]) -> None:
+        store = ResultStore(max_sets=5, ttl=60, max_pattern_length=64)
+        rs_id = await store.store(sample_results, "test", 5)
+
+        with pytest.raises(PatternValidationError, match="za długi"):
+            await store.filter_results(rs_id, pattern="a" * 65)
+
+    async def test_pattern_at_limit_is_accepted(self, sample_results: list[ActSummaryOutput]) -> None:
+        """Boundary: a pattern whose length equals the limit exactly is not rejected."""
+        store = ResultStore(max_sets=5, ttl=60, max_pattern_length=64)
+        rs_id = await store.store(sample_results, "test", 5)
+
+        filtered, _ = await store.filter_results(rs_id, pattern="a" * 64)
+
+        assert filtered == []
+
+
+class TestResultStoreRecordCap:
+    """Refuse the call instead of returning a partial result"""
+
+    async def test_oversized_set_is_refused(self, sample_results: list[ActSummaryOutput]) -> None:
+        store = ResultStore(max_sets=5, ttl=60, max_records=3)
+        rs_id = await store.store(sample_results, "test", 5)
+
+        with pytest.raises(ResultSetTooLargeError) as exc_info:
+            await store.filter_results(rs_id, pattern="Ustawa")
+
+        assert exc_info.value.size == 5
+        assert exc_info.value.limit == 3
+        assert "Zawęź" in str(exc_info.value)
+
+    async def test_refusal_applies_without_pattern_too(self, sample_results: list[ActSummaryOutput]) -> None:
+        """Refusal applies to the call, not only to the regex path."""
+        store = ResultStore(max_sets=5, ttl=60, max_records=3)
+        rs_id = await store.store(sample_results, "test", 5)
+
+        with pytest.raises(ResultSetTooLargeError):
+            await store.filter_results(rs_id, type_equals="Ustawa")
+
+    async def test_set_at_limit_is_processed(self, sample_results: list[ActSummaryOutput]) -> None:
+        store = ResultStore(max_sets=5, ttl=60, max_records=5)
+        rs_id = await store.store(sample_results, "test", 5)
+
+        filtered, original = await store.filter_results(rs_id, type_equals="Ustawa")
+
+        assert original == 5
+        assert len(filtered) == 2

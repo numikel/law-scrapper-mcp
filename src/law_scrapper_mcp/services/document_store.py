@@ -95,16 +95,19 @@ class DocumentStore:
             return None
 
     async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
-        """Search within a loaded document."""
+        """Search literal text within a loaded document.
+
+        The query is escaped before compilation, so Python's backtracking
+        engine never receives client-supplied regex syntax. Replacing
+        ``re.escape(query)`` with ``query`` would reintroduce the ReDoS risk
+        addressed by the pattern filtering path.
+        """
         async with self._lock:
             doc = self._get_doc(eli)
             doc.last_accessed = time.time()
 
             hits = []
-            try:
-                pattern = re.compile(re.escape(query), re.IGNORECASE)
-            except re.error:
-                pattern = re.compile(re.escape(query), re.IGNORECASE)
+            pattern = re.compile(re.escape(query), re.IGNORECASE)
 
             for match in pattern.finditer(doc.markdown):
                 start = max(0, match.start() - context_chars)

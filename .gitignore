@@ -59,3 +59,7 @@ docker-compose.override.yml
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
+
+# Other
+docs/
+.worktrees/

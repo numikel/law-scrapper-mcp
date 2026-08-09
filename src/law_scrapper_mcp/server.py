@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
-from law_scrapper_mcp.config import settings
+from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(server):
     """Initialize and cleanup server resources."""
     logger.info("Starting Law Scrapper MCP Server v%s", settings.server_version)
+    log_pattern_limit_clamping(settings, logger)
 
     circuit_breaker = CircuitBreaker(
         failure_threshold=settings.circuit_breaker_threshold,
@@ -51,27 +52,32 @@ async def lifespan(server):
     )
     content_processor = ContentProcessor()
 
-    result_store = ResultStore()
+    result_store = ResultStore(
+        max_pattern_length=settings.effective_max_pattern_length,
+        pattern_length_limit_clamped=settings.max_pattern_length_was_clamped,
+        max_records=settings.effective_filter_max_records,
+    )
     metadata_service = MetadataService(client)
     search_service = SearchService(client)
     act_service = ActService(client, document_store, content_processor)
     changes_service = ChangesService(client)
 
-    yield {
-        "client": client,
-        "cache": cache,
-        "document_store": document_store,
-        "content_processor": content_processor,
-        "result_store": result_store,
-        "metadata_service": metadata_service,
-        "search_service": search_service,
-        "act_service": act_service,
-        "changes_service": changes_service,
-    }
-
-    await client.close()
-    await cache.clear()
-    logger.info("Law Scrapper MCP Server stopped")
+    try:
+        yield {
+            "client": client,
+            "cache": cache,
+            "document_store": document_store,
+            "content_processor": content_processor,
+            "result_store": result_store,
+            "metadata_service": metadata_service,
+            "search_service": search_service,
+            "act_service": act_service,
+            "changes_service": changes_service,
+        }
+    finally:
+        await client.close()
+        await cache.clear()
+        logger.info("Law Scrapper MCP Server stopped")
 
 
 app = FastMCP(

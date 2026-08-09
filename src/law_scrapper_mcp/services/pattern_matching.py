@@ -68,13 +68,47 @@ def _is_pattern_too_large(e: re2.error) -> bool:
     return isinstance(detail, bytes) and b"pattern too large" in detail
 
 
-def _has_too_many_variable_range_quantifiers(pattern: str) -> bool:
-    r"""Count unescaped `{min,max}` quantifiers outside character classes.
+def _quoted_literal_message() -> str:
+    return (
+        r"Cytowane literały \Q...\E nie są obsługiwane. Użyj sekwencji "
+        r"ucieczki dla każdego znaku specjalnego."
+    )
+
+
+def _variable_range_quantifier_end(pattern: str, opening_brace_index: int) -> tuple[int, bool] | None:
+    """Return the end and variability of a valid `{min,max}` quantifier.
+
+    The caller advances directly to the returned end, so each character is
+    inspected at most once. Other brace forms are left to RE2 syntax
+    validation without searching ahead for a closing brace.
+    """
+    cursor = opening_brace_index + 1
+    minimum_start = cursor
+    while cursor < len(pattern) and "0" <= pattern[cursor] <= "9":
+        cursor += 1
+    if cursor == minimum_start or cursor == len(pattern) or pattern[cursor] != ",":
+        return None
+
+    minimum = pattern[minimum_start:cursor]
+    cursor += 1
+    maximum_start = cursor
+    while cursor < len(pattern) and "0" <= pattern[cursor] <= "9":
+        cursor += 1
+    if cursor == maximum_start or cursor == len(pattern) or pattern[cursor] != "}":
+        return None
+
+    return cursor + 1, int(minimum) != int(pattern[maximum_start:cursor])
+
+
+def _validate_variable_range_quantifier_limit(pattern: str) -> None:
+    r"""Validate range quantifiers with a forward-only lexical scan.
 
     This deliberately performs only lexical recognition; RE2 remains the
-    authority for regex syntax validation. Skipping escapes and character
-    classes prevents literals such as `\{1,900}` and `[{1,900}]` from being
-    counted as quantifiers.
+    authority for regex syntax validation. The scanner models escaped
+    characters, POSIX character-class tokens, and bracket-expression state so
+    literals such as `\{1,900}` and `[[:alpha:]{1,900}]` are not counted as
+    quantifiers. Quoted literals (`\Q...\E`) are excluded from the documented
+    subset and rejected before they can hide range quantifiers.
     """
     quantifier_count = 0
     in_character_class = False
@@ -83,31 +117,39 @@ def _has_too_many_variable_range_quantifiers(pattern: str) -> bool:
     while index < len(pattern):
         character = pattern[index]
         if character == "\\":
+            if index + 1 < len(pattern) and pattern[index + 1] in {"Q", "E"}:
+                raise PatternValidationError(_quoted_literal_message())
             index += 2
             continue
-        if character == "[" and not in_character_class:
+
+        if in_character_class:
+            if character == "[" and index + 1 < len(pattern) and pattern[index + 1] in {":", ".", "="}:
+                closing_delimiter = pattern[index + 1]
+                index += 2
+                while index + 1 < len(pattern):
+                    if pattern[index] == closing_delimiter and pattern[index + 1] == "]":
+                        index += 2
+                        break
+                    index += 1
+                continue
+            if character == "]":
+                in_character_class = False
+            index += 1
+            continue
+
+        if character == "[":
             in_character_class = True
-        elif character == "]" and in_character_class:
-            in_character_class = False
-        elif character == "{" and not in_character_class:
-            closing_brace = pattern.find("}", index + 1)
-            if closing_brace != -1:
-                minimum, separator, maximum = pattern[index + 1 : closing_brace].partition(",")
-                if (
-                    separator
-                    and minimum.isascii()
-                    and maximum.isascii()
-                    and minimum.isdecimal()
-                    and maximum.isdecimal()
-                    and minimum != maximum
-                ):
+        elif character == "{":
+            quantifier = _variable_range_quantifier_end(pattern, index)
+            if quantifier is not None:
+                end_index, is_variable = quantifier
+                if is_variable:
                     quantifier_count += 1
                     if quantifier_count > MAX_VARIABLE_RANGE_QUANTIFIERS:
-                        return True
-                index = closing_brace
+                        raise PatternValidationError(_too_complex_message())
+                index = end_index
+                continue
         index += 1
-
-    return False
 
 
 def _re2_error_detail(e: re2.error) -> str:
@@ -169,8 +211,7 @@ def compile_pattern(
     """
     if len(pattern) > max_length:
         raise PatternValidationError(_too_long_message(len(pattern), max_length, limit_was_clamped))
-    if _has_too_many_variable_range_quantifiers(pattern):
-        raise PatternValidationError(_too_complex_message())
+    _validate_variable_range_quantifier_limit(pattern)
 
     try:
         return re2.compile(pattern, _build_options())

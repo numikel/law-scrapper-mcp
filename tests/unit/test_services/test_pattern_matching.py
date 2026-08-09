@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from time import perf_counter
 
 import pytest
@@ -14,6 +16,7 @@ from law_scrapper_mcp.services.pattern_matching import (
 )
 
 CATASTROPHIC_PATTERN = "(.+)+!"
+COMPILE_TIMEOUT_SECONDS = 1
 
 LONG_TITLE = (
     "Rozporządzenie Ministra Rozwoju i Technologii z dnia 12 kwietnia 2024 r. "
@@ -21,6 +24,31 @@ LONG_TITLE = (
     "budowlanego oraz warunków technicznych, jakim powinny odpowiadać budynki "
     "i ich usytuowanie, w zakresie wymagań ochrony przeciwpożarowej"
 )
+
+
+def _compile_in_subprocess(pattern: str) -> subprocess.CompletedProcess[str]:
+    """Run compilation in a process that can be terminated on a regression."""
+    script = """
+import sys
+from law_scrapper_mcp.services.pattern_matching import PatternValidationError, compile_pattern
+
+try:
+    compile_pattern(sys.stdin.read(), max_length=512)
+except PatternValidationError:
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+    try:
+        return subprocess.run(
+            [sys.executable, "-c", script],
+            input=pattern,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=COMPILE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"compile_pattern() did not finish within {COMPILE_TIMEOUT_SECONDS} second in an isolated process.")
 
 
 def test_long_title_is_representative() -> None:
@@ -134,9 +162,48 @@ class TestCompilePatternRejections:
 
         assert perf_counter() - start < 0.5
 
+    def test_quoted_literal_bypass_is_rejected_before_compilation(self) -> None:
+        """Quoted literals must not hide ranges from the compile-time DoS guard."""
+        pattern = r"\Q[\E" + "a{1,900}" * 62
+
+        result = _compile_in_subprocess(pattern)
+
+        assert result.returncode == 0, result.stderr
+
     def test_four_variable_ranges_remain_supported(self) -> None:
         """The structural guard permits the documented, bounded use case."""
         assert compile_pattern("a{1,2}b{3,5}c{0,3}d{1,4}", max_length=512)
+
+    def test_five_variable_ranges_are_rejected(self) -> None:
+        """The first range above the documented limit is rejected."""
+        with pytest.raises(PatternValidationError, match="złożony"):
+            compile_pattern("a{1,2}b{3,5}c{0,3}d{1,4}e{5,9}", max_length=512)
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "[[:alpha:]{1,2}]" * 5,
+            r"[\{\]]" * 5,
+            r"\{1,2\}" * 5,
+        ],
+    )
+    def test_literal_braces_do_not_count_as_variable_ranges(self, pattern: str) -> None:
+        """POSIX classes and escaped metacharacters retain their literal meaning."""
+        assert compile_pattern(pattern, max_length=512) is not None
+
+    @pytest.mark.parametrize("pattern", [r"\Qliteral\E", r"\Qunterminated", r"\E"])
+    def test_quoted_literal_constructs_are_rejected(self, pattern: str) -> None:
+        """The supported subset excludes quoted literals before RE2 compilation."""
+        with pytest.raises(PatternValidationError, match="Cytowane literały"):
+            compile_pattern(pattern, max_length=512)
+
+    def test_many_unmatched_braces_are_scanned_in_linear_time(self) -> None:
+        """Malformed braces must not cause repeated suffix scans in the preflight."""
+        start = perf_counter()
+
+        compile_pattern("{" * 4096, max_length=4096)
+
+        assert perf_counter() - start < 0.5
 
     def test_syntax_error_message_decodes_polish_diacritics(self) -> None:
         """The error message must show a readable character, not its byte repr.

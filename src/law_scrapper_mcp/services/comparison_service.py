@@ -20,19 +20,27 @@ class ComparisonService:
 
         task_a = asyncio.create_task(self._act_service.get_details(eli=eli_a, load_content=False))
         task_b = asyncio.create_task(self._act_service.get_details(eli=eli_b, load_content=False))
-        done, pending = await asyncio.wait((task_a, task_b), return_when=asyncio.FIRST_EXCEPTION)
+        tasks = (task_a, task_b)
+        try:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
 
-        for task in done:
-            if exc := task.exception():
-                for pending_task in pending:
-                    pending_task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-                raise exc
+            for task in done:
+                if exc := task.exception():
+                    for pending_task in pending:
+                        pending_task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                    raise exc
 
-        if pending:
-            await asyncio.gather(*pending)
+            if pending:
+                await asyncio.gather(*pending)
 
-        return task_a.result(), task_b.result()
+            return task_a.result(), task_b.result()
+        except asyncio.CancelledError:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     async def compare(self, eli_a: str, eli_b: str) -> CompareOutput:
         details_a, details_b = await self._fetch_details(eli_a, eli_b)

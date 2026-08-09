@@ -106,6 +106,43 @@ async def test_compare_cancels_sibling_fetch_on_failure() -> None:
     await asyncio.wait_for(sibling_cancelled.wait(), timeout=1.0)
 
 
+async def test_compare_cancels_both_fetches_on_parent_cancellation() -> None:
+    active_fetches = 0
+    both_started = asyncio.Event()
+    fetches_cancelled: list[str] = []
+    all_cancelled = asyncio.Event()
+
+    async def get_details(eli: str, load_content: bool = False) -> ActDetailOutput:
+        nonlocal active_fetches
+        assert load_content is False
+        active_fetches += 1
+        if active_fetches == 2:
+            both_started.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            fetches_cancelled.append(eli)
+            if len(fetches_cancelled) == 2:
+                all_cancelled.set()
+            raise
+        return _details(eli, eli, [])
+
+    act_service = AsyncMock()
+    act_service.get_details.side_effect = get_details
+    compare_task = asyncio.create_task(
+        ComparisonService(act_service).compare("DU/2024/1", "DU/2024/2"),
+    )
+
+    await asyncio.wait_for(both_started.wait(), timeout=1.0)
+    compare_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await compare_task
+
+    await asyncio.wait_for(all_cancelled.wait(), timeout=1.0)
+    assert sorted(fetches_cancelled) == ["DU/2024/1", "DU/2024/2"]
+
+
 async def test_compare_reuses_single_fetch_for_identical_elis() -> None:
     act_service = AsyncMock()
     act_service.get_details.return_value = _details("DU/2024/1", "Ustawa testowa", ["prawo"])

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     @property
     def effective_max_pattern_length(self) -> int:
-        """Return max pattern length clamped to the allowed range (D3.1)."""
+        """Return max pattern length clamped to the allowed range"""
         return min(
             max(self.max_pattern_length, MAX_PATTERN_LENGTH_FLOOR),
             MAX_PATTERN_LENGTH_CEILING,
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
 
 
 def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:
-    """Log a warning when the max pattern length setting was clamped (D3.1)."""
+    """Log a warning when the max pattern length setting was clamped"""
     if not current.max_pattern_length_was_clamped:
         return
     log.warning(

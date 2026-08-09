@@ -159,7 +159,7 @@ def compile_pattern(
         pattern: Raw pattern passed by the tool caller.
         max_length: Effective pattern length limit (after clamping to the range).
         limit_was_clamped: Whether `max_length` came from a clamped configuration.
-            Affects only the error message text (D3.1).
+            Affects only the error message text
 
     Raises:
         PatternValidationError: Pattern exceeds the length limit, uses syntax

@@ -441,3 +441,36 @@ class TestEdgeCases:
 
         await document_store.load("DU/2024/1", "Second version", sections2)
         assert len(await document_store.get_toc("DU/2024/1")) == 2
+
+
+class TestSearchTreatsQueryLiterally:
+    """Guard przeciw regresji F51 — `query` nie może stać się surowym wzorcem."""
+
+    async def test_catastrophic_pattern_is_treated_as_literal_text(self, document_store: DocumentStore):
+        """Wzorzec katastroficzny jest WEWNĄTRZ treści dokumentu, a asercja dotyczy
+        pozycji trafienia — nie samego faktu braku wyniku. Dzięki temu regresja
+        (usunięcie re.escape) daje natychmiastowy FAIL na złej pozycji zamiast
+        zawieszać przebieg: `pytest.mark.timeout` nie chroni tego przypadku, bo
+        `re` nie zwalnia GIL-a podczas backtrackingu, a wątek-timer nigdy nie
+        dostaje sterowania."""
+        markdown = "Art. 1. Zabroniony wzorzec (.+)+! jest tu zwykłym tekstem!"
+        sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
+        await document_store.load("DU/2024/1", markdown, sections)
+
+        hits = await document_store.search("DU/2024/1", "(.+)+!")
+
+        assert len(hits) == 1
+        assert hits[0].match_start == markdown.index("(.+)+!")
+
+    async def test_regex_metacharacters_match_only_literally(self, document_store: DocumentStore):
+        """Metaznaki regex ('(', '.') w query mają działać jak zwykłe znaki — grupa
+        i kropka nie mogą zostać zinterpretowane jako wzorzec."""
+        markdown = "Art. 1. Stawka wynosi 23% (dwadzieścia trzy procent)."
+        sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
+        await document_store.load("DU/2024/1", markdown, sections)
+
+        literal_hits = await document_store.search("DU/2024/1", "(dwadzieścia")
+        wildcard_hits = await document_store.search("DU/2024/1", "23.")
+
+        assert len(literal_hits) == 1
+        assert wildcard_hits == []  # kropka nie jest metaznakiem — "23." nie występuje

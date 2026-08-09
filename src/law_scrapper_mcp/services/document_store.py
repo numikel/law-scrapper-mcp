@@ -101,10 +101,16 @@ class DocumentStore:
             doc.last_accessed = time.time()
 
             hits = []
-            try:
-                pattern = re.compile(re.escape(query), re.IGNORECASE)
-            except re.error:
-                pattern = re.compile(re.escape(query), re.IGNORECASE)
+            # re.escape jest tu obowiązkowe: `query` pochodzi od klienta i musi być
+            # traktowane dosłownie. Usunięcie escapowania oznaczałoby przyjmowanie
+            # surowego wzorca od wywołującego, czyli odtworzenie w tym miejscu
+            # podatności ReDoS zamkniętej w klastrze 1 (ustalenie F01, patrz
+            # docs/mcp-audit-2026-08-06.md).
+            # Wzorce od klienta wolno kompilować wyłącznie przez
+            # services/pattern_matching.compile_pattern (silnik RE2).
+            # Escapowany wzorzec nigdy nie rzuca re.error, dlatego nie ma tu
+            # obsługi wyjątku (ustalenie F51).
+            pattern = re.compile(re.escape(query), re.IGNORECASE)
 
             for match in pattern.finditer(doc.markdown):
                 start = max(0, match.start() - context_chars)

@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any
 
-from law_scrapper_mcp.models.tool_outputs import CompareOutput
+from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, CompareOutput
 from law_scrapper_mcp.services.act_service import ActService
 
 
@@ -13,11 +13,29 @@ class ComparisonService:
     def __init__(self, act_service: ActService) -> None:
         self._act_service = act_service
 
+    async def _fetch_details(self, eli_a: str, eli_b: str) -> tuple[ActDetailOutput, ActDetailOutput]:
+        if eli_a == eli_b:
+            details = await self._act_service.get_details(eli=eli_a, load_content=False)
+            return details, details
+
+        task_a = asyncio.create_task(self._act_service.get_details(eli=eli_a, load_content=False))
+        task_b = asyncio.create_task(self._act_service.get_details(eli=eli_b, load_content=False))
+        done, pending = await asyncio.wait((task_a, task_b), return_when=asyncio.FIRST_EXCEPTION)
+
+        for task in done:
+            if exc := task.exception():
+                for pending_task in pending:
+                    pending_task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+                raise exc
+
+        if pending:
+            await asyncio.gather(*pending)
+
+        return task_a.result(), task_b.result()
+
     async def compare(self, eli_a: str, eli_b: str) -> CompareOutput:
-        details_a, details_b = await asyncio.gather(
-            self._act_service.get_details(eli=eli_a, load_content=False),
-            self._act_service.get_details(eli=eli_b, load_content=False),
-        )
+        details_a, details_b = await self._fetch_details(eli_a, eli_b)
         comparison: dict[str, Any] = {
             "title_a": details_a.title,
             "title_b": details_b.title,

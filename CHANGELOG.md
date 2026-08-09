@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`filter_results` breaking change: result set size cap** — Previously unlimited, calls on result sets larger than 100 records (`LAW_MCP_FILTER_MAX_RECORDS`) are now refused, even without a `pattern`; the response reports `error_category: precondition` so it's clear the request needs adjusting. Narrow the search or raise `LAW_MCP_FILTER_MAX_RECORDS` to work around it.
-- **`filter_results`: pattern compilation has bounded resource budgets** — Some simple-looking patterns, e.g. `\p{L}{0,112}`, are now rejected because their compiled size exceeds the limit. Patterns with more than four variable range quantifiers (such as `{1,900}`) are also rejected before compilation to avoid blocking the event loop.
+- **`filter_results`: pattern compilation has bounded resource budgets** — Some simple-looking patterns, e.g. `\p{L}{0,112}`, are now rejected because their compiled size exceeds the limit. Patterns with more than four variable range quantifiers (such as `{1,900}`) are also rejected before compilation to avoid blocking the event loop. The preflight recognizes only exact RE2 POSIX tokens (`[[:name:]]` / `[[:^name:]]`); incomplete `[.` / `[=` forms cannot hide ranges from the guard.
 - **`filter_results` parameter description names the supported pattern syntax** — The `pattern` parameter description now documents the supported regex subset, matching the validation error message.
 
 ### Added

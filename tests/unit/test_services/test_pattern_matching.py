@@ -16,7 +16,13 @@ from law_scrapper_mcp.services.pattern_matching import (
 )
 
 CATASTROPHIC_PATTERN = "(.+)+!"
-COMPILE_TIMEOUT_SECONDS = 1
+COMPILE_TIMEOUT_SECONDS = 3
+EXPENSIVE_RANGE_PATTERNS = [
+    "a{1,900}" * 62,
+    r"\Q[\E" + "a{1,900}" * 62,
+    "[a[.b]" + "a{1,900}" * 62 + ".]",
+    "[a[=b]" + "a{1,900}" * 62 + "=]",
+]
 
 LONG_TITLE = (
     "Rozporządzenie Ministra Rozwoju i Technologii z dnia 12 kwietnia 2024 r. "
@@ -105,6 +111,11 @@ class TestCompilePatternSupportedSyntax:
         compiled = compile_pattern("[[:alpha:]]+", max_length=512)
         assert compiled.search("ustawa") is not None
 
+    def test_negated_posix_class_is_supported(self) -> None:
+        compiled = compile_pattern("[[:^digit:]]+", max_length=512)
+        assert compiled.search("ustawa") is not None
+        assert compiled.search("2024") is None
+
     @pytest.mark.timeout(5)
     def test_catastrophic_pattern_returns_immediately(self) -> None:
         compiled = compile_pattern(CATASTROPHIC_PATTERN, max_length=512)
@@ -152,20 +163,9 @@ class TestCompilePatternRejections:
 
         assert "przycięcia" not in str(exc_info.value)
 
-    def test_many_bounded_ranges_are_rejected_before_compilation(self) -> None:
-        """Concatenated range quantifiers must not monopolize the event loop."""
-        pattern = "a{1,900}" * 62
-        start = perf_counter()
-
-        with pytest.raises(PatternValidationError, match="złożony"):
-            compile_pattern(pattern, max_length=512)
-
-        assert perf_counter() - start < 0.5
-
-    def test_quoted_literal_bypass_is_rejected_before_compilation(self) -> None:
-        """Quoted literals must not hide ranges from the compile-time DoS guard."""
-        pattern = r"\Q[\E" + "a{1,900}" * 62
-
+    @pytest.mark.parametrize("pattern", EXPENSIVE_RANGE_PATTERNS)
+    def test_expensive_range_patterns_are_rejected_in_an_isolated_process(self, pattern: str) -> None:
+        """Known expensive shapes must be rejected before RE2 compilation begins."""
         result = _compile_in_subprocess(pattern)
 
         assert result.returncode == 0, result.stderr

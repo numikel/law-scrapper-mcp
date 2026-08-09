@@ -26,6 +26,29 @@ from law_scrapper_mcp.config import (
 RE2_MAX_MEM_BYTES = 2 * 1024 * 1024
 MAX_VARIABLE_RANGE_QUANTIFIERS = 4
 
+# Exact ASCII class names from RE2's syntax reference. Only a complete
+# `[:name:]` / `[:^name:]` token is skipped inside a bracket expression —
+# arbitrary forward scans for `[.` / `[=` / incomplete `[:` delimiters are
+# refused so they cannot hide variable-range quantifiers from this preflight.
+POSIX_CLASS_NAMES = frozenset(
+    {
+        "alnum",
+        "alpha",
+        "ascii",
+        "blank",
+        "cntrl",
+        "digit",
+        "graph",
+        "lower",
+        "print",
+        "punct",
+        "space",
+        "upper",
+        "word",
+        "xdigit",
+    }
+)
+
 CompiledPattern = Any
 
 SUPPORTED_SYNTAX_HINT = (
@@ -100,15 +123,42 @@ def _variable_range_quantifier_end(pattern: str, opening_brace_index: int) -> tu
     return cursor + 1, int(minimum) != int(pattern[maximum_start:cursor])
 
 
+def _posix_class_token_end(pattern: str, opening_bracket_index: int) -> int | None:
+    """Return the end index after a complete `[:name:]` or `[:^name:]` token.
+
+    Incomplete or unknown nested bracket forms return None so the caller can
+    treat the opening `[` as ordinary class content. This avoids open-ended
+    delimiter scans that can skip past real character-class closers.
+    """
+    if opening_bracket_index + 1 >= len(pattern) or pattern[opening_bracket_index + 1] != ":":
+        return None
+
+    cursor = opening_bracket_index + 2
+    if cursor < len(pattern) and pattern[cursor] == "^":
+        cursor += 1
+
+    name_start = cursor
+    while cursor < len(pattern) and "a" <= pattern[cursor] <= "z":
+        cursor += 1
+    name = pattern[name_start:cursor]
+    if name not in POSIX_CLASS_NAMES:
+        return None
+    if cursor + 1 >= len(pattern) or pattern[cursor] != ":" or pattern[cursor + 1] != "]":
+        return None
+    return cursor + 2
+
+
 def _validate_variable_range_quantifier_limit(pattern: str) -> None:
     r"""Validate range quantifiers with a forward-only lexical scan.
 
     This deliberately performs only lexical recognition; RE2 remains the
     authority for regex syntax validation. The scanner models escaped
-    characters, POSIX character-class tokens, and bracket-expression state so
+    characters, exact POSIX `[:name:]` tokens, and bracket-expression state so
     literals such as `\{1,900}` and `[[:alpha:]{1,900}]` are not counted as
     quantifiers. Quoted literals (`\Q...\E`) are excluded from the documented
-    subset and rejected before they can hide range quantifiers.
+    subset and rejected before they can hide range quantifiers. Incomplete
+    collating/equivalence forms (`[.`, `[=`) are ordinary class content so a
+    real `]` can close the class and expose subsequent ranges to counting.
     """
     quantifier_count = 0
     in_character_class = False
@@ -123,15 +173,11 @@ def _validate_variable_range_quantifier_limit(pattern: str) -> None:
             continue
 
         if in_character_class:
-            if character == "[" and index + 1 < len(pattern) and pattern[index + 1] in {":", ".", "="}:
-                closing_delimiter = pattern[index + 1]
-                index += 2
-                while index + 1 < len(pattern):
-                    if pattern[index] == closing_delimiter and pattern[index + 1] == "]":
-                        index += 2
-                        break
-                    index += 1
-                continue
+            if character == "[":
+                posix_end = _posix_class_token_end(pattern, index)
+                if posix_end is not None:
+                    index = posix_end
+                    continue
             if character == "]":
                 in_character_class = False
             index += 1

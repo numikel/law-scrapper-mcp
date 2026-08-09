@@ -31,9 +31,6 @@ class ComparisonService:
                     await asyncio.gather(*pending, return_exceptions=True)
                     raise exc
 
-            if pending:
-                await asyncio.gather(*pending)
-
             return task_a.result(), task_b.result()
         except asyncio.CancelledError:
             for task in tasks:

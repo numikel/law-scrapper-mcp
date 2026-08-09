@@ -8,7 +8,11 @@ from unittest.mock import patch
 import pytest
 
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
-from law_scrapper_mcp.services.pattern_matching import PatternValidationError, compile_pattern
+from law_scrapper_mcp.services.pattern_matching import (
+    CompiledPattern,
+    PatternValidationError,
+    compile_pattern,
+)
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError, ResultStore
 
 
@@ -237,10 +241,19 @@ class TestResultStoreReDoSRegression:
         """
         rs_id = await store.store(sample_results, "test", 5)
 
-        captured: list[object] = []
+        captured: list[CompiledPattern] = []
 
-        def _spy_compile_pattern(*args: object, **kwargs: object) -> object:
-            compiled = compile_pattern(*args, **kwargs)
+        def _spy_compile_pattern(
+            pattern: str,
+            *,
+            max_length: int,
+            limit_was_clamped: bool = False,
+        ) -> CompiledPattern:
+            compiled = compile_pattern(
+                pattern,
+                max_length=max_length,
+                limit_was_clamped=limit_was_clamped,
+            )
             captured.append(compiled)
             return compiled
 

@@ -1,5 +1,4 @@
-"""Compile client-supplied regex patterns.
-"""
+"""Compile client-supplied regex patterns."""
 
 from __future__ import annotations
 

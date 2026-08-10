@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, RelationshipsOutput
 from law_scrapper_mcp.services.response_enrichment import relationships_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -55,7 +56,7 @@ def register(mcp: FastMCP) -> None:
         - analyze_act_relationships(eli="DU/2024/1", relationship_type="Akty uznane za uchylone") - Uchylone akty
         """
         assert ctx is not None
-        output = await ctx.lifespan_context.relationship_service.get_relationships(eli, relationship_type)
+        output = await get_app_context(ctx).relationship_service.get_relationships(eli, relationship_type)
         return EnrichedResponse(
             data=output,
             hints=relationships_hints(eli, list(output.relationships)),

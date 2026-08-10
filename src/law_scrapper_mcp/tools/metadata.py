@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
@@ -49,7 +50,7 @@ def register(mcp: FastMCP) -> None:
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
         assert ctx is not None
-        metadata_service = ctx.lifespan_context.metadata_service
+        metadata_service = get_app_context(ctx).metadata_service
 
         # Convert string to enum
         try:

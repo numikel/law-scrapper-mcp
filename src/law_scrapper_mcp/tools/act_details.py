@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import act_details_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -66,7 +67,7 @@ def register(mcp: FastMCP) -> None:
         - get_act_details(eli="DU/2021/1500") - Sprawdź status i daty obowiązywania
         """
         assert ctx is not None
-        act_service = ctx.lifespan_context.act_service
+        act_service = get_app_context(ctx).act_service
 
         # Normalize bool (MCP clients may send string)
         if isinstance(load_content, str):

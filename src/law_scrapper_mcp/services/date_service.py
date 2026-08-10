@@ -13,9 +13,9 @@ class DateService:
 
     def calculate(
         self,
-        days: str | int = 0,
-        months: str | int = 0,
-        years: str | int = 0,
+        days: str | int | bool = 0,
+        months: str | int | bool = 0,
+        years: str | int | bool = 0,
         base_date: str | None = None,
     ) -> DateOutput:
         days_value = self._normalize_offset(days)
@@ -45,7 +45,7 @@ class DateService:
         return datetime.now()
 
     @staticmethod
-    def _normalize_offset(value: str | int) -> int:
+    def _normalize_offset(value: str | int | bool) -> int:
         if isinstance(value, bool):
             raise ValueError("Nieprawidłowa wartość przesunięcia: wartość logiczna nie jest dozwolona.")
         try:

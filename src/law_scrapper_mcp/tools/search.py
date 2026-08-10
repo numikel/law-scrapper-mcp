@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -104,7 +105,7 @@ def register(mcp: FastMCP) -> None:
         - search_legal_acts(title="budżet", year=2024) - Akty budżetowe z 2024
         """
         assert ctx is not None
-        search_service = ctx.lifespan_context.search_service
+        search_service = get_app_context(ctx).search_service
 
         year_int: int | None = None
         if year is not None:
@@ -147,7 +148,6 @@ def register(mcp: FastMCP) -> None:
         )
 
         effective_limit = limit_int if limit_int is not None else DEFAULT_SEARCH_LIMIT
-        was_truncated = output.returned_count == effective_limit and output.total_count > effective_limit
         first_eli = output.results[0].eli if output.results else None
 
         response = EnrichedResponse(
@@ -157,7 +157,8 @@ def register(mcp: FastMCP) -> None:
                 output.returned_count > 0,
                 first_eli,
                 output.result_set_id,
-                was_truncated=was_truncated,
+                offset=offset_int or 0,
+                returned_count=output.returned_count,
                 applied_limit=effective_limit,
             ),
         )

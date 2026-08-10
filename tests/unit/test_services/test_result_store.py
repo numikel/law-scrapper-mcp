@@ -359,3 +359,64 @@ class TestResultStoreRecordCap:
 
         assert original == 5
         assert len(filtered) == 2
+
+
+class TestResultStoreFilterAndStore:
+    async def test_filter_and_store_persists_chained_result_set(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            type_equals="Ustawa",
+        )
+
+        assert output.source_result_set_id == source_id
+        assert output.result_set_id == "rs_2"
+        assert output.filtered_count == 2
+        assert output.original_count == len(sample_results)
+        assert all(result.type == "Ustawa" for result in output.results)
+
+        stored = await store.get(output.result_set_id)
+        assert stored is not None
+        assert stored.query_summary.startswith(f"filtered({source_id}):")
+        assert "type_equals=Ustawa" in stored.query_summary
+
+    async def test_filter_and_store_records_applied_filters(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            pattern="Ustawa",
+            field="title",
+            sort_by="title",
+            sort_desc=True,
+            limit=1,
+        )
+
+        assert output.filters_applied == {
+            "pattern": "Ustawa",
+            "field": "title",
+            "sort_by": "title",
+            "sort_desc": True,
+            "limit": 1,
+        }
+        assert output.filtered_count == 1
+
+    async def test_filter_and_store_leaves_result_set_id_none_for_empty_matches(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            pattern="nonexistent-pattern-xyz",
+        )
+
+        assert output.results == []
+        assert output.filtered_count == 0
+        assert output.result_set_id is None
+        assert output.filters_applied["pattern"] == "nonexistent-pattern-xyz"

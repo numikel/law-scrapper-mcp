@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -62,7 +63,7 @@ def register(mcp: FastMCP) -> None:
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
         """
         assert ctx is not None
-        search_service = ctx.lifespan_context.search_service
+        search_service = get_app_context(ctx).search_service
 
         year_int = 0
         with contextlib.suppress(ValueError, TypeError):
@@ -86,7 +87,6 @@ def register(mcp: FastMCP) -> None:
         )
 
         effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
-        was_truncated = output.returned_count == effective_limit and output.total_count > effective_limit
         first_eli = output.results[0].eli if output.results else None
 
         response = EnrichedResponse(
@@ -96,7 +96,7 @@ def register(mcp: FastMCP) -> None:
                 output.returned_count > 0,
                 first_eli,
                 output.result_set_id,
-                was_truncated=was_truncated,
+                returned_count=output.returned_count,
                 applied_limit=effective_limit,
             ),
         )

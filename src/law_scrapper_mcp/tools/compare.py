@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import CompareOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import compare_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -57,5 +58,5 @@ def register(mcp: FastMCP) -> None:
         - compare_acts(eli_a="DU/2021/1500", eli_b="DU/2021/1600") - Porównaj podobne akty
         """
         assert ctx is not None
-        output = await ctx.lifespan_context.comparison_service.compare(eli_a, eli_b)
+        output = await get_app_context(ctx).comparison_service.compare(eli_a, eli_b)
         return EnrichedResponse(data=output, hints=compare_hints(eli_a, eli_b)).model_dump_json()

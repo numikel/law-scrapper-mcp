@@ -12,7 +12,7 @@ from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
-from law_scrapper_mcp.context import AppContext
+from law_scrapper_mcp.context import APP_CONTEXT_KEY, AppContext
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -85,7 +85,7 @@ async def lifespan(server):
     )
 
     try:
-        yield context
+        yield {APP_CONTEXT_KEY: context}
     finally:
         await client.close()
         await cache.clear()

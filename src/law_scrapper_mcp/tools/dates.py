@@ -1,11 +1,11 @@
 """Date calculation utility for legal date operations."""
 
-import contextlib
 import logging
 from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import DateOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import date_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -29,16 +29,16 @@ def register(mcp: FastMCP) -> None:
     )
     async def calculate_legal_date(
         days: Annotated[
-            str | int,
+            str | int | bool,
             "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. Domyślnie 0.",
         ] = 0,
         months: Annotated[
-            str | int,
+            str | int | bool,
             "Liczba miesięcy do dodania (+) lub odjęcia (-). "
             "Np. months=3 = za 3 miesiące, months=-6 = 6 miesięcy temu. Domyślnie 0.",
         ] = 0,
         years: Annotated[
-            str | int,
+            str | int | bool,
             "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. Domyślnie 0.",
         ] = 0,
         base_date: Annotated[
@@ -64,16 +64,5 @@ def register(mcp: FastMCP) -> None:
         - calculate_legal_date(years=-5, base_date="2024") - 5 lat przed 1 stycznia 2024
         """
         assert ctx is not None
-
-        days_value: str | int = days
-        months_value: str | int = months
-        years_value: str | int = years
-        with contextlib.suppress(ValueError, TypeError):
-            days_value = int(days)
-        with contextlib.suppress(ValueError, TypeError):
-            months_value = int(months)
-        with contextlib.suppress(ValueError, TypeError):
-            years_value = int(years)
-
-        output = ctx.lifespan_context.date_service.calculate(days_value, months_value, years_value, base_date)
+        output = get_app_context(ctx).date_service.calculate(days, months, years, base_date)
         return EnrichedResponse(data=output, hints=date_hints()).model_dump_json()

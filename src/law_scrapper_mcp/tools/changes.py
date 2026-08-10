@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -58,7 +59,7 @@ def register(mcp: FastMCP) -> None:
         - track_legal_changes(date_from="2024-01-01", keywords=["zdrowotny"]) - Zmiany zdrowotne
         """
         assert ctx is not None
-        changes_service = ctx.lifespan_context.changes_service
+        changes_service = get_app_context(ctx).changes_service
 
         output = await changes_service.track_changes(
             publisher=publisher,

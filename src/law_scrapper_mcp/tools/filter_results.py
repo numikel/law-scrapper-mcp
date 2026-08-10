@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
+from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
@@ -113,7 +114,7 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
         """
         assert ctx is not None
-        result_store = ctx.lifespan_context.result_store
+        result_store = get_app_context(ctx).result_store
 
         year_int: int | None = None
         if year_equals is not None:
@@ -190,7 +191,7 @@ def register(mcp: FastMCP) -> None:
         - list_result_sets() - Wyświetl wszystkie aktywne zestawy wyników
         """
         assert ctx is not None
-        result_store = ctx.lifespan_context.result_store
+        result_store = get_app_context(ctx).result_store
 
         raw_sets = await result_store.list_sets()
         sets = [ResultSetInfo(**s) for s in raw_sets]

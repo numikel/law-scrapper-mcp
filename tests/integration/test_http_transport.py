@@ -22,6 +22,8 @@ from law_scrapper_mcp.server import app
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
 PROTOCOL_FLOOR = date(2026, 7, 28)
+PROTOCOL_FLOOR_VERSION = "2026-07-28"
+MAX_PORT_BIND_ATTEMPTS = 10
 
 
 @pytest.fixture
@@ -95,63 +97,105 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     for response in (discover, listed, success, failure):
         assert response.status_code == 200
         assert "Mcp-Session-Id" not in response.headers
-    assert discover.json()["result"]["supportedVersions"]
+
+    discover_result = discover.json()["result"]
+    supported_versions = discover_result["supportedVersions"]
+    assert supported_versions
+    assert any(
+        date.fromisoformat(version) >= PROTOCOL_FLOOR for version in supported_versions
+    )
+    assert PROTOCOL_FLOOR_VERSION in supported_versions
+
     assert len(listed.json()["result"]["tools"]) == 13
-    assert success.json()["result"]["isError"] is False
-    assert failure.json()["result"]["isError"] is True
+
+    success_result = success.json()["result"]
+    assert success_result["isError"] is False
+    assert (
+        success_result["structuredContent"]["data"]["calculated_date"] == "2026-01-02"
+    )
+
+    failure_result = failure.json()["result"]
+    assert failure_result["isError"] is True
+    failure_messages = [
+        item["text"]
+        for item in failure_result["content"]
+        if item.get("type") == "text" and item.get("text")
+    ]
+    assert failure_messages
+    assert any("Invalid ELI format" in message for message in failure_messages)
+
+
+def _allocate_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def _stop_http_server(process: subprocess.Popen[str]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def _wait_for_http_server(
+    process: subprocess.Popen[str],
+    *,
+    port: int,
+    deadline_seconds: float = 10,
+) -> bool:
+    health_url = f"http://127.0.0.1:{port}/health"
+    deadline = time.monotonic() + deadline_seconds
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return False
+        try:
+            if httpx.get(health_url, timeout=0.25).status_code == 200:
+                return process.poll() is None
+        except httpx.HTTPError:
+            time.sleep(0.1)
+    return False
 
 
 @pytest.fixture
 def live_http_server(tmp_path: Path):
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
     log_path = tmp_path / "http-server.log"
-    environment = {
-        **os.environ,
-        "LAW_MCP_TRANSPORT": "streamable-http",
-        "LAW_MCP_HOST": "127.0.0.1",
-        "LAW_MCP_PORT": str(port),
-    }
-    with log_path.open("w", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "law_scrapper_mcp"],
-            cwd=PROJECT_ROOT,
-            env=environment,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        try:
-            deadline = time.monotonic() + 10
-            health_url = f"http://127.0.0.1:{port}/health"
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    break
-                try:
-                    if httpx.get(health_url, timeout=0.25).status_code == 200:
-                        break
-                except httpx.HTTPError:
-                    time.sleep(0.1)
-            else:
-                pytest.fail(
-                    f"HTTP server did not become ready:\n"
-                    f"{log_path.read_text(encoding='utf-8')}"
+    startup_errors: list[str] = []
+
+    for _ in range(MAX_PORT_BIND_ATTEMPTS):
+        port = _allocate_loopback_port()
+        environment = {
+            **os.environ,
+            "LAW_MCP_TRANSPORT": "streamable-http",
+            "LAW_MCP_HOST": "127.0.0.1",
+            "LAW_MCP_PORT": str(port),
+        }
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                [sys.executable, "-m", "law_scrapper_mcp"],
+                cwd=PROJECT_ROOT,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            try:
+                if _wait_for_http_server(process, port=port):
+                    yield f"http://127.0.0.1:{port}/mcp"
+                    return
+                startup_errors.append(
+                    f"port {port} failed:\n{log_path.read_text(encoding='utf-8')}"
                 )
-            if process.poll() is not None:
-                pytest.fail(
-                    f"HTTP server exited early:\n"
-                    f"{log_path.read_text(encoding='utf-8')}"
-                )
-            yield f"http://127.0.0.1:{port}/mcp"
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+            finally:
+                _stop_http_server(process)
+
+    pytest.fail(
+        "HTTP server did not bind and become ready after "
+        f"{MAX_PORT_BIND_ATTEMPTS} attempts:\n" + "\n---\n".join(startup_errors)
+    )
 
 
 @pytest.mark.anyio

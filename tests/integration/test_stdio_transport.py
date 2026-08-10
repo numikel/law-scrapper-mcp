@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from mcp import Client, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import get_default_environment, stdio_client
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -25,7 +25,11 @@ async def test_stdio_discovery_tools_success_and_error() -> None:
             command=sys.executable,
             args=["-m", "law_scrapper_mcp"],
             cwd=str(PROJECT_ROOT),
-            env={**os.environ, "LAW_MCP_LOG_LEVEL": "INFO"},
+            env={
+                **get_default_environment(),
+                "LAW_MCP_TRANSPORT": "stdio",
+                "LAW_MCP_LOG_LEVEL": "INFO",
+            },
         )
 
         async with Client(stdio_client(parameters, errlog=stderr_file)) as client:

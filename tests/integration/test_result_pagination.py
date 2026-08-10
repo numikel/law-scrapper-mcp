@@ -83,6 +83,17 @@ async def _assert_tool_page_matrix(
         )
         if items_field is not None:
             assert len(payload["data"][items_field]) == page_info["returned_count"]
+        elif "metadata" in payload["data"]:
+            metadata = payload["data"]["metadata"]
+            assert sum(len(values) for values in metadata.values()) == page_info["returned_count"]
+            if base_arguments.get("category", "all") == "all":
+                assert list(metadata) == [
+                    "keywords",
+                    "publishers",
+                    "statuses",
+                    "types",
+                    "institutions",
+                ]
 
 
 async def test_filter_stores_full_set_but_returns_one_page(mcp_client) -> None:

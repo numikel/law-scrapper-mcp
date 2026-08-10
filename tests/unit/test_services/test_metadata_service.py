@@ -8,6 +8,7 @@ from httpx import Response
 
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.models.enums import MetadataCategory
+from law_scrapper_mcp.models.pagination import MAX_ITEM_LIMIT
 from law_scrapper_mcp.services.metadata_service import MetadataService
 
 
@@ -140,6 +141,18 @@ class TestMetadataService:
         ]
         assert sum(len(values) for values in output.metadata.values()) == 2
         assert output.page_info.total_count == 6
+
+    @respx.mock
+    async def test_get_metadata_page_clamps_limit_in_service(self, service: MetadataService):
+        """Metadata paging clamps oversized limits in the service layer."""
+        keywords = [f"keyword-{index}" for index in range(MAX_ITEM_LIMIT + 5)]
+        respx.get("https://api.sejm.gov.pl/eli/keywords").mock(return_value=Response(200, json=keywords))
+
+        output = await service.get_metadata_page(MetadataCategory.KEYWORDS, limit=500, offset=0)
+
+        assert output.page_info.limit == MAX_ITEM_LIMIT
+        assert output.count == MAX_ITEM_LIMIT
+        assert len(output.metadata["keywords"]) == MAX_ITEM_LIMIT
 
     @respx.mock
     async def test_get_metadata_page_single_category(self, service: MetadataService):

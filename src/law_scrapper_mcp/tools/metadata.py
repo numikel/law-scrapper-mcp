@@ -9,7 +9,6 @@ from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
-from law_scrapper_mcp.services.pagination import effective_limit, parse_non_negative
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -70,22 +69,10 @@ def register(mcp: FastMCP) -> None:
         except ValueError:
             category_enum = MetadataCategory.ALL
 
-        from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
-
-        page_limit = effective_limit(
-            int(limit) if limit is not None else DEFAULT_ITEM_LIMIT,
-            default=DEFAULT_ITEM_LIMIT,
-            maximum=MAX_ITEM_LIMIT,
-        )
-        page_offset = parse_non_negative(
-            int(offset) if offset is not None else 0,
-            name="offset",
-            default=0,
-        )
         output = await metadata_service.get_metadata_page(
             category_enum,
-            limit=page_limit,
-            offset=page_offset,
+            limit=limit,
+            offset=offset,
         )
 
         response = EnrichedResponse(

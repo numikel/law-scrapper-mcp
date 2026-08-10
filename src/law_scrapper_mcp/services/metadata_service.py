@@ -6,8 +6,9 @@ from typing import Any
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import MetadataCategory
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import MetadataOutput
-from law_scrapper_mcp.services.pagination import paginate_items
+from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class MetadataService:
         self,
         category: MetadataCategory,
         *,
-        limit: int,
-        offset: int,
+        limit: str | int | None = DEFAULT_ITEM_LIMIT,
+        offset: str | int | None = 0,
     ) -> MetadataOutput:
         """Return one deterministic metadata page across categories."""
         raw = await self.get_metadata(category)
@@ -59,7 +60,9 @@ class MetadataService:
             for current in categories
             for item in raw.get(current.value, [])
         ]
-        page, page_info = paginate_items(flattened, limit=limit, offset=offset)
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        page, page_info = paginate_items(flattened, limit=page_limit, offset=page_offset)
         metadata: dict[str, list[Any]] = {current.value: [] for current in categories}
         for key, item in page:
             metadata[key].append(item)

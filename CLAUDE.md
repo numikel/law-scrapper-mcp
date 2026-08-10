@@ -67,7 +67,7 @@ src/law_scrapper_mcp/
 - **Result Store**: Search results persisted for chained filtering (LRU eviction, TTL, asyncio.Lock)
 - **Circuit Breaker**: CLOSED → OPEN → HALF_OPEN states protecting Sejm API from cascading failures
 - **Enriched responses**: Every tool returns `EnrichedResponse` with hints; native `outputSchema` and object `structuredContent`
-- **Pagination**: `PageInfo` with `limit`/`offset` on list and content tools (defaults: 20 items, 10,000 chars; maxima: 100 items, 50,000 chars)
+- **Pagination**: `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on list and content tools (defaults: 20 items, 10,000 chars; maxima: 100 items, 50,000 chars)
 - **TTL cache**: Async API response cache with configurable TTL (metadata=24h, search=10min)
 - **Error handling**: `@handle_tool_errors` re-raises `ToolExecutionError` so failures surface as `is_error=True`
 - **Async throughout**: httpx.AsyncClient with retry (tenacity), semaphore rate limiting, asyncio.Lock

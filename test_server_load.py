@@ -27,7 +27,7 @@ def test_import(module_name):
 
 
 if __name__ == "__main__":
-    print("Testing Law Scrapper MCP v2.0 imports...\n")
+    print("Testing Law Scrapper MCP v3.0 imports...\n")
 
     modules_to_test = [
         "law_scrapper_mcp.config",

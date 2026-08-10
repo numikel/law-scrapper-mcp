@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Reject FastMCP remnants
         run: |
           if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests; then
@@ -34,7 +37,7 @@ jobs:
           fi
 
       - name: Ruff check
-        run: uv run ruff check src/
+        run: uv run ruff check src tests
 
       - name: Mypy
         run: uv run mypy src/law_scrapper_mcp/
@@ -58,12 +61,20 @@ jobs:
           uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          HEALTH_READY=false
           for attempt in {1..40}; do
             if curl --fail --silent http://127.0.0.1:7683/health >/dev/null; then
+              HEALTH_READY=true
               break
             fi
             sleep 0.25
           done
+          if [ "$HEALTH_READY" != "true" ]; then
+            echo "Server /health did not become ready in time"
+            cat server.stderr.log || true
+            cat server.stdout.log || true
+            exit 1
+          fi
           SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
           npx --yes @modelcontextprotocol/conformance@latest server \
             --url http://127.0.0.1:7683/mcp \

@@ -597,7 +597,7 @@ If upgrading from v1.0.2, note these breaking changes:
 - **Native structured responses** — Tools return `EnrichedResponse` with `outputSchema` and object `structuredContent` (no JSON strings)
 - **Protocol-visible errors** — Tool failures surface as `isError=true` instead of in-body `error` fields
 - **Stateless Streamable HTTP** — `/mcp` endpoint only; legacy event-stream transport removed
-- **Pagination** — `PageInfo` metadata with `limit`/`offset` on search, browse, metadata, changes, TOC, sections, and in-act search
+- **Pagination** — `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on search, browse, metadata, changes, TOC, sections, and in-act search
 - **Typed `AppContext`** — Lifespan resources accessed via `ctx.request_context.lifespan_context`
 - **Domain services** — `ComparisonService`, `RelationshipService`, and `DateService` extracted from tool adapters
 - **Transport tests** — Real STDIO subprocess, loopback HTTP, and MCP conformance in CI
@@ -652,7 +652,7 @@ uv sync --extra dev
 # Run unit tests
 uv run pytest tests/unit/ -v
 
-# Run integration tests (requires internet)
+# Run integration tests (mocked Sejm API via respx; no live network required)
 uv run pytest tests/integration/ -v -m integration
 
 # Run all tests with coverage
@@ -697,7 +697,7 @@ uv run pytest tests/integration/ -v -m integration
 - All 13 tools registered with preserved public arguments
 - Native `structuredContent` payloads with `outputSchema` (not JSON strings)
 - `isError=true` on tool execution failures
-- `PageInfo` pagination metadata on paginated outputs
+- `page_info` (`PageInfo`) pagination metadata on paginated outputs
 - Stateful workflows: search → filter → load act → read sections → search in content
 - Real STDIO and HTTP transports against a running server process
 

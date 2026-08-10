@@ -30,16 +30,19 @@ def register(mcp: FastMCP) -> None:
     async def calculate_legal_date(
         days: Annotated[
             str | int | bool,
-            "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. Domyślnie 0.",
+            "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. "
+            "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone.",
         ] = 0,
         months: Annotated[
             str | int | bool,
             "Liczba miesięcy do dodania (+) lub odjęcia (-). "
-            "Np. months=3 = za 3 miesiące, months=-6 = 6 miesięcy temu. Domyślnie 0.",
+            "Np. months=3 = za 3 miesiące, months=-6 = 6 miesięcy temu. Domyślnie 0. "
+            "Wartości logiczne (true/false) są niedozwolone.",
         ] = 0,
         years: Annotated[
             str | int | bool,
-            "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. Domyślnie 0.",
+            "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. "
+            "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone.",
         ] = 0,
         base_date: Annotated[
             str | None,

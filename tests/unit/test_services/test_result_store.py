@@ -383,6 +383,28 @@ class TestResultStoreFilterAndStore:
         assert stored.query_summary.startswith(f"filtered({source_id}):")
         assert "type_equals=Ustawa" in stored.query_summary
 
+        chained_output = await store.filter_and_store(
+            output.result_set_id,
+            pattern="podatku",
+            field="title",
+        )
+
+        assert chained_output.source_result_set_id == output.result_set_id
+        assert chained_output.result_set_id == "rs_3"
+        assert chained_output.original_count == output.filtered_count
+        assert chained_output.filtered_count == 1
+        assert chained_output.results[0].eli == "DU/2024/1"
+        assert chained_output.filters_applied == {
+            "pattern": "podatku",
+            "field": "title",
+        }
+
+        chained_stored = await store.get(chained_output.result_set_id)
+        assert chained_stored is not None
+        assert chained_stored.query_summary.startswith(f"filtered({output.result_set_id}):")
+        assert "pattern=podatku" in chained_stored.query_summary
+        assert len(chained_stored.results) == 1
+
     async def test_filter_and_store_records_applied_filters(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:

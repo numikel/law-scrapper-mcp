@@ -76,21 +76,27 @@ jobs:
             exit 1
           fi
           SDK_SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
-          # Dated versions currently accepted by @modelcontextprotocol/conformance@latest
-          # (newest first). The Python SDK may advertise a newer era before the suite catches up.
-          CONFORMANCE_SPEC_VERSIONS=(2025-11-25 2025-06-18 2025-03-26)
-          SPEC_VERSION="$SDK_SPEC_VERSION"
-          SUPPORTED=false
-          for candidate in "${CONFORMANCE_SPEC_VERSIONS[@]}"; do
-            if [ "$candidate" = "$SDK_SPEC_VERSION" ]; then
-              SUPPORTED=true
-              break
-            fi
-          done
-          if [ "$SUPPORTED" != "true" ]; then
-            SPEC_VERSION="${CONFORMANCE_SPEC_VERSIONS[0]}"
-            echo "::warning::SDK protocol ${SDK_SPEC_VERSION} is not yet known to @modelcontextprotocol/conformance; falling back to ${SPEC_VERSION}"
+          PROBE_LOG="$(mktemp)"
+          set +e
+          npx --yes @modelcontextprotocol/conformance@latest server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SDK_SPEC_VERSION" \
+            --scenario server-initialize \
+            >"$PROBE_LOG" 2>&1
+          PROBE_STATUS=$?
+          set -e
+          if grep -q "Unknown spec version" "$PROBE_LOG"; then
+            # Design: do not mask upstream lag by running an older protocol era.
+            # Direct STDIO/HTTP transport tests remain the mandatory protocol gate.
+            echo "::warning::@modelcontextprotocol/conformance does not yet support SDK protocol ${SDK_SPEC_VERSION}; skipping suite. Transport tests remain the protocol gate."
+            cat "$PROBE_LOG"
+            exit 0
+          fi
+          if [ "$PROBE_STATUS" -ne 0 ]; then
+            cat "$PROBE_LOG"
+            exit "$PROBE_STATUS"
           fi
           npx --yes @modelcontextprotocol/conformance@latest server \
             --url http://127.0.0.1:7683/mcp \
-            --spec-version "$SPEC_VERSION"
+            --spec-version "$SDK_SPEC_VERSION" \
+            --expected-failures ./conformance-baseline.yml

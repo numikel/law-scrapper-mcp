@@ -29,10 +29,10 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
-      - name: Reject FastMCP remnants
+      - name: Reject legacy framework remnants
         run: |
           if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests; then
-            echo "FastMCP remnants found"
+            echo "Legacy framework remnants found"
             exit 1
           fi
 

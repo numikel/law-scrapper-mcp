@@ -130,7 +130,7 @@ assert payload["data"]["calculated_date"] == "2026-01-02"
 GitHub Actions (`.github/workflows/ci.yml`):
 
 ```yaml
-- name: Reject FastMCP remnants
+- name: Reject legacy framework remnants
 - name: Unit tests
 - name: Integration tests
 - name: Protocol transport tests

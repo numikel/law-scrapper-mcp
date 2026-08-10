@@ -36,7 +36,7 @@ async def test_get_relationships_normalizes_list_response() -> None:
 async def test_get_relationships_rejects_invalid_eli_before_http() -> None:
     client = AsyncMock()
 
-    with pytest.raises(ValueError, match="Invalid ELI format"):
+    with pytest.raises(ValueError, match="Nieprawidłowy format ELI"):
         await RelationshipService(client).get_relationships("DU/2024")
 
     client.get_json.assert_not_awaited()

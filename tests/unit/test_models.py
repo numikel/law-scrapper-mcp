@@ -73,12 +73,12 @@ class TestParseEli:
     )
     def test_invalid_eli_format(self, invalid_eli: str):
         """Test that invalid ELI formats raise ValueError."""
-        with pytest.raises(ValueError, match="Invalid"):
+        with pytest.raises(ValueError, match="Nieprawidłowy"):
             parse_eli(invalid_eli)
 
     def test_invalid_url_format(self):
         """Test that invalid URL format raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid ELI URL format"):
+        with pytest.raises(ValueError, match="Nieprawidłowy format URL ELI"):
             parse_eli("http://example.com/DU/2024/1")
 
 

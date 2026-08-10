@@ -122,7 +122,7 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
         if item.get("type") == "text" and item.get("text")
     ]
     assert failure_messages
-    assert any("Invalid ELI format" in message for message in failure_messages)
+    assert any("Nieprawidłowy format ELI" in message for message in failure_messages)
 
 
 def _allocate_loopback_port() -> int:

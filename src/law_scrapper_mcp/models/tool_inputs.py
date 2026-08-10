@@ -126,14 +126,16 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
     if "api.sejm.gov.pl/eli/" in eli:
         eli = eli.split("api.sejm.gov.pl/eli/")[1]
     elif eli.startswith("http"):
-        raise ValueError(f"Invalid ELI URL format: {eli}")
+        raise ValueError(f"Nieprawidłowy format URL ELI: {eli}")
 
     # Remove trailing slashes and split
     eli = eli.rstrip("/")
     parts = eli.split("/")
 
     if len(parts) != 3:
-        raise ValueError(f"Invalid ELI format: {eli}. Expected format: PUBLISHER/YEAR/POS")
+        raise ValueError(
+            f"Nieprawidłowy format ELI: {eli}. Oczekiwany: wydawca/rok/pozycja (np. DU/2024/1716)"
+        )
 
     publisher, year_str, pos_str = parts
 
@@ -141,6 +143,6 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
         year = int(year_str)
         pos = int(pos_str)
     except ValueError as e:
-        raise ValueError(f"Invalid year or position in ELI: {eli}") from e
+        raise ValueError(f"Nieprawidłowy rok lub pozycja w ELI: {eli}") from e
 
     return publisher, year, pos

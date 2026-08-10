@@ -73,6 +73,34 @@ def _assert_enriched(payload: dict[str, Any]) -> None:
     assert isinstance(payload["hints"], list), "'hints' must be a list"
 
 
+def _assert_full_item_page_info(data: dict[str, Any], *, payload_field: str) -> None:
+    """Assert page_info matches a full unpaginated item payload."""
+    page_info = data["page_info"]
+    payload_len = len(data[payload_field])
+
+    assert page_info["unit"] == "items"
+    assert page_info["offset"] == 0
+    assert page_info["returned_count"] == payload_len
+    assert page_info["total_count"] == payload_len
+    assert page_info["was_truncated"] is False
+    assert page_info["next_offset"] is None
+    assert page_info["limit"] >= payload_len or payload_len == 0
+
+
+def _assert_full_character_page_info(data: dict[str, Any]) -> None:
+    """Assert page_info matches a full unpaginated character payload."""
+    page_info = data["page_info"]
+    content_len = len(data["content"])
+
+    assert page_info["unit"] == "characters"
+    assert page_info["offset"] == 0
+    assert page_info["returned_count"] == content_len
+    assert page_info["total_count"] == content_len
+    assert page_info["was_truncated"] is False
+    assert page_info["next_offset"] is None
+    assert page_info["limit"] >= content_len or content_len == 0
+
+
 # ---------------------------------------------------------------------------
 # list_tools
 # ---------------------------------------------------------------------------
@@ -113,6 +141,22 @@ class TestMetadataTools:
         assert payload["data"]["category"] == "publishers"
         assert "publishers" in payload["data"]["metadata"]
         assert len(payload["data"]["metadata"]["publishers"]) == 2
+
+    async def test_get_metadata_page_info_matches_payload(self, mcp_client) -> None:
+        """Metadata success payload exposes truthful item page_info before Task 7 slicing."""
+        result = await mcp_client.call_tool("get_system_metadata", {"category": "publishers"})
+        payload = _parse_tool_result(result)
+        data = payload["data"]
+        flattened_count = len(data["metadata"]["publishers"])
+
+        _assert_enriched(payload)
+        assert data["count"] == flattened_count
+        assert data["page_info"]["unit"] == "items"
+        assert data["page_info"]["offset"] == 0
+        assert data["page_info"]["returned_count"] == flattened_count
+        assert data["page_info"]["total_count"] == flattened_count
+        assert data["page_info"]["was_truncated"] is False
+        assert data["page_info"]["next_offset"] is None
 
     async def test_get_metadata_keywords(self, mcp_client) -> None:
         """Keywords category returns a non-empty list of keyword strings."""
@@ -347,6 +391,7 @@ class TestActContentTools:
         assert isinstance(payload["data"]["toc"], list)
         # The mock HTML produces at least one section (h1 heading)
         assert len(payload["data"]["toc"]) >= 1
+        _assert_full_item_page_info(payload["data"], payload_field="toc")
 
     async def test_read_act_content_specific_section(self, mcp_client) -> None:
         """read_act_content with a valid section_id returns non-empty content."""
@@ -365,6 +410,7 @@ class TestActContentTools:
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
         assert payload["data"]["content"]  # non-empty string
+        _assert_full_character_page_info(payload["data"])
 
     async def test_read_act_content_unknown_section(self, mcp_client) -> None:
         """read_act_content with a non-existent section returns graceful error."""
@@ -391,6 +437,8 @@ class TestActContentTools:
         assert payload["data"]["eli"] == "DU/2024/1"
         assert payload["data"]["query"] == "Content"
         assert payload["data"]["total_matches"] >= 1
+        _assert_full_item_page_info(payload["data"], payload_field="matches")
+        assert payload["data"]["total_matches"] == payload["data"]["page_info"]["total_count"]
 
     async def test_search_in_act_no_matches(self, mcp_client) -> None:
         """search_in_act returns zero matches for a term not in the content."""

@@ -1,8 +1,9 @@
 """Models shared by paginated tool outputs."""
 
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 DEFAULT_ITEM_LIMIT = 20
 MAX_ITEM_LIMIT = 100
@@ -26,8 +27,25 @@ class PageInfo(BaseModel):
     returned_count: int = Field(ge=0)
     total_count: int = Field(ge=0)
     was_truncated: bool
-    next_offset: int | None
+    next_offset: int | None = Field(default=None, ge=0)
     unit: PageUnit
+
+    @model_validator(mode="after")
+    def validate_page_consistency(self) -> Self:
+        """Ensure pagination metadata is internally consistent."""
+        if self.limit > 0 and self.returned_count > self.limit:
+            raise ValueError("returned_count cannot exceed limit when limit is positive")
+
+        end = min(self.offset + self.returned_count, self.total_count)
+        expected_truncated = end < self.total_count
+        if self.was_truncated != expected_truncated:
+            raise ValueError("was_truncated is inconsistent with offset, returned_count, and total_count")
+
+        expected_next = end if self.limit > 0 and expected_truncated else None
+        if self.next_offset != expected_next:
+            raise ValueError("next_offset is inconsistent with offset, returned_count, and total_count")
+
+        return self
 
 
 def empty_item_page_info(*, limit: int = DEFAULT_ITEM_LIMIT) -> PageInfo:
@@ -58,6 +76,6 @@ def empty_character_page_info(*, limit: int = DEFAULT_SECTION_CHAR_LIMIT) -> Pag
 
 def error_page_info_for_content(*, section: str | None) -> PageInfo:
     """Return the zero-count page placeholder for read_act_content errors."""
-    if section:
+    if section is not None:
         return empty_character_page_info()
     return empty_item_page_info()

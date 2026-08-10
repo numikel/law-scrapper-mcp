@@ -196,3 +196,53 @@ def test_empty_character_page_info_uses_characters_unit_and_default_limit() -> N
 def test_content_error_page_info_is_section_aware() -> None:
     assert error_page_info_for_content(section=None).unit == PageUnit.ITEMS
     assert error_page_info_for_content(section="Art. 1").unit == PageUnit.CHARACTERS
+
+
+def test_content_error_page_info_treats_empty_section_as_characters() -> None:
+    assert error_page_info_for_content(section="").unit == PageUnit.CHARACTERS
+
+
+@pytest.mark.parametrize(
+    "invalid_page_info",
+    [
+        {
+            "limit": 3,
+            "offset": 0,
+            "returned_count": 3,
+            "total_count": 7,
+            "was_truncated": True,
+            "next_offset": -1,
+            "unit": PageUnit.ITEMS,
+        },
+        {
+            "limit": 3,
+            "offset": 0,
+            "returned_count": 3,
+            "total_count": 7,
+            "was_truncated": False,
+            "next_offset": 3,
+            "unit": PageUnit.ITEMS,
+        },
+        {
+            "limit": 3,
+            "offset": 0,
+            "returned_count": 3,
+            "total_count": 7,
+            "was_truncated": True,
+            "next_offset": None,
+            "unit": PageUnit.ITEMS,
+        },
+        {
+            "limit": 3,
+            "offset": 0,
+            "returned_count": 3,
+            "total_count": 7,
+            "was_truncated": True,
+            "next_offset": 99,
+            "unit": PageUnit.ITEMS,
+        },
+    ],
+)
+def test_page_info_rejects_inconsistent_construction(invalid_page_info: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        PageInfo(**invalid_page_info)

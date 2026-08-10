@@ -71,6 +71,11 @@ def test_read_act_content_error_factory_uses_character_unit_for_section() -> Non
     assert output.page_info.unit == PageUnit.CHARACTERS
 
 
+def test_read_act_content_error_factory_treats_empty_section_as_characters() -> None:
+    output = _content_error_output(Exception("x"), {"eli": "DU/2024/1", "section": ""})
+    assert output.page_info.unit == PageUnit.CHARACTERS
+
+
 def test_search_in_act_error_factory_uses_items_unit() -> None:
     output = _search_in_act_error_output(Exception("x"), {"eli": "DU/2024/1", "query": "x"})
     assert output.page_info.unit == PageUnit.ITEMS

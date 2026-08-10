@@ -34,6 +34,10 @@ uv run pytest --cov=law_scrapper_mcp --cov-report=term-missing
 # Quality gates
 uv run ruff check src/
 uv run mypy src/law_scrapper_mcp/
+
+# Release management
+uv run python scripts/check_release.py --version 2.4.0
+# Prepare new release (via skill): /prepare-release X.Y.Z
 ```
 
 ## Testing strategy

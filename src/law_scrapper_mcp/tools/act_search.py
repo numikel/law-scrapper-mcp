@@ -71,14 +71,14 @@ def register(mcp: FastMCP) -> None:
         WYMAGANIE: Akt musi być wcześniej załadowany za pomocą
         get_act_details(eli=..., load_content=True).
 
-        Zwraca wszystkie trafienia z kontekstem i informacją o sekcji.
+        Zwraca jedną stronę trafień z kontekstem, metadanymi paginacji i informacją o sekcji.
 
         Przykłady:
         - search_in_act(eli="DU/2024/1692", query="straż") - Znajdź "straż" w akcie
         - search_in_act(eli="DU/2024/1692", query="obowiązek", context_chars=200) - Z krótszym kontekstem
-        - search_in_act(eli="DU/2024/1692", query="art. 5") - Odwołania do artykułu 5
-        - search_in_act(eli="DU/2024/1692", query="kara") - Fragmenty o karach
-        - search_in_act(eli="DU/2024/1692", query="termin") - Wszystkie wzmianki o terminach
+        - search_in_act(eli="DU/2024/1692", query="art. 5", limit=10, offset=0) - Pierwsza strona trafień
+        - search_in_act(eli="DU/2024/1692", query="kara", limit=5, offset=5) - Kolejna strona trafień
+        - search_in_act(eli="DU/2024/1692", query="termin") - Domyślna strona (do 20 trafień)
         """
         assert ctx is not None
         document_store = get_app_context(ctx).document_store

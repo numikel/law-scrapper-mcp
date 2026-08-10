@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from law_scrapper_mcp.models.pagination import MAX_CONTEXT_CHARS
+
 pytestmark = pytest.mark.integration
 
 
@@ -33,18 +35,25 @@ async def test_search_in_act_returns_first_page_and_total(mcp_client) -> None:
 
     assert payload["data"]["total_matches"] == payload["data"]["page_info"]["total_count"]
     assert payload["data"]["page_info"]["limit"] == 1
+    assert payload["data"]["page_info"]["returned_count"] == 1
     assert payload["data"]["page_info"]["unit"] == "items"
+    assert len(payload["data"]["matches"]) == 1
 
 
 async def test_search_in_act_clamps_context_chars(mcp_client) -> None:
     await _load(mcp_client)
+    query = "Content"
     result = await mcp_client.call_tool(
         "search_in_act",
-        {"eli": "DU/2024/1", "query": "Content", "context_chars": 999999},
+        {"eli": "DU/2024/1", "query": query, "context_chars": 999999},
     )
     payload = _parse_payload(result)
+    max_context_len = len(query) + 2 * MAX_CONTEXT_CHARS
 
-    assert all(len(match["context"]) <= 4007 for match in payload["data"]["matches"])
+    matches = payload["data"]["matches"]
+    assert matches, "Expected at least one search hit in the long-context fixture"
+    assert all(len(match["context"]) <= max_context_len for match in matches)
+    assert any(len(match["context"]) == max_context_len for match in matches)
 
 
 async def test_read_content_toc_uses_item_pages(mcp_client) -> None:
@@ -91,6 +100,8 @@ async def _assert_item_matrix(
     mcp_client,
     tool_name: str,
     base_arguments: dict[str, object],
+    *,
+    items_field: str,
 ) -> None:
     baseline = await mcp_client.call_tool(tool_name, base_arguments)
     baseline_payload = _parse_payload(baseline)
@@ -111,13 +122,15 @@ async def _assert_item_matrix(
             {**base_arguments, **arguments},
         )
         payload = _parse_payload(result)
+        page_info = payload["data"]["page_info"]
         _assert_page(
-            payload["data"]["page_info"],
+            page_info,
             total=total,
             limit=effective_limit,
             offset=effective_offset,
             unit="items",
         )
+        assert len(payload["data"][items_field]) == page_info["returned_count"]
 
 
 async def test_toc_and_search_cover_every_item_boundary(mcp_client) -> None:
@@ -126,11 +139,13 @@ async def test_toc_and_search_cover_every_item_boundary(mcp_client) -> None:
         mcp_client,
         "read_act_content",
         {"eli": "DU/2024/1"},
+        items_field="toc",
     )
     await _assert_item_matrix(
         mcp_client,
         "search_in_act",
         {"eli": "DU/2024/1", "query": "Content"},
+        items_field="matches",
     )
 
 
@@ -208,10 +223,12 @@ async def test_section_character_pages_are_contiguous(mcp_client) -> None:
             {"eli": "DU/2024/1", "section": section, **arguments},
         )
         payload = _parse_payload(result)
+        page_info = payload["data"]["page_info"]
         _assert_page(
-            payload["data"]["page_info"],
+            page_info,
             total=total,
             limit=effective_limit,
             offset=effective_offset,
             unit="characters",
         )
+        assert len(payload["data"]["content"]) == page_info["returned_count"]

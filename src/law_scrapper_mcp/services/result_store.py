@@ -8,8 +8,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput
-from law_scrapper_mcp.services.pagination import full_item_page
+from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,6 @@ class ResultStore:
         date_to: str | None = None,
         sort_by: str | None = None,
         sort_desc: bool = False,
-        limit: int | None = None,
     ) -> tuple[list[ActSummaryOutput], int]:
         """Filter a stored result set. Returns (filtered_results, original_count)."""
         rs = await self.get(result_set_id)
@@ -163,10 +163,6 @@ class ResultStore:
         if sort_by:
             filtered = _sort_results(filtered, sort_by, sort_desc)
 
-        # Limit
-        if limit is not None and limit > 0:
-            filtered = filtered[:limit]
-
         return filtered, original_count
 
     async def filter_and_store(
@@ -183,7 +179,8 @@ class ResultStore:
         date_to: str | None = None,
         sort_by: str | None = None,
         sort_desc: bool = False,
-        limit: int | None = None,
+        limit: int = 20,
+        offset: int = 0,
     ) -> FilterOutput:
         """Filter one set, persist the result, and build its public output."""
         filtered, original_count = await self.filter_results(
@@ -198,7 +195,6 @@ class ResultStore:
             date_to=date_to,
             sort_by=sort_by,
             sort_desc=sort_desc,
-            limit=limit,
         )
         filters_applied: dict[str, Any] = {}
         if pattern:
@@ -217,8 +213,6 @@ class ResultStore:
                 filters_applied["date_to"] = date_to
         if sort_by:
             filters_applied.update(sort_by=sort_by, sort_desc=sort_desc)
-        if limit is not None:
-            filters_applied["limit"] = limit
 
         new_set_id = None
         if filtered:
@@ -237,7 +231,13 @@ class ResultStore:
                 f"filtered({result_set_id}): {description}",
                 len(filtered),
             )
-        page_results, page_info = full_item_page(filtered)
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        page_results, page_info = paginate_items(
+            filtered,
+            limit=page_limit,
+            offset=page_offset,
+        )
         return FilterOutput(
             source_result_set_id=result_set_id,
             result_set_id=new_set_id,

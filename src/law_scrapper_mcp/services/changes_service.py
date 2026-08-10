@@ -5,8 +5,9 @@ from datetime import datetime
 
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ChangesOutput
-from law_scrapper_mcp.services.pagination import full_item_page
+from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.result_store import ResultStore
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,8 @@ class ChangesService:
         date_range: str,
         publisher: str,
         keywords: list[str],
+        limit: int,
+        offset: int,
     ) -> ChangesOutput:
         query_summary = f"changes: {date_range} | publisher={publisher}"
         if keywords:
@@ -35,7 +38,9 @@ class ChangesService:
             if results
             else None
         )
-        changes, page_info = full_item_page(results)
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        changes, page_info = paginate_items(results, limit=page_limit, offset=page_offset)
         return ChangesOutput(
             date_range=date_range,
             publisher=publisher,
@@ -52,6 +57,8 @@ class ChangesService:
         date_from: str = "",
         date_to: str | None = None,
         keywords: list[str] | None = None,
+        limit: int = 20,
+        offset: int = 0,
     ) -> ChangesOutput:
         """Track changes in legal acts within date range."""
         if not date_to:
@@ -93,4 +100,6 @@ class ChangesService:
             date_range=date_range,
             publisher=publisher,
             keywords=keyword_list,
+            limit=limit,
+            offset=offset,
         )

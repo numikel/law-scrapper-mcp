@@ -46,6 +46,14 @@ def register(mcp: FastMCP) -> None:
             list[str] | None,
             "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie'].",
         ] = None,
+        limit: Annotated[
+            str | int | None,
+            "Maksymalna liczba zmian na stronie odpowiedzi (domyślnie 20, maks. 100).",
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            "Nieujemne przesunięcie strony zmian.",
+        ] = 0,
         ctx: Context = None,
     ) -> str:
         """
@@ -70,6 +78,8 @@ def register(mcp: FastMCP) -> None:
             date_from=date_from,
             date_to=date_to,
             keywords=keywords,
+            limit=int(limit) if limit is not None else 20,
+            offset=int(offset) if offset is not None else 0,
         )
 
         response = EnrichedResponse(data=output)

@@ -39,6 +39,29 @@ class TestChangesService:
         assert output.page_info.unit == PageUnit.ITEMS
 
     @respx.mock
+    async def test_track_changes_stores_full_set_but_pages_response(
+        self, service: ChangesService, search_results: dict
+    ):
+        """Tracked changes store the complete set before paging the response."""
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
+
+        output = await service.track_changes(
+            publisher="DU",
+            date_from="2024-01-01",
+            date_to="2024-12-31",
+            limit=1,
+            offset=0,
+        )
+
+        assert output.total_count == 3
+        assert len(output.changes) == 1
+        assert output.page_info.returned_count == 1
+
+        stored = await service._result_store.get(output.result_set_id)
+        assert stored is not None
+        assert len(stored.results) == 3
+
+    @respx.mock
     async def test_track_changes_defaults_date_to_today(self, service: ChangesService, search_results: dict):
         """Test that date_to defaults to today when not provided."""
         respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))

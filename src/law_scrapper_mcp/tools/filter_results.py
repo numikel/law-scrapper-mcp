@@ -90,8 +90,12 @@ def register(mcp: FastMCP) -> None:
         ] = False,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników do zwrócenia.",
-        ] = None,
+            "Maksymalna liczba wyników na stronie odpowiedzi (domyślnie 20, maks. 100).",
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            "Nieujemne przesunięcie strony wyników.",
+        ] = 0,
         ctx: Context = None,
     ) -> str:
         """
@@ -114,7 +118,7 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", pattern="zdrow|apteka|lekar") - Akty związane ze zdrowiem
         - filter_results(result_set_id="rs_1", pattern="podatek|VAT", type_equals="Ustawa") - Ustawy podatkowe
         - filter_results(result_set_id="rs_1", date_field="promulgation_date", date_from="2024-01-01", date_to="2024-06-30") - Ogłoszone w I połowie 2024
-        - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych
+        - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych na pierwszej stronie
         - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
         """
         assert ctx is not None
@@ -125,10 +129,8 @@ def register(mcp: FastMCP) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 year_int = int(year_equals)
 
-        limit_int: int | None = None
-        if limit is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                limit_int = int(limit)
+        limit_int = int(limit) if limit is not None else 20
+        offset_int = int(offset) if offset is not None else 0
 
         sort_desc_bool = sort_desc.lower() in ("true", "1", "yes") if isinstance(sort_desc, str) else bool(sort_desc)
 
@@ -145,6 +147,7 @@ def register(mcp: FastMCP) -> None:
             sort_by=sort_by,
             sort_desc=sort_desc_bool,
             limit=limit_int,
+            offset=offset_int,
         )
 
         hints = []

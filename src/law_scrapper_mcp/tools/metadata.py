@@ -9,7 +9,7 @@ from law_scrapper_mcp.context import get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
-from law_scrapper_mcp.services.pagination import full_item_page
+from law_scrapper_mcp.services.pagination import effective_limit, parse_non_negative
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -39,6 +39,14 @@ def register(mcp: FastMCP) -> None:
             "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
             "Domyślnie 'all'.",
         ] = "all",
+        limit: Annotated[
+            str | int | None,
+            "Maksymalna liczba wartości metadanych na stronie odpowiedzi (domyślnie 20, maks. 100).",
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            "Nieujemne przesunięcie strony metadanych.",
+        ] = 0,
         ctx: Context = None,
     ) -> str:
         """
@@ -62,21 +70,26 @@ def register(mcp: FastMCP) -> None:
         except ValueError:
             category_enum = MetadataCategory.ALL
 
-        metadata = await metadata_service.get_metadata(category_enum)
-        flattened = [
-            item
-            for values in metadata.values()
-            for item in (values if isinstance(values, list) else [values])
-        ]
-        _, page_info = full_item_page(flattened)
+        from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
+
+        page_limit = effective_limit(
+            int(limit) if limit is not None else DEFAULT_ITEM_LIMIT,
+            default=DEFAULT_ITEM_LIMIT,
+            maximum=MAX_ITEM_LIMIT,
+        )
+        page_offset = parse_non_negative(
+            int(offset) if offset is not None else 0,
+            name="offset",
+            default=0,
+        )
+        output = await metadata_service.get_metadata_page(
+            category_enum,
+            limit=page_limit,
+            offset=page_offset,
+        )
 
         response = EnrichedResponse(
-            data=MetadataOutput(
-                category=category,
-                metadata=metadata,
-                count=page_info.returned_count,
-                page_info=page_info,
-            ),
+            data=output,
             hints=metadata_hints(category),
         )
 

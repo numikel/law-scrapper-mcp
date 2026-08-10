@@ -77,6 +77,8 @@ class MetadataRequest(BaseModel):
     """Parameters for retrieving metadata."""
 
     category: MetadataCategory = Field(default=MetadataCategory.ALL, description="Category of metadata to retrieve")
+    limit: int = Field(default=20, description="Maximum metadata values returned")
+    offset: int = Field(default=0, description="Non-negative metadata value offset")
 
 
 class RelationshipsRequest(BaseModel):
@@ -95,6 +97,8 @@ class TrackChangesRequest(BaseModel):
     date_from: str = Field(description="Start date for tracking (YYYY-MM-DD)")
     date_to: str | None = Field(default=None, description="End date for tracking (YYYY-MM-DD, default: today)")
     keywords: list[str] | None = Field(default=None, description="Filter by keywords")
+    limit: int = Field(default=20, description="Maximum changes returned")
+    offset: int = Field(default=0, description="Non-negative change offset")
 
 
 class DateCalculationRequest(BaseModel):

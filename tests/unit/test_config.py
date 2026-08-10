@@ -67,7 +67,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "2.4.0"
+        assert settings.server_version == "3.0.0"
 
 
 class TestSettingsFromEnvironment:
@@ -75,9 +75,9 @@ class TestSettingsFromEnvironment:
 
     def test_transport_from_env(self, monkeypatch):
         """Test loading transport from environment variable."""
-        monkeypatch.setenv("LAW_MCP_TRANSPORT", "sse")
+        monkeypatch.setenv("LAW_MCP_TRANSPORT", "streamable-http")
         settings = Settings()
-        assert settings.transport == "sse"
+        assert settings.transport == "streamable-http"
 
     def test_port_from_env(self, monkeypatch):
         """Test loading port from environment variable."""
@@ -113,20 +113,20 @@ class TestSettingsFromEnvironment:
 
     def test_multiple_env_vars(self, monkeypatch):
         """Test loading multiple settings from environment variables."""
-        monkeypatch.setenv("LAW_MCP_TRANSPORT", "sse")
+        monkeypatch.setenv("LAW_MCP_TRANSPORT", "streamable-http")
         monkeypatch.setenv("LAW_MCP_PORT", "7683")
         monkeypatch.setenv("LAW_MCP_API_TIMEOUT", "45.0")
         monkeypatch.setenv("LAW_MCP_LOG_LEVEL", "WARNING")
 
         settings = Settings()
-        assert settings.transport == "sse"
+        assert settings.transport == "streamable-http"
         assert settings.port == 7683
         assert settings.api_timeout == 45.0
         assert settings.log_level == "WARNING"
 
     def test_env_prefix_required(self, monkeypatch):
         """Test that env vars without LAW_MCP_ prefix are ignored."""
-        monkeypatch.setenv("TRANSPORT", "sse")  # Wrong prefix
+        monkeypatch.setenv("TRANSPORT", "http")  # Wrong prefix
         monkeypatch.setenv("PORT", "9000")  # Wrong prefix
 
         settings = Settings()

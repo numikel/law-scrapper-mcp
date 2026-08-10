@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-09
+
+### Added
+
+- **`PageInfo` pagination metadata** — Paginated tool responses include `page_info` with `limit`, `offset`, `returned_count`, `total_count`, `was_truncated`, `next_offset`, and `unit` (`items` or `characters`)
+- **Pagination parameters** — `limit` and `offset` on search, browse, metadata, changes, TOC, section reads, and in-act search; item limits default to 20 (max 100), section character limits default to 10,000 (max 50,000)
+- **Typed `AppContext`** — Lifespan yields a frozen dataclass accessed via `ctx.request_context.lifespan_context`
+- **Three domain services** — `ComparisonService`, `RelationshipService`, and `DateService` extracted from tool adapters
+- **Real transport tests** — Official MCP `Client` over in-memory fixtures, real STDIO subprocess, and loopback Streamable HTTP; CI runs MCP conformance against `/mcp`
+
+### Changed
+
+- **Official Python MCP SDK** — Replaced FastMCP with `mcp[cli]==2.0.0` and `MCPServer[AppContext]`
+- **Native structured responses** — Tools return `EnrichedResponse` objects with `outputSchema` and object `structuredContent` instead of JSON strings
+- **Stateless Streamable HTTP** — HTTP transport serves `/mcp` with `stateless_http=True`; STDIO remains the default
+
+### Removed
+
+- **FastMCP** — No FastMCP dependency or runtime APIs
+- **SSE transport** — Only STDIO and stateless Streamable HTTP are supported
+- **`result: string`** — Tool outputs are no longer serialized JSON strings
+- **Success-envelope `error`** — Failures no longer appear as `{data, hints, error}` inside successful tool results
+
+### Breaking
+
+- **Clients must read `structuredContent`** — Parse the native MCP structured payload (`result.structured_content` / `structuredContent`) instead of `result.content` text or `model_dump_json()` strings
+- **Tool failures use `isError=true`** — Invalid inputs and execution errors surface as protocol-visible `is_error` / `isError=true`, not in-body error fields
+
 ### Security
 
 - **`filter_results`: fixed ReDoS vulnerability** — Client-supplied patterns now compile through a linear-time matching engine instead of Python's backtracking `re`; lookaround and backreferences are rejected with a validation error instead of executed. Previously, `pattern="(.+)+!"` could freeze the server indefinitely.

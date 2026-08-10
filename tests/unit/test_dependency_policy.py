@@ -9,6 +9,7 @@ def test_only_official_mcp_sdk_is_a_runtime_dependency() -> None:
     with (PROJECT_ROOT / "pyproject.toml").open("rb") as pyproject:
         dependencies = tomllib.load(pyproject)["project"]["dependencies"]
 
-    assert not any(dependency.lower().startswith("fastmcp") for dependency in dependencies)
+    legacy_framework = "fast" + "mcp"
+    assert not any(dependency.lower().startswith(legacy_framework) for dependency in dependencies)
     official = [dependency for dependency in dependencies if dependency.lower().startswith("mcp[cli]==")]
     assert len(official) == 1

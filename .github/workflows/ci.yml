@@ -26,6 +26,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Reject FastMCP remnants
+        run: |
+          if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests; then
+            echo "FastMCP remnants found"
+            exit 1
+          fi
+
       - name: Ruff check
         run: uv run ruff check src/
 
@@ -37,3 +44,27 @@ jobs:
 
       - name: Integration tests
         run: uv run pytest tests/integration/ -v -m integration
+
+      - name: Protocol transport tests
+        run: uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py -v -m integration
+
+      - name: MCP conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LAW_MCP_TRANSPORT=streamable-http
+          export LAW_MCP_HOST=127.0.0.1
+          export LAW_MCP_PORT=7683
+          uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:7683/health >/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
+          npx --yes @modelcontextprotocol/conformance@latest server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SPEC_VERSION"

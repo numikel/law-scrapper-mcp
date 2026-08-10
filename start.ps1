@@ -1,4 +1,4 @@
-# Law Scrapper MCP v2.0 — startup script (Windows PowerShell)
+# Law Scrapper MCP v3.0 — startup script (Windows PowerShell)
 #
 # Usage:
 #   .\start.ps1              # STDIO transport (default)

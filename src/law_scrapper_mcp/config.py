@@ -78,7 +78,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "2.4.0"
+    server_version: str = "3.0.0"
 
 
 def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:

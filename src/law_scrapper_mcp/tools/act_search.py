@@ -2,29 +2,34 @@
 
 import contextlib
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
+from law_scrapper_mcp.services.pagination import full_item_page
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
+
+
+def _search_in_act_error_output(_: Exception, kw: dict[str, Any]) -> SearchInActOutput:
+    return SearchInActOutput(
+        eli=kw.get("eli", ""),
+        query=kw.get("query", ""),
+        matches=[],
+        total_matches=0,
+        page_info=empty_item_page_info(),
+    )
 
 
 def register(mcp: FastMCP) -> None:
     """Register search in act tool."""
 
     @mcp.tool(tags={"analysis", "search"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: SearchInActOutput(
-            eli=kw.get("eli", ""),
-            query=kw.get("query", ""),
-            matches=[],
-            total_matches=0,
-        ),
-    )
+    @handle_tool_errors(default_factory=_search_in_act_error_output)
     async def search_in_act(
         eli: Annotated[
             str,
@@ -62,14 +67,13 @@ def register(mcp: FastMCP) -> None:
         assert ctx is not None
         document_store = get_app_context(ctx).document_store
 
-        # Normalize int (MCP clients may send string)
         context_chars_int = 500
         with contextlib.suppress(ValueError, TypeError):
             context_chars_int = int(context_chars)
 
         hits = await document_store.search(eli, query, context_chars_int)
 
-        matches = [
+        all_matches = [
             {
                 "section_id": hit.section_id,
                 "section_title": hit.section_title,
@@ -78,13 +82,15 @@ def register(mcp: FastMCP) -> None:
             }
             for hit in hits
         ]
+        matches, page_info = full_item_page(all_matches)
 
         response = EnrichedResponse(
             data=SearchInActOutput(
                 eli=eli,
                 query=query,
                 matches=matches,
-                total_matches=len(matches),
+                total_matches=page_info.total_count,
+                page_info=page_info,
             ),
         )
 

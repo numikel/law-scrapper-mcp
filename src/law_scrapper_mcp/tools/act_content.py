@@ -1,35 +1,41 @@
 """Read content from loaded legal acts."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.models.pagination import error_page_info_for_content
 from law_scrapper_mcp.models.tool_outputs import (
     ContentOutput,
     EnrichedResponse,
     LoadedDocumentInfo,
     LoadedDocumentListOutput,
 )
+from law_scrapper_mcp.services.pagination import full_item_page, full_text_page
 from law_scrapper_mcp.services.response_enrichment import content_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
 
 
+def _content_error_output(_: Exception, kw: dict[str, Any]) -> ContentOutput:
+    section = kw.get("section")
+    return ContentOutput(
+        eli=kw.get("eli", ""),
+        section_id=section,
+        section_title="",
+        content="",
+        page_info=error_page_info_for_content(section=section),
+    )
+
+
 def register(mcp: FastMCP) -> None:
     """Register act content reading tool."""
 
     @mcp.tool(tags={"analysis", "content"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: ContentOutput(
-            eli=kw.get("eli", ""),
-            section_id=kw.get("section"),
-            section_title="",
-            content="",
-        ),
-    )
+    @handle_tool_errors(default_factory=_content_error_output)
     async def read_act_content(
         eli: Annotated[
             str,
@@ -70,41 +76,44 @@ def register(mcp: FastMCP) -> None:
         document_store = get_app_context(ctx).document_store
 
         if section is None:
-            # Return table of contents
             sections = await document_store.get_toc(eli)
-            toc = [{"id": s.id, "title": s.title, "level": s.level} for s in sections]
+            all_toc = [{"id": s.id, "title": s.title, "level": s.level} for s in sections]
+            toc, page_info = full_item_page(all_toc)
             response = EnrichedResponse(
                 data=ContentOutput(
                     eli=eli,
                     section_id=None,
                     section_title="Spis treści",
-                    content=f"Znaleziono {len(toc)} sekcji",
+                    content=f"Znaleziono {page_info.total_count} sekcji",
                     toc=toc,
+                    page_info=page_info,
                 ),
-                hints=content_hints(eli, len(toc) > 0),
+                hints=content_hints(eli, page_info.total_count > 0),
             )
         else:
-            # Read specific section
-            content = await document_store.get_section(eli, section)
-            if content is None:
+            full_content = await document_store.get_section(eli, section)
+            if full_content is None:
                 error_response = EnrichedResponse(
                     data=ContentOutput(
                         eli=eli,
                         section_id=section,
                         section_title="",
                         content="",
+                        page_info=error_page_info_for_content(section=section),
                     ),
                     error=f"Sekcja '{section}' nie znaleziona w akcie {eli}. "
                     f"Użyj read_act_content(eli='{eli}') aby zobaczyć dostępne sekcje.",
                 )
                 return error_response.model_dump_json()
 
+            content, page_info = full_text_page(full_content)
             response = EnrichedResponse(
                 data=ContentOutput(
                     eli=eli,
                     section_id=section,
                     section_title=section,
                     content=content,
+                    page_info=page_info,
                 ),
                 hints=content_hints(eli, True),
             )

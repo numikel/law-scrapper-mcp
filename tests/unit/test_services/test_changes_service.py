@@ -7,6 +7,7 @@ import respx
 from httpx import Response
 
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
+from law_scrapper_mcp.models.pagination import PageUnit
 from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -33,6 +34,9 @@ class TestChangesService:
         assert len(output.changes) == 3
         assert output.date_range == "2024-01-01 to 2024-12-31"
         assert output.result_set_id == "rs_1"
+        assert len(output.changes) == output.page_info.returned_count
+        assert output.total_count == output.page_info.total_count
+        assert output.page_info.unit == PageUnit.ITEMS
 
     @respx.mock
     async def test_track_changes_defaults_date_to_today(self, service: ChangesService, search_results: dict):

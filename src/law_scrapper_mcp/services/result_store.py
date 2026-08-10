@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput
+from law_scrapper_mcp.services.pagination import full_item_page
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
 logger = logging.getLogger(__name__)
@@ -236,13 +237,15 @@ class ResultStore:
                 f"filtered({result_set_id}): {description}",
                 len(filtered),
             )
+        page_results, page_info = full_item_page(filtered)
         return FilterOutput(
             source_result_set_id=result_set_id,
             result_set_id=new_set_id,
-            results=filtered,
+            results=page_results,
             original_count=original_count,
             filtered_count=len(filtered),
             filters_applied=filters_applied,
+            page_info=page_info,
         )
 
     def _evict_expired(self) -> None:

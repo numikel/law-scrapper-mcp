@@ -13,7 +13,7 @@ from law_scrapper_mcp.models.enums import (
     Publisher,
     RelationshipType,
 )
-from law_scrapper_mcp.models.pagination import PageInfo, PageUnit
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, PageInfo, PageUnit
 from law_scrapper_mcp.models.tool_inputs import ActDetailsRequest, SearchRequest, parse_eli
 from law_scrapper_mcp.models.tool_outputs import (
     ActSummaryOutput,
@@ -26,7 +26,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     SearchInActOutput,
     SearchOutput,
 )
-from law_scrapper_mcp.services.pagination import DEFAULT_ITEM_LIMIT, paginate_items
+from law_scrapper_mcp.services.pagination import paginate_items
 
 
 class TestParseEli:
@@ -281,22 +281,21 @@ class TestPaginationModels:
             page_info=page_info,
         ).page_info == page_info
 
-    def test_paginated_outputs_default_empty_item_page_info(self) -> None:
-        output = ContentOutput(
-            eli="DU/2024/1",
-            section_title="Spis treści",
-            content="",
-        )
+    def test_paginated_outputs_require_page_info(self) -> None:
+        with pytest.raises(ValidationError):
+            ContentOutput(
+                eli="DU/2024/1",
+                section_title="Spis treści",
+                content="",
+            )
 
-        assert output.page_info == PageInfo(
-            limit=DEFAULT_ITEM_LIMIT,
-            offset=0,
-            returned_count=0,
-            total_count=0,
-            was_truncated=False,
-            next_offset=None,
-            unit=PageUnit.ITEMS,
-        )
+    def test_models_package_exports_page_types(self) -> None:
+        from law_scrapper_mcp.models import PageInfo as ExportedPageInfo
+        from law_scrapper_mcp.models import PageUnit as ExportedPageUnit
+
+        assert ExportedPageInfo is PageInfo
+        assert ExportedPageUnit is PageUnit
+        assert ExportedPageUnit.ITEMS == "items"
 
 
 class TestApiResponseModels:

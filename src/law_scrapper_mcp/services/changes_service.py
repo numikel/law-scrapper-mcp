@@ -6,6 +6,7 @@ from datetime import datetime
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ChangesOutput
+from law_scrapper_mcp.services.pagination import full_item_page
 from law_scrapper_mcp.services.result_store import ResultStore
 
 logger = logging.getLogger(__name__)
@@ -34,13 +35,15 @@ class ChangesService:
             if results
             else None
         )
+        changes, page_info = full_item_page(results)
         return ChangesOutput(
             date_range=date_range,
             publisher=publisher,
             keywords=keywords,
-            changes=results,
+            changes=changes,
             total_count=len(results),
             result_set_id=result_set_id,
+            page_info=page_info,
         )
 
     async def track_changes(

@@ -1,30 +1,34 @@
 """Track legal changes within date ranges."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
 
 
+def _changes_error_output(_: Exception, kw: dict[str, Any]) -> ChangesOutput:
+    return ChangesOutput(
+        date_range=f"{kw.get('date_from', '')} do {kw.get('date_to', 'dziś')}",
+        publisher=kw.get("publisher", "DU"),
+        keywords=kw.get("keywords") or [],
+        changes=[],
+        total_count=0,
+        page_info=empty_item_page_info(),
+    )
+
+
 def register(mcp: FastMCP) -> None:
     """Register changes tracking tool."""
 
     @mcp.tool(tags={"analysis", "tracking"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: ChangesOutput(
-            date_range=f"{kw.get('date_from', '')} do {kw.get('date_to', 'dziś')}",
-            publisher=kw.get("publisher", "DU"),
-            keywords=kw.get("keywords") or [],
-            changes=[],
-            total_count=0,
-        ),
-    )
+    @handle_tool_errors(default_factory=_changes_error_output)
     async def track_legal_changes(
         date_from: Annotated[
             str,

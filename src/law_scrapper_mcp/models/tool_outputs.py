@@ -6,7 +6,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
-from law_scrapper_mcp.models.pagination import PageInfo, empty_item_page_info
+from law_scrapper_mcp.models.pagination import PageInfo
 
 T = TypeVar("T")
 
@@ -86,7 +86,7 @@ class ContentOutput(BaseModel):
     section_title: str
     content: str
     toc: list[dict[str, Any]] = []
-    page_info: PageInfo = Field(default_factory=empty_item_page_info)
+    page_info: PageInfo
 
 
 class SearchInActOutput(BaseModel):
@@ -96,7 +96,7 @@ class SearchInActOutput(BaseModel):
     query: str
     matches: list[dict[str, Any]]
     total_matches: int
-    page_info: PageInfo = Field(default_factory=empty_item_page_info)
+    page_info: PageInfo
 
 
 class MetadataOutput(BaseModel):
@@ -105,7 +105,7 @@ class MetadataOutput(BaseModel):
     category: str
     metadata: dict[str, Any]
     count: int
-    page_info: PageInfo = Field(default_factory=empty_item_page_info)
+    page_info: PageInfo
 
 
 class RelationshipsOutput(BaseModel):
@@ -126,7 +126,7 @@ class ChangesOutput(BaseModel):
     changes: list[ActSummaryOutput]
     total_count: int
     result_set_id: str | None = None
-    page_info: PageInfo = Field(default_factory=empty_item_page_info)
+    page_info: PageInfo
 
 
 class FilterOutput(BaseModel):
@@ -138,7 +138,7 @@ class FilterOutput(BaseModel):
     original_count: int
     filtered_count: int
     filters_applied: dict[str, Any] = {}
-    page_info: PageInfo = Field(default_factory=empty_item_page_info)
+    page_info: PageInfo
 
 
 class DateOutput(BaseModel):

@@ -2,11 +2,12 @@
 
 import contextlib
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
@@ -19,18 +20,21 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
+def _filter_results_error_output(_: Exception, kw: dict[str, Any]) -> FilterOutput:
+    return FilterOutput(
+        source_result_set_id=kw.get("result_set_id", ""),
+        results=[],
+        original_count=0,
+        filtered_count=0,
+        page_info=empty_item_page_info(),
+    )
+
+
 def register(mcp: FastMCP) -> None:
     """Register filter results tool."""
 
     @mcp.tool(tags={"utility", "filter"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: FilterOutput(
-            source_result_set_id=kw.get("result_set_id", ""),
-            results=[],
-            original_count=0,
-            filtered_count=0,
-        ),
-    )
+    @handle_tool_errors(default_factory=_filter_results_error_output)
     async def filter_results(
         result_set_id: Annotated[
             str,

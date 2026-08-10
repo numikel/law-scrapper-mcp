@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from law_scrapper_mcp.models.pagination import PageUnit
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
 from law_scrapper_mcp.services.pattern_matching import (
     CompiledPattern,
@@ -377,6 +378,9 @@ class TestResultStoreFilterAndStore:
         assert output.filtered_count == 2
         assert output.original_count == len(sample_results)
         assert all(result.type == "Ustawa" for result in output.results)
+        assert len(output.results) == output.page_info.returned_count
+        assert output.filtered_count == output.page_info.total_count
+        assert output.page_info.unit == PageUnit.ITEMS
 
         stored = await store.get(output.result_set_id)
         assert stored is not None

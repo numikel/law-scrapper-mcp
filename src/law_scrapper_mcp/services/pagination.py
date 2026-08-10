@@ -2,13 +2,29 @@
 
 from collections.abc import Sequence
 
-from law_scrapper_mcp.models.pagination import PageInfo, PageUnit
+from law_scrapper_mcp.models.pagination import (
+    DEFAULT_ITEM_LIMIT,
+    DEFAULT_SECTION_CHAR_LIMIT,
+    MAX_CONTEXT_CHARS,
+    MAX_ITEM_LIMIT,
+    MAX_SECTION_CHAR_LIMIT,
+    PageInfo,
+    PageUnit,
+)
 
-DEFAULT_ITEM_LIMIT = 20
-MAX_ITEM_LIMIT = 100
-MAX_CONTEXT_CHARS = 2_000
-DEFAULT_SECTION_CHAR_LIMIT = 10_000
-MAX_SECTION_CHAR_LIMIT = 50_000
+__all__ = [
+    "DEFAULT_ITEM_LIMIT",
+    "DEFAULT_SECTION_CHAR_LIMIT",
+    "MAX_CONTEXT_CHARS",
+    "MAX_ITEM_LIMIT",
+    "MAX_SECTION_CHAR_LIMIT",
+    "effective_limit",
+    "full_item_page",
+    "full_text_page",
+    "paginate_items",
+    "paginate_text",
+    "parse_non_negative",
+]
 
 
 def parse_non_negative(value: str | int | None, *, name: str, default: int) -> int:
@@ -29,6 +45,13 @@ def effective_limit(value: str | int | None, *, default: int, maximum: int) -> i
     return min(parse_non_negative(value, name="limit", default=default), maximum)
 
 
+def _validated_page_bounds(*, limit: int, offset: int) -> tuple[int, int]:
+    return (
+        parse_non_negative(limit, name="limit", default=0),
+        parse_non_negative(offset, name="offset", default=0),
+    )
+
+
 def _page_info(*, limit: int, offset: int, returned: int, total: int, unit: PageUnit) -> PageInfo:
     end = min(offset + returned, total)
     was_truncated = end < total
@@ -45,11 +68,12 @@ def _page_info(*, limit: int, offset: int, returned: int, total: int, unit: Page
 
 def paginate_items[T](items: Sequence[T], *, limit: int, offset: int) -> tuple[list[T], PageInfo]:
     """Return one item page and its metadata."""
+    page_limit, page_offset = _validated_page_bounds(limit=limit, offset=offset)
     total = len(items)
-    page = list(items[offset : offset + limit]) if limit > 0 else []
+    page = list(items[page_offset : page_offset + page_limit]) if page_limit > 0 else []
     return page, _page_info(
-        limit=limit,
-        offset=offset,
+        limit=page_limit,
+        offset=page_offset,
         returned=len(page),
         total=total,
         unit=PageUnit.ITEMS,
@@ -58,11 +82,24 @@ def paginate_items[T](items: Sequence[T], *, limit: int, offset: int) -> tuple[l
 
 def paginate_text(text: str, *, limit: int, offset: int) -> tuple[str, PageInfo]:
     """Return one character page and its metadata."""
-    page = text[offset : offset + limit] if limit > 0 else ""
+    page_limit, page_offset = _validated_page_bounds(limit=limit, offset=offset)
+    page = text[page_offset : page_offset + page_limit] if page_limit > 0 else ""
     return page, _page_info(
-        limit=limit,
-        offset=offset,
+        limit=page_limit,
+        offset=page_offset,
         returned=len(page),
         total=len(text),
         unit=PageUnit.CHARACTERS,
     )
+
+
+def full_item_page[T](items: Sequence[T]) -> tuple[list[T], PageInfo]:
+    """Return the full current item payload with truthful page metadata."""
+    page_limit = len(items) if items else DEFAULT_ITEM_LIMIT
+    return paginate_items(items, limit=page_limit, offset=0)
+
+
+def full_text_page(text: str) -> tuple[str, PageInfo]:
+    """Return the full current text payload with truthful page metadata."""
+    page_limit = len(text) if text else DEFAULT_SECTION_CHAR_LIMIT
+    return paginate_text(text, limit=page_limit, offset=0)

@@ -6,6 +6,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
@@ -26,18 +27,25 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def browse_acts(
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski).",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski)."),
         ],
-        year: Annotated[str | int, "Rok publikacji (np. 2024)."],
+        year: Annotated[
+            str | int,
+            Field(description="Rok publikacji (np. 2024)."),
+        ],
         ctx: Context[AppContext],
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników do zwrócenia. Domyślnie 20.",
+            Field(description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20."),
         ] = None,
         detail_level: Annotated[
             str,
-            "Poziom szczegółowości: 'minimal' (ELI, tytuł, status), "
-            "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
+            Field(
+                description=(
+                    "Poziom szczegółowości: 'minimal' (ELI, tytuł, status), "
+                    "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'."
+                ),
+            ),
         ] = "standard",
     ) -> EnrichedResponse[SearchOutput]:
         """

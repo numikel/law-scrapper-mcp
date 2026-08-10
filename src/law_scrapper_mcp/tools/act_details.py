@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, EnrichedResponse
@@ -22,17 +23,25 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def get_act_details(
         eli: Annotated[
             str,
-            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
-            "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".',
+            Field(
+                description=(
+                    'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+                    "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
+                    'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".'
+                ),
+            ),
         ],
         ctx: Context[AppContext],
         load_content: Annotated[
             str | bool,
-            "Załaduj treść aktu do Document Store (pamięć). "
-            "WYMAGANE przed użyciem: read_act_content, search_in_act. "
-            "Lifecycle: załadowane → TTL 2h → wygasa → wymaga ponownego załadowania. "
-            "Domyślnie False.",
+            Field(
+                description=(
+                    "Załaduj treść aktu do Document Store (pamięć). "
+                    "WYMAGANE przed użyciem: read_act_content, search_in_act. "
+                    "Lifecycle: załadowane → TTL 2h → wygasa → wymaga ponownego załadowania. "
+                    "Domyślnie False."
+                ),
+            ),
         ] = False,
     ) -> EnrichedResponse[ActDetailOutput]:
         """

@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import DateOutput, EnrichedResponse
@@ -23,25 +24,41 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         days: Annotated[
             str | int | bool,
-            "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. "
-            "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone.",
+            Field(
+                description=(
+                    "Liczba dni do dodania (+) lub odjęcia (-). Np. days=14 = za 14 dni, days=-14 = 14 dni temu. "
+                    "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone."
+                ),
+            ),
         ] = 0,
         months: Annotated[
             str | int | bool,
-            "Liczba miesięcy do dodania (+) lub odjęcia (-). "
-            "Np. months=3 = za 3 miesiące, months=-6 = 6 miesięcy temu. Domyślnie 0. "
-            "Wartości logiczne (true/false) są niedozwolone.",
+            Field(
+                description=(
+                    "Liczba miesięcy do dodania (+) lub odjęcia (-). "
+                    "Np. months=3 = za 3 miesiące, months=-6 = 6 miesięcy temu. Domyślnie 0. "
+                    "Wartości logiczne (true/false) są niedozwolone."
+                ),
+            ),
         ] = 0,
         years: Annotated[
             str | int | bool,
-            "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. "
-            "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone.",
+            Field(
+                description=(
+                    "Liczba lat do dodania (+) lub odjęcia (-). Np. years=1 = za rok, years=-5 = 5 lat temu. "
+                    "Domyślnie 0. Wartości logiczne (true/false) są niedozwolone."
+                ),
+            ),
         ] = 0,
         base_date: Annotated[
             str | None,
-            "Data bazowa. Akceptowane formaty: 'YYYY-MM-DD' (np. '2024-01-15'), "
-            "'YYYY-MM' (np. '2024-01' → 2024-01-01), 'YYYY' (np. '2024' → 2024-01-01). "
-            "Jeśli nie podano, używa dzisiejszej daty.",
+            Field(
+                description=(
+                    "Data bazowa. Akceptowane formaty: 'YYYY-MM-DD' (np. '2024-01-15'), "
+                    "'YYYY-MM' (np. '2024-01' → 2024-01-01), 'YYYY' (np. '2024' → 2024-01-01). "
+                    "Jeśli nie podano, używa dzisiejszej daty."
+                ),
+            ),
         ] = None,
     ) -> EnrichedResponse[DateOutput]:
         """

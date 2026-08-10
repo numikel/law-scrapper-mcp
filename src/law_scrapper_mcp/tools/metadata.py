@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
@@ -24,19 +25,25 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         category: Annotated[
             str,
-            "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
-            "'publishers' (wydawcy: DU, MP), 'statuses' (statusy aktów), "
-            "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
-            "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
-            "Domyślnie 'all'.",
+            Field(
+                description=(
+                    "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
+                    "'publishers' (wydawcy: DU, MP), 'statuses' (statusy aktów), "
+                    "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
+                    "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
+                    "Domyślnie 'all'."
+                ),
+            ),
         ] = "all",
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wartości metadanych na stronie odpowiedzi (domyślnie 20, maks. 100).",
+            Field(
+                description="Maksymalna liczba wartości metadanych na stronie odpowiedzi (domyślnie 20, maks. 100).",
+            ),
         ] = 20,
         offset: Annotated[
             str | int | None,
-            "Nieujemne przesunięcie strony metadanych.",
+            Field(description="Nieujemne przesunięcie strony metadanych."),
         ] = 0,
     ) -> EnrichedResponse[MetadataOutput]:
         """

@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, RelationshipsOutput
@@ -22,18 +23,26 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def analyze_act_relationships(
         eli: Annotated[
             str,
-            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
-            "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".',
+            Field(
+                description=(
+                    'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+                    "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
+                    'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1".'
+                ),
+            ),
         ],
         ctx: Context[AppContext],
         relationship_type: Annotated[
             str | None,
-            "Filtruj po typie powiązania (dokładne dopasowanie do klucza z API). "
-            "Dostępne typy: 'Akty zmienione', 'Akty zmieniające', 'Akty uchylone', "
-            "'Akty uchylające', 'Akty uznane za uchylone', 'Podstawa prawna', "
-            "'Podstawa prawna z art.', 'Teksty jednolite'. "
-            "None = zwróć wszystkie powiązania.",
+            Field(
+                description=(
+                    "Filtruj po typie powiązania (dokładne dopasowanie do klucza z API). "
+                    "Dostępne typy: 'Akty zmienione', 'Akty zmieniające', 'Akty uchylone', "
+                    "'Akty uchylające', 'Akty uznane za uchylone', 'Podstawa prawna', "
+                    "'Podstawa prawna z art.', 'Teksty jednolite'. "
+                    "None = zwróć wszystkie powiązania."
+                ),
+            ),
         ] = None,
     ) -> EnrichedResponse[RelationshipsOutput]:
         """

@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.pagination import (
@@ -31,28 +32,36 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def search_in_act(
         eli: Annotated[
             str,
-            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
-            "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
-            "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True).",
+            Field(
+                description=(
+                    'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+                    "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
+                    'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
+                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True)."
+                ),
+            ),
         ],
         query: Annotated[
             str,
-            "Termin do wyszukania w treści aktu (np. 'podatek', 'obowiązek', 'art. 5'). "
-            "Wielkość liter jest ignorowana.",
+            Field(
+                description=(
+                    "Termin do wyszukania w treści aktu (np. 'podatek', 'obowiązek', 'art. 5'). "
+                    "Wielkość liter jest ignorowana."
+                ),
+            ),
         ],
         ctx: Context[AppContext],
         context_chars: Annotated[
             str | int,
-            "Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500.",
+            Field(description="Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500."),
         ] = 500,
         limit: Annotated[
             str | int,
-            "Maksymalna liczba trafień na stronie. Domyślnie 20, maksimum 100.",
+            Field(description="Maksymalna liczba trafień na stronie. Domyślnie 20, maksimum 100."),
         ] = 20,
         offset: Annotated[
             str | int,
-            "Nieujemne przesunięcie początku strony. Domyślnie 0.",
+            Field(description="Nieujemne przesunięcie początku strony. Domyślnie 0."),
         ] = 0,
     ) -> EnrichedResponse[SearchInActOutput]:
         """

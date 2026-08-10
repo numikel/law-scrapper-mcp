@@ -30,8 +30,12 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def filter_results(
         result_set_id: Annotated[
             str,
-            "Identyfikator zestawu wyników z poprzedniego wyszukiwania (np. 'rs_1'). "
-            "Zwracany przez search_legal_acts, browse_acts lub track_legal_changes w polu result_set_id.",
+            Field(
+                description=(
+                    "Identyfikator zestawu wyników z poprzedniego wyszukiwania (np. 'rs_1'). "
+                    "Zwracany przez search_legal_acts, browse_acts lub track_legal_changes w polu result_set_id."
+                ),
+            ),
         ],
         ctx: Context[AppContext],
         pattern: Annotated[
@@ -46,52 +50,72 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ] = None,
         field: Annotated[
             str,
-            "Pole do przeszukania wzorcem RE2. Dostępne: 'title' (domyślne), 'eli', 'status', 'type', 'publisher'.",
+            Field(
+                description=(
+                    "Pole do przeszukania wzorcem RE2. Dostępne: 'title' (domyślne), 'eli', 'status', 'type', 'publisher'."
+                ),
+            ),
         ] = "title",
         type_equals: Annotated[
             str | None,
-            "Filtruj po typie dokumentu (dokładne dopasowanie). "
-            "Wartości: 'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
-            "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'",
+            Field(
+                description=(
+                    "Filtruj po typie dokumentu (dokładne dopasowanie). "
+                    "Wartości: 'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
+                    "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'"
+                ),
+            ),
         ] = None,
         status_equals: Annotated[
             str | None,
-            "Filtruj po statusie aktu (dokładne dopasowanie). "
-            "Wartości: 'akt obowiązujący', 'akt uchylony', 'akt jednorazowy', "
-            "'obowiązujący', 'uchylony', 'uznany za uchylony', 'nieobowiązujący'",
+            Field(
+                description=(
+                    "Filtruj po statusie aktu (dokładne dopasowanie). "
+                    "Wartości: 'akt obowiązujący', 'akt uchylony', 'akt jednorazowy', "
+                    "'obowiązujący', 'uchylony', 'uznany za uchylony', 'nieobowiązujący'"
+                ),
+            ),
         ] = None,
         year_equals: Annotated[
             str | int | None,
-            "Filtruj po roku publikacji (dokładne dopasowanie). Np. 2024.",
+            Field(description="Filtruj po roku publikacji (dokładne dopasowanie). Np. 2024."),
         ] = None,
         date_field: Annotated[
             str | None,
-            "Pole daty do filtrowania zakresem: 'promulgation_date' (data ogłoszenia) "
-            "lub 'effective_date' (data wejścia w życie).",
+            Field(
+                description=(
+                    "Pole daty do filtrowania zakresem: 'promulgation_date' (data ogłoszenia) "
+                    "lub 'effective_date' (data wejścia w życie)."
+                ),
+            ),
         ] = None,
         date_from: Annotated[
             str | None,
-            "Początek zakresu dat (YYYY-MM-DD). Wymaga ustawienia date_field.",
+            Field(description="Początek zakresu dat (YYYY-MM-DD). Wymaga ustawienia date_field."),
         ] = None,
         date_to: Annotated[
             str | None,
-            "Koniec zakresu dat (YYYY-MM-DD). Wymaga ustawienia date_field.",
+            Field(description="Koniec zakresu dat (YYYY-MM-DD). Wymaga ustawienia date_field."),
         ] = None,
         sort_by: Annotated[
             str | None,
-            "Pole do sortowania: 'title', 'year', 'pos', 'promulgation_date', 'effective_date', 'type', 'status'.",
+            Field(
+                description=(
+                    "Pole do sortowania: 'title', 'year', 'pos', 'promulgation_date', 'effective_date', 'type', 'status'."
+                ),
+            ),
         ] = None,
         sort_desc: Annotated[
             str | bool,
-            "Sortuj malejąco (True) lub rosnąco (False, domyślnie).",
+            Field(description="Sortuj malejąco (True) lub rosnąco (False, domyślnie)."),
         ] = False,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników na stronie odpowiedzi (domyślnie 20, maks. 100).",
+            Field(description="Maksymalna liczba wyników na stronie odpowiedzi (domyślnie 20, maks. 100)."),
         ] = 20,
         offset: Annotated[
             str | int | None,
-            "Nieujemne przesunięcie strony wyników.",
+            Field(description="Nieujemne przesunięcie strony wyników."),
         ] = 0,
     ) -> EnrichedResponse[FilterOutput]:
         """

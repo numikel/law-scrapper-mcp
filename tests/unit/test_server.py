@@ -29,51 +29,6 @@ EXPECTED_TOOLS = sorted(
     ]
 )
 
-EXPECTED_ARGUMENTS = {
-    "get_system_metadata": {"category", "limit", "offset"},
-    "search_legal_acts": {
-        "publisher",
-        "year",
-        "keywords",
-        "date_from",
-        "date_to",
-        "title",
-        "act_type",
-        "pub_date_from",
-        "pub_date_to",
-        "in_force",
-        "limit",
-        "offset",
-        "detail_level",
-    },
-    "browse_acts": {"publisher", "year", "limit", "detail_level"},
-    "get_act_details": {"eli", "load_content"},
-    "read_act_content": {"eli", "section", "limit", "offset"},
-    "list_loaded_documents": set(),
-    "search_in_act": {"eli", "query", "context_chars", "limit", "offset"},
-    "analyze_act_relationships": {"eli", "relationship_type"},
-    "track_legal_changes": {"date_from", "publisher", "date_to", "keywords", "limit", "offset"},
-    "calculate_legal_date": {"days", "months", "years", "base_date"},
-    "filter_results": {
-        "result_set_id",
-        "pattern",
-        "field",
-        "type_equals",
-        "status_equals",
-        "year_equals",
-        "date_field",
-        "date_from",
-        "date_to",
-        "sort_by",
-        "sort_desc",
-        "limit",
-        "offset",
-    },
-    "list_result_sets": set(),
-    "compare_acts": {"eli_a", "eli_b"},
-}
-
-
 async def test_all_tools_registered() -> None:
     """list_tools() returns exactly 13 tools."""
     async with Client(app) as client:
@@ -99,20 +54,6 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
 
     assert len(tools) == 13
     for tool in tools:
-        assert tool.output_schema is not None
-        assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
-        assert set(tool.output_schema["properties"]) != {"result"}
-
-
-@pytest.mark.anyio
-async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(mcp_client) -> None:
-    tools = (await mcp_client.list_tools()).tools
-    by_name = {tool.name: tool for tool in tools}
-
-    assert set(by_name) == set(EXPECTED_ARGUMENTS)
-    for name, expected_arguments in EXPECTED_ARGUMENTS.items():
-        tool = by_name[name]
-        assert set(tool.input_schema["properties"]) == expected_arguments
         assert tool.output_schema is not None
         assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
         assert set(tool.output_schema["properties"]) != {"result"}

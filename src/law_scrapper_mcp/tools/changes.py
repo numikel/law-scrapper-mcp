@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
@@ -21,28 +22,32 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def track_legal_changes(
         date_from: Annotated[
             str,
-            "Data początkowa śledzenia (YYYY-MM-DD). Np. '2024-01-01'.",
+            Field(description="Data początkowa śledzenia (YYYY-MM-DD). Np. '2024-01-01'."),
         ],
         ctx: Context[AppContext],
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'."),
         ] = "DU",
         date_to: Annotated[
             str | None,
-            "Data końcowa śledzenia (YYYY-MM-DD). Domyślnie dzisiejsza data.",
+            Field(description="Data końcowa śledzenia (YYYY-MM-DD). Domyślnie dzisiejsza data."),
         ] = None,
         keywords: Annotated[
             list[str] | None,
-            "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie'].",
+            Field(
+                description=(
+                    "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie']."
+                ),
+            ),
         ] = None,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba zmian na stronie odpowiedzi (domyślnie 20, maks. 100).",
+            Field(description="Maksymalna liczba zmian na stronie odpowiedzi (domyślnie 20, maks. 100)."),
         ] = 20,
         offset: Annotated[
             str | int | None,
-            "Nieujemne przesunięcie strony zmian.",
+            Field(description="Nieujemne przesunięcie strony zmian."),
         ] = 0,
     ) -> EnrichedResponse[ChangesOutput]:
         """

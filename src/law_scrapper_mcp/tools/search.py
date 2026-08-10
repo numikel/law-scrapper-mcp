@@ -6,6 +6,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
@@ -27,59 +28,84 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'."),
         ] = "DU",
-        year: Annotated[str | int | None, "Rok publikacji (np. 2024)."] = None,
+        year: Annotated[
+            str | int | None,
+            Field(description="Rok publikacji (np. 2024)."),
+        ] = None,
         keywords: Annotated[
             list[str] | None,
-            "Słowa kluczowe z systemu Sejmu (logika AND — wiele słów zawęża wyniki). "
-            "Aby uzyskać logikę OR, wykonaj oddzielne wyszukiwanie dla każdego słowa. "
-            "Użyj get_system_metadata(category='keywords') aby poznać dostępne słowa kluczowe.",
+            Field(
+                description=(
+                    "Słowa kluczowe z systemu Sejmu (logika AND — wiele słów zawęża wyniki). "
+                    "Aby uzyskać logikę OR, wykonaj oddzielne wyszukiwanie dla każdego słowa. "
+                    "Użyj get_system_metadata(category='keywords') aby poznać dostępne słowa kluczowe."
+                ),
+            ),
         ] = None,
         date_from: Annotated[
             str | None,
-            "Data wejścia w życie OD (YYYY-MM-DD). Filtruje akty które weszły w życie od tej daty.",
+            Field(description="Data wejścia w życie OD (YYYY-MM-DD). Filtruje akty które weszły w życie od tej daty."),
         ] = None,
         date_to: Annotated[
             str | None,
-            "Data wejścia w życie DO (YYYY-MM-DD). Filtruje akty które weszły w życie do tej daty.",
+            Field(description="Data wejścia w życie DO (YYYY-MM-DD). Filtruje akty które weszły w życie do tej daty."),
         ] = None,
         title: Annotated[
             str | None,
-            "Szukaj w tytule aktu (dopasowanie podciągu). Np. 'budżet', 'przeciwpożarow', 'podatek dochodowy'.",
+            Field(
+                description=(
+                    "Szukaj w tytule aktu (dopasowanie podciągu). Np. 'budżet', 'przeciwpożarow', 'podatek dochodowy'."
+                ),
+            ),
         ] = None,
         act_type: Annotated[
             str | None,
-            "Typ dokumentu (dokładne dopasowanie). Dostępne wartości: "
-            "'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
-            "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'. "
-            "Użyj get_system_metadata(category='types') aby zobaczyć pełną listę.",
+            Field(
+                description=(
+                    "Typ dokumentu (dokładne dopasowanie). Dostępne wartości: "
+                    "'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
+                    "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'. "
+                    "Użyj get_system_metadata(category='types') aby zobaczyć pełną listę."
+                ),
+            ),
         ] = None,
         pub_date_from: Annotated[
             str | None,
-            "Data publikacji/ogłoszenia OD (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku.",
+            Field(description="Data publikacji/ogłoszenia OD (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku."),
         ] = None,
         pub_date_to: Annotated[
             str | None,
-            "Data publikacji/ogłoszenia DO (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku.",
+            Field(description="Data publikacji/ogłoszenia DO (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku."),
         ] = None,
         in_force: Annotated[
             str | bool | None,
-            "Filtruj po obowiązywaniu: true = tylko akty obecnie obowiązujące, "
-            "false = tylko akty nieobowiązujące, None = wszystkie.",
+            Field(
+                description=(
+                    "Filtruj po obowiązywaniu: true = tylko akty obecnie obowiązujące, "
+                    "false = tylko akty nieobowiązujące, None = wszystkie."
+                ),
+            ),
         ] = None,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Przydatne do ograniczenia dużych zbiorów.",
+            Field(
+                description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Przydatne do ograniczenia dużych zbiorów.",
+            ),
         ] = None,
         offset: Annotated[
             str | int | None,
-            "Liczba wyników do pominięcia (paginacja). Użyj z parametrem limit.",
+            Field(description="Liczba wyników do pominięcia (paginacja). Użyj z parametrem limit."),
         ] = None,
         detail_level: Annotated[
             str,
-            "Poziom szczegółowości wyników: 'minimal' (ELI, tytuł, status), "
-            "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
+            Field(
+                description=(
+                    "Poziom szczegółowości wyników: 'minimal' (ELI, tytuł, status), "
+                    "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'."
+                ),
+            ),
         ] = "standard",
     ) -> EnrichedResponse[SearchOutput]:
         """

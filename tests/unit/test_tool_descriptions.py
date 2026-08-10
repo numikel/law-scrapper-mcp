@@ -1,4 +1,4 @@
-"""Tests for MCP-visible tool descriptions"""
+"""Tests for MCP-visible tool descriptions."""
 
 from __future__ import annotations
 
@@ -8,10 +8,79 @@ from mcp_helpers import parse_tool_result
 
 pytestmark = pytest.mark.anyio
 
+EXPECTED_ARGUMENTS = {
+    "get_system_metadata": {"category", "limit", "offset"},
+    "search_legal_acts": {
+        "publisher",
+        "year",
+        "keywords",
+        "date_from",
+        "date_to",
+        "title",
+        "act_type",
+        "pub_date_from",
+        "pub_date_to",
+        "in_force",
+        "limit",
+        "offset",
+        "detail_level",
+    },
+    "browse_acts": {"publisher", "year", "limit", "detail_level"},
+    "get_act_details": {"eli", "load_content"},
+    "read_act_content": {"eli", "section", "limit", "offset"},
+    "list_loaded_documents": set(),
+    "search_in_act": {"eli", "query", "context_chars", "limit", "offset"},
+    "analyze_act_relationships": {"eli", "relationship_type"},
+    "track_legal_changes": {"date_from", "publisher", "date_to", "keywords", "limit", "offset"},
+    "calculate_legal_date": {"days", "months", "years", "base_date"},
+    "filter_results": {
+        "result_set_id",
+        "pattern",
+        "field",
+        "type_equals",
+        "status_equals",
+        "year_equals",
+        "date_field",
+        "date_from",
+        "date_to",
+        "sort_by",
+        "sort_desc",
+        "limit",
+        "offset",
+    },
+    "list_result_sets": set(),
+    "compare_acts": {"eli_a", "eli_b"},
+}
+
 
 async def _get_tool(mcp_client, name: str):
     tools = (await mcp_client.list_tools()).tools
     return next(tool for tool in tools if tool.name == name)
+
+
+class TestToolInputSchemaDescriptions:
+    async def test_all_public_parameters_have_non_empty_descriptions(self, mcp_client) -> None:
+        tools = (await mcp_client.list_tools()).tools
+
+        for tool in tools:
+            properties = tool.input_schema.get("properties", {})
+            for param_name, param_schema in properties.items():
+                description = param_schema.get("description")
+                assert description and description.strip(), (
+                    f"Tool '{tool.name}' parameter '{param_name}' is missing input_schema description"
+                )
+
+    async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(self, mcp_client) -> None:
+        tools = (await mcp_client.list_tools()).tools
+        by_name = {tool.name: tool for tool in tools}
+
+        assert set(by_name) == set(EXPECTED_ARGUMENTS)
+        for name, expected_arguments in EXPECTED_ARGUMENTS.items():
+            tool = by_name[name]
+            assert set(tool.input_schema["properties"]) == expected_arguments
+            assert tool.output_schema is not None
+            assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
+            assert set(tool.output_schema["properties"]) != {"result"}
 
 
 class TestFilterResultsDescriptions:

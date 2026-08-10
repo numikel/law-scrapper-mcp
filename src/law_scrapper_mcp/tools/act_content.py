@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.pagination import (
@@ -40,26 +41,34 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def read_act_content(
         eli: Annotated[
             str,
-            'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
-            "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
-            'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
-            "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True).",
+            Field(
+                description=(
+                    'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+                    "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
+                    'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
+                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True)."
+                ),
+            ),
         ],
         ctx: Context[AppContext],
         section: Annotated[
             str | None,
-            "Identyfikator sekcji do odczytania. Można użyć surowego ID (np. 'art_1') "
-            "lub formy czytelnej (np. 'Art. 1', 'Rozdział 1') - obsługiwane jest elastyczne dopasowanie. "
-            "Aby poznać dostępne section_id, użyj get_act_details(load_content=true) i sprawdź tabelę treści. "
-            "Jeśli None — zwraca spis treści z dostępnymi sekcjami.",
+            Field(
+                description=(
+                    "Identyfikator sekcji do odczytania. Można użyć surowego ID (np. 'art_1') "
+                    "lub formy czytelnej (np. 'Art. 1', 'Rozdział 1') - obsługiwane jest elastyczne dopasowanie. "
+                    "Aby poznać dostępne section_id, użyj get_act_details(load_content=true) i sprawdź tabelę treści. "
+                    "Jeśli None — zwraca spis treści z dostępnymi sekcjami."
+                ),
+            ),
         ] = None,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba elementów lub znaków na stronie. Domyślnie zależy od trybu odczytu.",
+            Field(description="Maksymalna liczba elementów lub znaków na stronie. Domyślnie zależy od trybu odczytu."),
         ] = None,
         offset: Annotated[
             str | int,
-            "Nieujemne przesunięcie początku strony. Domyślnie 0.",
+            Field(description="Nieujemne przesunięcie początku strony. Domyślnie 0."),
         ] = 0,
     ) -> EnrichedResponse[ContentOutput]:
         """

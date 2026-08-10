@@ -5,6 +5,7 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import CompareOutput, EnrichedResponse
@@ -22,14 +23,22 @@ def register(mcp: MCPServer[AppContext]) -> None:
     async def compare_acts(
         eli_a: Annotated[
             str,
-            'Identyfikator ELI pierwszego aktu. Format: "{wydawca}/{rok}/{pozycja}". '
-            'Przykłady: "DU/2024/1716", "MP/2023/500".',
+            Field(
+                description=(
+                    'Identyfikator ELI pierwszego aktu. Format: "{wydawca}/{rok}/{pozycja}". '
+                    'Przykłady: "DU/2024/1716", "MP/2023/500".'
+                ),
+            ),
         ],
         eli_b: Annotated[
             str,
-            "Identyfikator ELI drugiego aktu do porównania. "
-            'Format: "{wydawca}/{rok}/{pozycja}". '
-            'Przykłady: "DU/2024/1692", "DU/2020/1444".',
+            Field(
+                description=(
+                    "Identyfikator ELI drugiego aktu do porównania. "
+                    'Format: "{wydawca}/{rok}/{pozycja}". '
+                    'Przykłady: "DU/2024/1692", "DU/2020/1444".'
+                ),
+            ),
         ],
         ctx: Context[AppContext],
     ) -> EnrichedResponse[CompareOutput]:

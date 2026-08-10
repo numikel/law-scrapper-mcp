@@ -1,39 +1,29 @@
 """Track legal changes within date ranges."""
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
-from law_scrapper_mcp.models.pagination import empty_item_page_info
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
 
 
-def _changes_error_output(_: Exception, kw: dict[str, Any]) -> ChangesOutput:
-    return ChangesOutput(
-        date_range=f"{kw.get('date_from', '')} do {kw.get('date_to', 'dziś')}",
-        publisher=kw.get("publisher", "DU"),
-        keywords=kw.get("keywords") or [],
-        changes=[],
-        total_count=0,
-        page_info=empty_item_page_info(),
-    )
-
-
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register changes tracking tool."""
 
-    @mcp.tool(tags={"analysis", "tracking"})
-    @handle_tool_errors(default_factory=_changes_error_output)
+    @mcp.tool(meta={"tags": ["analysis", "tracking"]})
+    @handle_tool_errors
     async def track_legal_changes(
         date_from: Annotated[
             str,
             "Data początkowa śledzenia (YYYY-MM-DD). Np. '2024-01-01'.",
         ],
+        ctx: Context[AppContext],
         publisher: Annotated[
             str,
             "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
@@ -54,8 +44,7 @@ def register(mcp: FastMCP) -> None:
             str | int | None,
             "Nieujemne przesunięcie strony zmian.",
         ] = 0,
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[ChangesOutput]:
         """
         Śledź zmiany prawne i nowe publikacje w zakresie dat.
 
@@ -70,7 +59,6 @@ def register(mcp: FastMCP) -> None:
         - track_legal_changes(date_from="2024-06-01", publisher="MP") - Zmiany w MP od czerwca 2024
         - track_legal_changes(date_from="2024-01-01", keywords=["zdrowotny"]) - Zmiany zdrowotne
         """
-        assert ctx is not None
         changes_service = get_app_context(ctx).changes_service
 
         output = await changes_service.track_changes(
@@ -82,6 +70,4 @@ def register(mcp: FastMCP) -> None:
             offset=int(offset) if offset is not None else 0,
         )
 
-        response = EnrichedResponse(data=output)
-
-        return response.model_dump_json()
+        return EnrichedResponse[ChangesOutput](data=output)

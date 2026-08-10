@@ -182,7 +182,6 @@ class TestToolOutputModels:
         assert len(response.hints) == 1
         assert response.hints[0].message == "Test hint"
         assert response.metadata == {"count": 1}
-        assert response.error is None
 
     def test_enriched_response_serialization(self):
         """Test EnrichedResponse serialization to dict."""

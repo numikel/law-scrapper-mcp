@@ -1,13 +1,13 @@
 """System metadata tool for retrieving keywords, publishers, statuses, types, institutions."""
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
-from law_scrapper_mcp.models.pagination import empty_item_page_info
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -15,21 +15,13 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
-def _metadata_error_output(_: Exception, kw: dict[str, Any]) -> MetadataOutput:
-    return MetadataOutput(
-        category=kw.get("category", "all"),
-        metadata={},
-        count=0,
-        page_info=empty_item_page_info(),
-    )
-
-
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register metadata tool."""
 
-    @mcp.tool(tags={"metadata"})
-    @handle_tool_errors(default_factory=_metadata_error_output)
+    @mcp.tool(meta={"tags": ["metadata"]})
+    @handle_tool_errors
     async def get_system_metadata(
+        ctx: Context[AppContext],
         category: Annotated[
             str,
             "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
@@ -46,8 +38,7 @@ def register(mcp: FastMCP) -> None:
             str | int | None,
             "Nieujemne przesunięcie strony metadanych.",
         ] = 0,
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[MetadataOutput]:
         """
         Pobierz metadane systemu aktów prawnych.
 
@@ -61,7 +52,6 @@ def register(mcp: FastMCP) -> None:
         - get_system_metadata(category="statuses") - Statusy aktów (obowiązujący, uchylony itp.)
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
-        assert ctx is not None
         metadata_service = get_app_context(ctx).metadata_service
 
         try:
@@ -75,9 +65,7 @@ def register(mcp: FastMCP) -> None:
             offset=offset,
         )
 
-        response = EnrichedResponse(
+        return EnrichedResponse[MetadataOutput](
             data=output,
             hints=metadata_hints(category),
         )
-
-        return response.model_dump_json()

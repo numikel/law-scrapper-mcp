@@ -24,7 +24,6 @@ class EnrichedResponse(BaseModel, Generic[T]):
 
     data: T = Field(description="The actual response data")
     hints: list[Hint] = Field(default_factory=list, description="Suggested next steps")
-    error: str | None = Field(default=None, description="Error message if any")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 

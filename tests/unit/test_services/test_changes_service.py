@@ -11,12 +11,14 @@ from law_scrapper_mcp.models.pagination import PageUnit
 from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.result_store import ResultStore
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestChangesService:
     """Tests for changes tracking service."""
 
     @pytest.fixture
-    async def service(self, mock_client: SejmApiClient) -> ChangesService:
+    def service(self, mock_client: SejmApiClient) -> ChangesService:
         """Create ChangesService instance."""
         return ChangesService(client=mock_client, result_store=ResultStore())
 

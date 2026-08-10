@@ -6,6 +6,8 @@ import pytest
 
 from law_scrapper_mcp.services.relationship_service import RelationshipService
 
+pytestmark = pytest.mark.asyncio
+
 
 async def test_get_relationships_filters_dictionary_categories() -> None:
     client = AsyncMock()

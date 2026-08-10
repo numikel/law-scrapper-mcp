@@ -3,9 +3,10 @@
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import CompareOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import compare_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -13,19 +14,11 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register compare acts tool."""
 
-    @mcp.tool(tags={"analysis", "compare"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: CompareOutput(
-            eli_a=kw.get("eli_a", ""),
-            eli_b=kw.get("eli_b", ""),
-            comparison={},
-            common_keywords=[],
-            differences=[],
-        ),
-    )
+    @mcp.tool(meta={"tags": ["analysis", "compare"]})
+    @handle_tool_errors
     async def compare_acts(
         eli_a: Annotated[
             str,
@@ -38,8 +31,8 @@ def register(mcp: FastMCP) -> None:
             'Format: "{wydawca}/{rok}/{pozycja}". '
             'Przykłady: "DU/2024/1692", "DU/2020/1444".',
         ],
-        ctx: Context = None,
-    ) -> str:
+        ctx: Context[AppContext],
+    ) -> EnrichedResponse[CompareOutput]:
         """
         Porównaj metadane dwóch aktów prawnych.
 
@@ -57,6 +50,8 @@ def register(mcp: FastMCP) -> None:
         - compare_acts(eli_a="DU/2024/100", eli_b="MP/2024/200") - Porównaj DU vs MP
         - compare_acts(eli_a="DU/2021/1500", eli_b="DU/2021/1600") - Porównaj podobne akty
         """
-        assert ctx is not None
         output = await get_app_context(ctx).comparison_service.compare(eli_a, eli_b)
-        return EnrichedResponse(data=output, hints=compare_hints(eli_a, eli_b)).model_dump_json()
+        return EnrichedResponse[CompareOutput](
+            data=output,
+            hints=compare_hints(eli_a, eli_b),
+        )

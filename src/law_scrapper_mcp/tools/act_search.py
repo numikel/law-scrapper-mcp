@@ -1,16 +1,16 @@
 """Search within loaded legal acts."""
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.pagination import (
     DEFAULT_ITEM_LIMIT,
     MAX_CONTEXT_CHARS,
     MAX_ITEM_LIMIT,
-    empty_item_page_info,
 )
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
 from law_scrapper_mcp.services.pagination import (
@@ -23,21 +23,11 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
-def _search_in_act_error_output(_: Exception, kw: dict[str, Any]) -> SearchInActOutput:
-    return SearchInActOutput(
-        eli=kw.get("eli", ""),
-        query=kw.get("query", ""),
-        matches=[],
-        total_matches=0,
-        page_info=empty_item_page_info(),
-    )
-
-
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register search in act tool."""
 
-    @mcp.tool(tags={"analysis", "search"})
-    @handle_tool_errors(default_factory=_search_in_act_error_output)
+    @mcp.tool(meta={"tags": ["analysis", "search"]})
+    @handle_tool_errors
     async def search_in_act(
         eli: Annotated[
             str,
@@ -51,6 +41,7 @@ def register(mcp: FastMCP) -> None:
             "Termin do wyszukania w treści aktu (np. 'podatek', 'obowiązek', 'art. 5'). "
             "Wielkość liter jest ignorowana.",
         ],
+        ctx: Context[AppContext],
         context_chars: Annotated[
             str | int,
             "Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500.",
@@ -63,8 +54,7 @@ def register(mcp: FastMCP) -> None:
             str | int,
             "Nieujemne przesunięcie początku strony. Domyślnie 0.",
         ] = 0,
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[SearchInActOutput]:
         """
         Wyszukaj termin w treści załadowanego aktu prawnego.
 
@@ -80,7 +70,6 @@ def register(mcp: FastMCP) -> None:
         - search_in_act(eli="DU/2024/1692", query="kara", limit=5, offset=5) - Kolejna strona trafień
         - search_in_act(eli="DU/2024/1692", query="termin") - Domyślna strona (do 20 trafień)
         """
-        assert ctx is not None
         document_store = get_app_context(ctx).document_store
 
         context_size = min(
@@ -108,6 +97,4 @@ def register(mcp: FastMCP) -> None:
             page_info=page_info,
         )
 
-        response = EnrichedResponse(data=output)
-
-        return response.model_dump_json()
+        return EnrichedResponse[SearchInActOutput](data=output)

@@ -16,6 +16,8 @@ from law_scrapper_mcp.services.pattern_matching import (
 )
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError, ResultStore
 
+pytestmark = pytest.mark.asyncio
+
 
 def _make_act(
     eli: str = "DU/2024/1",

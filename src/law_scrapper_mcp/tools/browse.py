@@ -4,9 +4,10 @@ import contextlib
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -17,24 +18,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_BROWSE_LIMIT = 20
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register browse tool."""
 
-    @mcp.tool(tags={"search", "browse"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: SearchOutput(
-            results=[],
-            total_count=0,
-            query_summary=f"publisher={kw.get('publisher', '')} | year={kw.get('year', '')}",
-            returned_count=0,
-        ),
-    )
+    @mcp.tool(meta={"tags": ["search", "browse"]})
+    @handle_tool_errors
     async def browse_acts(
         publisher: Annotated[
             str,
             "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski).",
         ],
         year: Annotated[str | int, "Rok publikacji (np. 2024)."],
+        ctx: Context[AppContext],
         limit: Annotated[
             str | int | None,
             "Maksymalna liczba wyników do zwrócenia. Domyślnie 20.",
@@ -44,8 +39,7 @@ def register(mcp: FastMCP) -> None:
             "Poziom szczegółowości: 'minimal' (ELI, tytuł, status), "
             "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
         ] = "standard",
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[SearchOutput]:
         """
         Przeglądaj wszystkie akty prawne wydane przez wydawcę w danym roku.
 
@@ -62,7 +56,6 @@ def register(mcp: FastMCP) -> None:
         - browse_acts(publisher="DU", year=2024, detail_level="minimal") - Tylko podstawowe info
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
         """
-        assert ctx is not None
         search_service = get_app_context(ctx).search_service
 
         year_int = 0
@@ -89,7 +82,7 @@ def register(mcp: FastMCP) -> None:
         effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
         first_eli = output.results[0].eli if output.results else None
 
-        response = EnrichedResponse(
+        return EnrichedResponse[SearchOutput](
             data=output,
             hints=search_hints(
                 output.total_count,
@@ -100,5 +93,3 @@ def register(mcp: FastMCP) -> None:
                 applied_limit=effective_limit,
             ),
         )
-
-        return response.model_dump_json()

@@ -4,9 +4,10 @@ import contextlib
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
-from law_scrapper_mcp.context import get_app_context
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -17,14 +18,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_SEARCH_LIMIT = 20
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register search tool."""
 
-    @mcp.tool(tags={"search"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: SearchOutput(results=[], total_count=0, query_summary="", returned_count=0),
-    )
+    @mcp.tool(meta={"tags": ["search"]})
+    @handle_tool_errors
     async def search_legal_acts(
+        ctx: Context[AppContext],
         publisher: Annotated[
             str,
             "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
@@ -81,8 +81,7 @@ def register(mcp: FastMCP) -> None:
             "Poziom szczegółowości wyników: 'minimal' (ELI, tytuł, status), "
             "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
         ] = "standard",
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[SearchOutput]:
         """
         Wyszukaj polskie akty prawne z Dziennika Ustaw (DU) i Monitora Polskiego (MP).
 
@@ -104,7 +103,6 @@ def register(mcp: FastMCP) -> None:
         - search_legal_acts(pub_date_from="2024-03-01", pub_date_to="2024-03-31") - Ogłoszone w marcu 2024
         - search_legal_acts(title="budżet", year=2024) - Akty budżetowe z 2024
         """
-        assert ctx is not None
         search_service = get_app_context(ctx).search_service
 
         year_int: int | None = None
@@ -150,7 +148,7 @@ def register(mcp: FastMCP) -> None:
         effective_limit = limit_int if limit_int is not None else DEFAULT_SEARCH_LIMIT
         first_eli = output.results[0].eli if output.results else None
 
-        response = EnrichedResponse(
+        return EnrichedResponse[SearchOutput](
             data=output,
             hints=search_hints(
                 output.total_count,
@@ -162,5 +160,3 @@ def register(mcp: FastMCP) -> None:
                 applied_limit=effective_limit,
             ),
         )
-
-        return response.model_dump_json()

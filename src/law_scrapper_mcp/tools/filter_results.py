@@ -2,15 +2,17 @@
 
 import contextlib
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
-from law_scrapper_mcp.context import get_app_context
-from law_scrapper_mcp.models.pagination import empty_item_page_info
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
+    Hint,
     ResultSetInfo,
     ResultSetListOutput,
 )
@@ -20,32 +22,27 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
-def _filter_results_error_output(_: Exception, kw: dict[str, Any]) -> FilterOutput:
-    return FilterOutput(
-        source_result_set_id=kw.get("result_set_id", ""),
-        results=[],
-        original_count=0,
-        filtered_count=0,
-        page_info=empty_item_page_info(),
-    )
-
-
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register filter results tool."""
 
-    @mcp.tool(tags={"utility", "filter"})
-    @handle_tool_errors(default_factory=_filter_results_error_output)
+    @mcp.tool(meta={"tags": ["utility", "filter"]})
+    @handle_tool_errors
     async def filter_results(
         result_set_id: Annotated[
             str,
             "Identyfikator zestawu wyników z poprzedniego wyszukiwania (np. 'rs_1'). "
             "Zwracany przez search_legal_acts, browse_acts lub track_legal_changes w polu result_set_id.",
         ],
+        ctx: Context[AppContext],
         pattern: Annotated[
             str | None,
-            f"Wzorzec wyszukiwania w składni RE2. Wielkość liter jest ignorowana. {SUPPORTED_SYNTAX_HINT} "
-            "Przykłady: 'zdrow|Minister Zdrowia|apteka|lekar', 'budżet.*państw', "
-            r"'transport|drogow', '\p{L}+ o ochronie'",
+            Field(
+                description=(
+                    f"Wzorzec wyszukiwania w składni RE2. Wielkość liter jest ignorowana. {SUPPORTED_SYNTAX_HINT} "
+                    "Przykłady: 'zdrow|Minister Zdrowia|apteka|lekar', 'budżet.*państw', "
+                    r"'transport|drogow', '\p{L}+ o ochronie'"
+                ),
+            ),
         ] = None,
         field: Annotated[
             str,
@@ -96,8 +93,7 @@ def register(mcp: FastMCP) -> None:
             str | int | None,
             "Nieujemne przesunięcie strony wyników.",
         ] = 0,
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[FilterOutput]:
         """
         Filtruj i zawężaj wyniki wcześniejszego wyszukiwania aktów prawnych.
 
@@ -121,7 +117,6 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych na pierwszej stronie
         - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
         """
-        assert ctx is not None
         result_store = get_app_context(ctx).result_store
 
         year_int: int | None = None
@@ -152,8 +147,6 @@ def register(mcp: FastMCP) -> None:
 
         hints = []
         if output.results:
-            from law_scrapper_mcp.models.tool_outputs import Hint
-
             hints.append(
                 Hint(
                     message="Użyj get_act_details aby zobaczyć szczegóły wybranego aktu.",
@@ -170,20 +163,13 @@ def register(mcp: FastMCP) -> None:
                     )
                 )
 
-        response = EnrichedResponse(
-            data=output,
-            hints=hints,
-        )
+        return EnrichedResponse[FilterOutput](data=output, hints=hints)
 
-        return response.model_dump_json()
-
-    @mcp.tool(tags={"utility", "filter"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: ResultSetListOutput(sets=[], count=0),
-    )
+    @mcp.tool(meta={"tags": ["utility", "filter"]})
+    @handle_tool_errors
     async def list_result_sets(
-        ctx: Context = None,
-    ) -> str:
+        ctx: Context[AppContext],
+    ) -> EnrichedResponse[ResultSetListOutput]:
         """
         Wyświetl aktywne zestawy wyników przechowywane w pamięci.
 
@@ -197,7 +183,6 @@ def register(mcp: FastMCP) -> None:
         Przykłady:
         - list_result_sets() - Wyświetl wszystkie aktywne zestawy wyników
         """
-        assert ctx is not None
         result_store = get_app_context(ctx).result_store
 
         raw_sets = await result_store.list_sets()
@@ -205,8 +190,6 @@ def register(mcp: FastMCP) -> None:
 
         hints = []
         if sets:
-            from law_scrapper_mcp.models.tool_outputs import Hint
-
             hints.append(
                 Hint(
                     message=f"Użyj filter_results(result_set_id='{sets[0].result_set_id}') aby filtrować wyniki.",
@@ -215,9 +198,7 @@ def register(mcp: FastMCP) -> None:
                 )
             )
 
-        response = EnrichedResponse(
+        return EnrichedResponse[ResultSetListOutput](
             data=ResultSetListOutput(sets=sets, count=len(sets)),
             hints=hints,
         )
-
-        return response.model_dump_json()

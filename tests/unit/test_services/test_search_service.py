@@ -11,12 +11,14 @@ from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestSearchService:
     """Tests for search service."""
 
     @pytest.fixture
-    async def service(self, mock_client: SejmApiClient) -> SearchService:
+    def service(self, mock_client: SejmApiClient) -> SearchService:
         """Create SearchService instance."""
         return SearchService(client=mock_client, result_store=ResultStore())
 

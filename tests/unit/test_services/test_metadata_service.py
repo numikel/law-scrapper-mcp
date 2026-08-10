@@ -11,12 +11,14 @@ from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import MAX_ITEM_LIMIT
 from law_scrapper_mcp.services.metadata_service import MetadataService
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestMetadataService:
     """Tests for metadata service."""
 
     @pytest.fixture
-    async def service(self, mock_client: SejmApiClient) -> MetadataService:
+    def service(self, mock_client: SejmApiClient) -> MetadataService:
         """Create MetadataService instance."""
         return MetadataService(client=mock_client)
 

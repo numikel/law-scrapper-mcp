@@ -1,26 +1,10 @@
 """Pagination contract tests for stored results and metadata."""
 
-import json
-
 import pytest
 
-pytestmark = pytest.mark.integration
+from mcp_helpers import parse_tool_result
 
-
-def _parse_payload(result) -> dict:
-    if isinstance(result.data, dict):
-        return result.data
-    if isinstance(result.data, str):
-        return json.loads(result.data)
-    if isinstance(result.structured_content, dict) and isinstance(
-        result.structured_content.get("result"), str
-    ):
-        return json.loads(result.structured_content["result"])
-    return result.structured_content
-
-
-async def _payload(result) -> dict:
-    return _parse_payload(result)
+pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
 
 def _assert_page(
@@ -56,7 +40,7 @@ async def _assert_tool_page_matrix(
     items_field: str | None = None,
 ) -> None:
     baseline = await mcp_client.call_tool(tool_name, base_arguments)
-    baseline_payload = await _payload(baseline)
+    baseline_payload = parse_tool_result(baseline)
     total = int(baseline_payload["data"]["page_info"]["total_count"])
     assert total >= 3
     cases = [
@@ -73,7 +57,7 @@ async def _assert_tool_page_matrix(
             tool_name,
             {**base_arguments, **arguments},
         )
-        payload = await _payload(result)
+        payload = parse_tool_result(result)
         page_info = payload["data"]["page_info"]
         _assert_page(
             page_info,
@@ -98,18 +82,18 @@ async def _assert_tool_page_matrix(
 
 async def test_filter_stores_full_set_but_returns_one_page(mcp_client) -> None:
     search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-    source_id = (await _payload(search))["data"]["result_set_id"]
+    source_id = parse_tool_result(search)["data"]["result_set_id"]
     filtered = await mcp_client.call_tool(
         "filter_results",
         {"result_set_id": source_id, "limit": 1, "offset": 0},
     )
-    filtered_payload = await _payload(filtered)
+    filtered_payload = parse_tool_result(filtered)
     chained_id = filtered_payload["data"]["result_set_id"]
     chained = await mcp_client.call_tool(
         "filter_results",
         {"result_set_id": chained_id, "limit": 100},
     )
-    chained_payload = await _payload(chained)
+    chained_payload = parse_tool_result(chained)
 
     assert len(filtered_payload["data"]["results"]) == 1
     assert filtered_payload["data"]["filtered_count"] == 3
@@ -121,7 +105,7 @@ async def test_metadata_all_has_one_global_limit(mcp_client) -> None:
         "get_system_metadata",
         {"category": "all", "limit": 2, "offset": 0},
     )
-    payload = await _payload(result)
+    payload = parse_tool_result(result)
 
     assert payload["data"]["count"] == 2
     assert sum(len(values) for values in payload["data"]["metadata"].values()) == 2
@@ -139,12 +123,12 @@ async def test_changes_store_full_set_but_return_one_page(mcp_client) -> None:
         "track_legal_changes",
         {"date_from": "2024-01-01", "date_to": "2024-12-31", "limit": 1},
     )
-    payload = await _payload(result)
+    payload = parse_tool_result(result)
     stored = await mcp_client.call_tool(
         "filter_results",
         {"result_set_id": payload["data"]["result_set_id"], "limit": 100},
     )
-    stored_payload = await _payload(stored)
+    stored_payload = parse_tool_result(stored)
 
     assert len(payload["data"]["changes"]) == 1
     assert payload["data"]["total_count"] == 3
@@ -153,7 +137,7 @@ async def test_changes_store_full_set_but_return_one_page(mcp_client) -> None:
 
 async def test_filter_sort_before_slice_returns_second_sorted_item(mcp_client) -> None:
     search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-    source_id = (await _payload(search))["data"]["result_set_id"]
+    source_id = parse_tool_result(search)["data"]["result_set_id"]
     sorted_all = await mcp_client.call_tool(
         "filter_results",
         {
@@ -173,8 +157,8 @@ async def test_filter_sort_before_slice_returns_second_sorted_item(mcp_client) -
             "offset": 1,
         },
     )
-    sorted_payload = await _payload(sorted_all)
-    page_payload = await _payload(page_two)
+    sorted_payload = parse_tool_result(sorted_all)
+    page_payload = parse_tool_result(page_two)
 
     globally_sorted = sorted_payload["data"]["results"]
     assert len(globally_sorted) == 3
@@ -183,7 +167,7 @@ async def test_filter_sort_before_slice_returns_second_sorted_item(mcp_client) -
 
 async def test_result_tools_cover_every_page_boundary(mcp_client) -> None:
     search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-    source_id = (await _payload(search))["data"]["result_set_id"]
+    source_id = parse_tool_result(search)["data"]["result_set_id"]
     await _assert_tool_page_matrix(
         mcp_client,
         "filter_results",
@@ -209,7 +193,7 @@ async def test_every_result_tool_rejects_negative_pages(
     field: str,
 ) -> None:
     search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-    source_id = (await _payload(search))["data"]["result_set_id"]
+    source_id = parse_tool_result(search)["data"]["result_set_id"]
     calls = [
         ("filter_results", {"result_set_id": source_id, field: -1}),
         ("get_system_metadata", {"category": "all", field: -1}),
@@ -224,6 +208,6 @@ async def test_every_result_tool_rejects_negative_pages(
     ]
     for tool_name, arguments in calls:
         result = await mcp_client.call_tool(tool_name, arguments)
-        payload = await _payload(result)
-        assert payload["error"] is not None
-        assert field in payload["error"]
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert field in result.content[0].text

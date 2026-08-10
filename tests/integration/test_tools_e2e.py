@@ -1,7 +1,7 @@
 """End-to-end integration tests for MCP tools.
 
 Test strategy:
-  - All 13 tools are exercised through the FastMCP in-memory Client (no real network).
+  - All 13 tools are exercised through the official in-memory MCP Client (no real network).
   - HTTP calls to api.sejm.gov.pl are intercepted by respx (see conftest.mock_api_responses).
   - Each smoke test verifies:
       1. The tool returns a valid JSON payload without raising.
@@ -9,9 +9,8 @@ Test strategy:
       3. At least one business-logic field in `data` carries the expected value.
   - Stateful workflow tests chain tools in the order a real client would use them
     (search → filter, get_act_details(load_content=True) → read/search in content).
-  - Error-handling tests confirm graceful degradation: the decorator catches
-    exceptions and returns an EnrichedResponse with a non-null `error` field
-    instead of propagating the exception to the MCP client.
+  - Error-handling tests confirm protocol-visible failures with is_error=True
+    instead of fake structured success payloads.
 
 Coverage map (13 tools):
   metadata   : get_system_metadata
@@ -26,12 +25,13 @@ Coverage map (13 tools):
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.integration
+from mcp_helpers import parse_tool_result
+
+pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
 EXPECTED_TOOLS = sorted(
     [
@@ -50,20 +50,6 @@ EXPECTED_TOOLS = sorted(
         "track_legal_changes",
     ]
 )
-
-
-def _parse_tool_result(result: Any) -> dict[str, Any]:
-    """Extract JSON payload from a FastMCP call_tool result."""
-    if hasattr(result, "data") and result.data is not None:
-        if isinstance(result.data, dict):
-            return result.data
-        if isinstance(result.data, str):
-            return json.loads(result.data)
-
-    if result.content:
-        return json.loads(result.content[0].text)
-
-    raise ValueError(f"Unexpected tool result format: {result!r}")
 
 
 def _assert_enriched(payload: dict[str, Any]) -> None:
@@ -111,7 +97,7 @@ class TestListToolsMCP:
 
     async def test_list_tools_returns_all_13(self, mcp_client) -> None:
         """list_tools() returns exactly the 13 expected tool names."""
-        tools = await mcp_client.list_tools()
+        tools = (await mcp_client.list_tools()).tools
         tool_names = sorted(tool.name for tool in tools)
 
         assert len(tool_names) == 13
@@ -119,7 +105,7 @@ class TestListToolsMCP:
 
     async def test_all_tools_have_descriptions(self, mcp_client) -> None:
         """Every tool exposes a non-empty description string."""
-        tools = await mcp_client.list_tools()
+        tools = (await mcp_client.list_tools()).tools
         for tool in tools:
             assert tool.description, f"Tool '{tool.name}' is missing a description"
 
@@ -135,7 +121,7 @@ class TestMetadataTools:
     async def test_get_metadata_publishers(self, mcp_client) -> None:
         """Publishers category returns a list of publisher objects."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "publishers"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["category"] == "publishers"
@@ -145,7 +131,7 @@ class TestMetadataTools:
     async def test_get_metadata_page_info_matches_payload(self, mcp_client) -> None:
         """Metadata success payload exposes truthful item page_info before Task 7 slicing."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "publishers"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
         data = payload["data"]
         flattened_count = len(data["metadata"]["publishers"])
 
@@ -161,7 +147,7 @@ class TestMetadataTools:
     async def test_get_metadata_keywords(self, mcp_client) -> None:
         """Keywords category returns a non-empty list of keyword strings."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "keywords"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["category"] == "keywords"
@@ -171,7 +157,7 @@ class TestMetadataTools:
     async def test_get_metadata_types(self, mcp_client) -> None:
         """Types category returns document type values."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "types"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["category"] == "types"
@@ -180,7 +166,7 @@ class TestMetadataTools:
     async def test_get_metadata_statuses(self, mcp_client) -> None:
         """Statuses category returns at least one status value."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "statuses"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["category"] == "statuses"
@@ -189,7 +175,7 @@ class TestMetadataTools:
     async def test_get_metadata_all(self, mcp_client) -> None:
         """'all' category returns a combined metadata dict with multiple keys."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "all"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["count"] > 0
@@ -208,7 +194,7 @@ class TestSearchTools:
     async def test_search_legal_acts(self, mcp_client) -> None:
         """search_legal_acts returns a paginated result set with acts."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["total_count"] == 3
@@ -218,7 +204,7 @@ class TestSearchTools:
     async def test_search_legal_acts_returns_enriched_results(self, mcp_client) -> None:
         """Each result in search output carries required fields."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         first = payload["data"]["results"][0]
         assert "eli" in first
@@ -230,7 +216,7 @@ class TestSearchTools:
         await mcp_client.call_tool("search_legal_acts", {"year": 2024})
 
         result = await mcp_client.call_tool("list_result_sets", {})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["count"] >= 1
@@ -239,7 +225,7 @@ class TestSearchTools:
     async def test_browse_acts(self, mcp_client) -> None:
         """browse_acts(publisher, year) returns acts for the given year."""
         result = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": 2024})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["returned_count"] == 3
@@ -251,7 +237,7 @@ class TestSearchTools:
             "track_legal_changes",
             {"date_from": "2024-01-01", "date_to": "2024-12-31"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert "date_range" in payload["data"]
@@ -271,14 +257,14 @@ class TestFilterTools:
     async def test_filter_results_by_type(self, mcp_client) -> None:
         """filter_results narrows a result set to matching document types."""
         search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        search_payload = _parse_tool_result(search)
+        search_payload = parse_tool_result(search)
         result_set_id = search_payload["data"]["result_set_id"]
 
         result = await mcp_client.call_tool(
             "filter_results",
             {"result_set_id": result_set_id, "type_equals": "Ustawa"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["source_result_set_id"] == result_set_id
@@ -289,14 +275,14 @@ class TestFilterTools:
     async def test_filter_results_by_regex_pattern(self, mcp_client) -> None:
         """filter_results applies regex to act titles."""
         browse = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": 2024})
-        browse_payload = _parse_tool_result(browse)
+        browse_payload = parse_tool_result(browse)
         rs_id = browse_payload["data"]["result_set_id"]
 
         result = await mcp_client.call_tool(
             "filter_results",
             {"result_set_id": rs_id, "pattern": "ustawa"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["filtered_count"] >= 1
@@ -304,13 +290,13 @@ class TestFilterTools:
     async def test_filter_results_creates_new_result_set(self, mcp_client) -> None:
         """filter_results stores filtered output as a new result_set_id."""
         search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        rs_id = _parse_tool_result(search)["data"]["result_set_id"]
+        rs_id = parse_tool_result(search)["data"]["result_set_id"]
 
         filter_result = await mcp_client.call_tool(
             "filter_results",
             {"result_set_id": rs_id, "type_equals": "Ustawa"},
         )
-        filter_payload = _parse_tool_result(filter_result)
+        filter_payload = parse_tool_result(filter_result)
 
         # A new result_set_id is created for chained filtering
         if filter_payload["data"]["filtered_count"] > 0:
@@ -329,7 +315,7 @@ class TestActDetailsTools:
     async def test_get_act_details(self, mcp_client, act_detail: dict) -> None:
         """get_act_details returns metadata matching the fixture."""
         result = await mcp_client.call_tool("get_act_details", {"eli": "DU/2024/1"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -339,7 +325,7 @@ class TestActDetailsTools:
     async def test_list_loaded_documents_empty(self, mcp_client) -> None:
         """list_loaded_documents returns empty list when no acts are loaded."""
         result = await mcp_client.call_tool("list_loaded_documents", {})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["count"] == 0
@@ -348,7 +334,7 @@ class TestActDetailsTools:
     async def test_get_act_details_with_load_content(self, mcp_client) -> None:
         """get_act_details with load_content=True marks act as loaded."""
         result = await mcp_client.call_tool("get_act_details", {"eli": "DU/2024/1", "load_content": True})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -359,7 +345,7 @@ class TestActDetailsTools:
         await mcp_client.call_tool("get_act_details", {"eli": "DU/2024/1", "load_content": True})
 
         result = await mcp_client.call_tool("list_loaded_documents", {})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["count"] == 1
@@ -383,7 +369,7 @@ class TestActContentTools:
         await self._load_act(mcp_client)
 
         result = await mcp_client.call_tool("read_act_content", {"eli": "DU/2024/1"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -399,13 +385,13 @@ class TestActContentTools:
 
         # First get toc to find a valid section id
         toc_result = await mcp_client.call_tool("read_act_content", {"eli": "DU/2024/1"})
-        toc_payload = _parse_tool_result(toc_result)
+        toc_payload = parse_tool_result(toc_result)
         sections = toc_payload["data"]["toc"]
         assert sections, "TOC must not be empty to test section reading"
 
         first_section_id = sections[0]["id"]
         result = await mcp_client.call_tool("read_act_content", {"eli": "DU/2024/1", "section": first_section_id})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -420,18 +406,17 @@ class TestActContentTools:
             "read_act_content",
             {"eli": "DU/2024/1", "section": "Rozdział_NONEXISTENT_999"},
         )
-        payload = _parse_tool_result(result)
 
-        _assert_enriched(payload)
-        # Error field is set; data is present but content is empty
-        assert payload.get("error") is not None
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert "nie znaleziona" in result.content[0].text
 
     async def test_search_in_act(self, mcp_client) -> None:
         """search_in_act finds occurrences of a query term in loaded content."""
         await self._load_act(mcp_client)
 
         result = await mcp_client.call_tool("search_in_act", {"eli": "DU/2024/1", "query": "Content"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -445,7 +430,7 @@ class TestActContentTools:
         await self._load_act(mcp_client)
 
         result = await mcp_client.call_tool("search_in_act", {"eli": "DU/2024/1", "query": "XYZNONEXISTENT_TERM"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["total_matches"] == 0
@@ -463,7 +448,7 @@ class TestRelationshipTools:
     async def test_analyze_act_relationships(self, mcp_client, act_references: dict) -> None:
         """analyze_act_relationships returns the mocked reference data."""
         result = await mcp_client.call_tool("analyze_act_relationships", {"eli": "DU/2024/1"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
@@ -478,7 +463,7 @@ class TestRelationshipTools:
             "analyze_act_relationships",
             {"eli": "DU/2024/1", "relationship_type": "Akty zmienione"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["relationship_type"] == "Akty zmienione"
@@ -488,7 +473,7 @@ class TestRelationshipTools:
     async def test_compare_acts(self, mcp_client) -> None:
         """compare_acts returns a comparison with differences and fields for both acts."""
         result = await mcp_client.call_tool("compare_acts", {"eli_a": "DU/2024/1", "eli_b": "DU/2024/2"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["eli_a"] == "DU/2024/1"
@@ -501,7 +486,7 @@ class TestRelationshipTools:
     async def test_compare_acts_same_act(self, mcp_client) -> None:
         """compare_acts on the same ELI reports no differences."""
         result = await mcp_client.call_tool("compare_acts", {"eli_a": "DU/2024/1", "eli_b": "DU/2024/1"})
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         differences = payload["data"]["differences"]
@@ -522,7 +507,7 @@ class TestDateTools:
             "calculate_legal_date",
             {"days": 14, "base_date": "2025-02-01"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["base_date"] == "2025-02-01"
@@ -535,7 +520,7 @@ class TestDateTools:
             "calculate_legal_date",
             {"days": -7, "base_date": "2025-02-08"},
         )
-        payload = _parse_tool_result(result)
+        payload = parse_tool_result(result)
 
         _assert_enriched(payload)
         assert payload["data"]["calculated_date"] == "2025-02-01"
@@ -552,9 +537,7 @@ class TestEnrichedResponseStructure:
     async def test_search_response_structure(self, mcp_client) -> None:
         """search_legal_acts wraps payload in {data, hints}."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        raw = result.content[0].text if result.content else None
-        assert raw is not None
-        payload = json.loads(raw)
+        payload = parse_tool_result(result)
 
         assert set(payload.keys()) >= {"data", "hints"}
         assert isinstance(payload["hints"], list)
@@ -562,9 +545,7 @@ class TestEnrichedResponseStructure:
     async def test_metadata_response_structure(self, mcp_client) -> None:
         """get_system_metadata wraps payload in {data, hints}."""
         result = await mcp_client.call_tool("get_system_metadata", {"category": "publishers"})
-        raw = result.content[0].text if result.content else None
-        assert raw is not None
-        payload = json.loads(raw)
+        payload = parse_tool_result(result)
 
         assert "data" in payload
         assert "hints" in payload
@@ -572,9 +553,7 @@ class TestEnrichedResponseStructure:
     async def test_act_details_response_structure(self, mcp_client) -> None:
         """get_act_details wraps payload in {data, hints}."""
         result = await mcp_client.call_tool("get_act_details", {"eli": "DU/2024/1"})
-        raw = result.content[0].text if result.content else None
-        assert raw is not None
-        payload = json.loads(raw)
+        payload = parse_tool_result(result)
 
         assert "data" in payload
         assert "hints" in payload
@@ -582,7 +561,7 @@ class TestEnrichedResponseStructure:
     async def test_hints_are_valid_objects(self, mcp_client) -> None:
         """Hints returned by search_legal_acts are valid hint objects."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
-        payload = json.loads(result.content[0].text)
+        payload = parse_tool_result(result)
 
         for hint in payload["hints"]:
             assert "message" in hint, "Each hint must have a 'message' field"
@@ -594,45 +573,56 @@ class TestEnrichedResponseStructure:
 
 
 class TestErrorHandling:
-    """Verify graceful error handling in tool execution."""
+    """Verify protocol-visible tool error handling."""
 
     async def test_get_act_details_invalid_eli_format(self, mcp_client) -> None:
-        """get_act_details with malformed ELI returns error in payload, not exception."""
+        """get_act_details with malformed ELI returns is_error=True."""
         result = await mcp_client.call_tool("get_act_details", {"eli": "INVALID"})
-        payload = _parse_tool_result(result)
 
-        # Tool must NOT raise; it returns EnrichedResponse with error
-        assert "error" in payload
-        assert payload["error"] is not None
-        assert "data" in payload  # default_factory output is present
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert "INVALID" in result.content[0].text
 
     async def test_filter_results_unknown_set_id(self, mcp_client) -> None:
-        """filter_results with an unknown result_set_id returns graceful error."""
+        """filter_results with an unknown result_set_id returns is_error=True."""
         result = await mcp_client.call_tool(
             "filter_results",
             {"result_set_id": "rs_nonexistent_999"},
         )
-        payload = _parse_tool_result(result)
 
-        assert "error" in payload
-        assert payload["error"] is not None
+        assert result.is_error is True
+        assert result.structured_content is None
 
     async def test_read_act_content_not_loaded(self, mcp_client) -> None:
-        """read_act_content on a non-loaded act returns graceful error payload."""
+        """read_act_content on a non-loaded act returns is_error=True."""
         result = await mcp_client.call_tool("read_act_content", {"eli": "DU/2024/1"})
-        payload = _parse_tool_result(result)
 
-        # DocumentNotLoadedError caught by decorator
-        assert "error" in payload
-        assert payload["error"] is not None
+        assert result.is_error is True
+        assert result.structured_content is None
 
     async def test_analyze_relationships_invalid_eli(self, mcp_client) -> None:
-        """analyze_act_relationships with invalid ELI returns graceful error."""
+        """analyze_act_relationships with invalid ELI returns is_error=True."""
         result = await mcp_client.call_tool("analyze_act_relationships", {"eli": "ONLY_TWO/PARTS"})
-        payload = _parse_tool_result(result)
 
-        assert "error" in payload
-        assert payload["error"] is not None
+        assert result.is_error is True
+        assert result.structured_content is None
+
+    async def test_internal_error_is_sanitized(self, mcp_client, monkeypatch) -> None:
+        from law_scrapper_mcp.services.date_service import DateService
+
+        def fail_calculation(*args, **kwargs):
+            raise RuntimeError("secret implementation detail")
+
+        monkeypatch.setattr(DateService, "calculate", fail_calculation)
+        result = await mcp_client.call_tool(
+            "calculate_legal_date",
+            {"days": 1, "base_date": "2026-01-01"},
+        )
+
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert "Wystąpił wewnętrzny błąd narzędzia" in result.content[0].text
+        assert "secret implementation detail" not in result.content[0].text
 
 
 # ---------------------------------------------------------------------------

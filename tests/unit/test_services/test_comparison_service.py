@@ -8,6 +8,8 @@ import pytest
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput
 from law_scrapper_mcp.services.comparison_service import ComparisonService
 
+pytestmark = pytest.mark.asyncio
+
 
 def _details(eli: str, title: str, keywords: list[str]) -> ActDetailOutput:
     publisher, year, pos = eli.split("/")

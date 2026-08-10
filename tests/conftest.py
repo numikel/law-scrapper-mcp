@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 import respx
 from httpx import Response
 
@@ -64,7 +65,7 @@ def cache() -> TTLCache:
     return TTLCache(max_entries=100)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_client(cache: TTLCache) -> AsyncGenerator[SejmApiClient]:
     """Create a SejmApiClient with mocked httpx.
 
@@ -157,11 +158,18 @@ def mock_api_responses(
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    """Use asyncio as the anyio backend for MCP client tests."""
+    return "asyncio"
+
+
+@pytest.fixture
 async def mcp_client(mock_api_responses):
-    """FastMCP in-memory client with mocked Sejm API responses."""
-    from fastmcp import Client
+    """Official in-memory MCP client with mocked Sejm API responses."""
+    from mcp import Client
 
     from law_scrapper_mcp.server import app
 
     async with Client(app) as client:
         yield client
+

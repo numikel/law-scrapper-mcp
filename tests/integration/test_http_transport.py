@@ -13,7 +13,7 @@ pytestmark = pytest.mark.integration
 
 def test_health_endpoint() -> None:
     """GET /health returns status, version, and server name."""
-    asgi_app = app.http_app(path="/mcp")
+    asgi_app = app.streamable_http_app(stateless_http=True)
     with TestClient(asgi_app) as client:
         response = client.get("/health")
 

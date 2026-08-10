@@ -10,6 +10,8 @@ from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
 from law_scrapper_mcp.services.document_store import DocumentStore, LoadedDocument
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestDocumentStoreBasicOperations:
     """Tests for basic document store operations."""

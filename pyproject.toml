@@ -85,4 +85,4 @@ no_implicit_optional = false
 
 [[tool.mypy.overrides]]
 module = "law_scrapper_mcp.tools.*"
-disable_error_code = ["assignment"]
+disable_error_code = ["assignment", "attr-defined"]

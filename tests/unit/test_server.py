@@ -6,6 +6,7 @@ import httpx
 import pytest
 from fastmcp import Client
 
+from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.server import app, lifespan
 
 EXPECTED_TOOLS = sorted(
@@ -25,18 +26,6 @@ EXPECTED_TOOLS = sorted(
         "track_legal_changes",
     ]
 )
-
-LIFESPAN_KEYS = {
-    "client",
-    "cache",
-    "document_store",
-    "content_processor",
-    "result_store",
-    "metadata_service",
-    "search_service",
-    "act_service",
-    "changes_service",
-}
 
 
 async def test_all_tools_registered() -> None:
@@ -59,12 +48,15 @@ async def test_tool_names_match_expected() -> None:
 
 
 async def test_lifespan_yields_services() -> None:
-    """Lifespan initializes all required service keys."""
-    async with lifespan(app) as ctx:
-        assert set(ctx.keys()) == LIFESPAN_KEYS
-        assert ctx["metadata_service"] is not None
-        assert ctx["search_service"] is not None
-        assert ctx["act_service"] is not None
+    """Lifespan initializes all required service attributes."""
+    async with lifespan(app) as context:
+        assert isinstance(context, AppContext)
+        assert context.metadata_service is not None
+        assert context.search_service is not None
+        assert context.act_service is not None
+        assert context.comparison_service is not None
+        assert context.relationship_service is not None
+        assert context.date_service is not None
 
 
 async def test_lifespan_result_store_receives_configured_limits(monkeypatch) -> None:
@@ -82,8 +74,8 @@ async def test_lifespan_result_store_receives_configured_limits(monkeypatch) -> 
     monkeypatch.setattr(server_module.settings, "max_pattern_length", 256)
     monkeypatch.setattr(server_module.settings, "filter_max_records", 42)
 
-    async with lifespan(app) as ctx:
-        store = ctx["result_store"]
+    async with lifespan(app) as context:
+        store = context.result_store
         assert store.max_pattern_length == 256
         assert store.pattern_length_limit_clamped is False
         assert store.max_records == 42
@@ -96,8 +88,8 @@ async def test_lifespan_result_store_uses_clamped_limit(monkeypatch) -> None:
     monkeypatch.setattr(server_module.settings, "max_pattern_length", 10000)
     monkeypatch.setattr(server_module.settings, "filter_max_records", 7)
 
-    async with lifespan(app) as ctx:
-        store = ctx["result_store"]
+    async with lifespan(app) as context:
+        store = context.result_store
 
         assert store.max_pattern_length == 4096
         assert store.pattern_length_limit_clamped is True
@@ -116,8 +108,8 @@ async def test_lifespan_result_store_floors_zero_record_limit(monkeypatch) -> No
 
     monkeypatch.setattr(server_module.settings, "filter_max_records", 0)
 
-    async with lifespan(app) as ctx:
-        assert ctx["result_store"].max_records == 1
+    async with lifespan(app) as context:
+        assert context.result_store.max_records == 1
 
 
 async def test_lifespan_warns_about_clamped_pattern_limit(monkeypatch, caplog) -> None:
@@ -147,8 +139,8 @@ async def test_lifespan_closes_client_when_body_raises() -> None:
     httpx_client: httpx.AsyncClient | None = None
 
     with pytest.raises(RuntimeError, match="boom"):
-        async with lifespan(app) as ctx:
-            httpx_client = ctx["client"]._client
+        async with lifespan(app) as context:
+            httpx_client = context.client._client
             raise RuntimeError("boom")
 
     assert httpx_client is not None

@@ -49,7 +49,7 @@ def register(mcp: FastMCP) -> None:
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
         assert ctx is not None
-        metadata_service = ctx.lifespan_context["metadata_service"]
+        metadata_service = ctx.lifespan_context.metadata_service
 
         # Convert string to enum
         try:

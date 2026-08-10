@@ -55,36 +55,8 @@ def register(mcp: FastMCP) -> None:
         - analyze_act_relationships(eli="DU/2024/1", relationship_type="Akty uznane za uchylone") - Uchylone akty
         """
         assert ctx is not None
-        client = ctx.lifespan_context["client"]
-
-        # Parse ELI
-        parts = eli.split("/")
-        if len(parts) != 3:
-            raise ValueError(f"Nieprawidłowy format ELI: {eli}. Oczekiwany: wydawca/rok/pozycja")
-        publisher, year, pos = parts
-
-        # Get references
-        references_data = await client.get_json(f"acts/{publisher}/{year}/{pos}/references")
-
-        # Process relationships
-        relationships = {}
-        if isinstance(references_data, dict):
-            for key, value in references_data.items():
-                if relationship_type is None or key == relationship_type:
-                    relationships[key] = value if isinstance(value, list) else [value]
-        elif isinstance(references_data, list):
-            relationships["references"] = references_data
-
-        total_count = sum(len(v) if isinstance(v, list) else 1 for v in relationships.values())
-
-        response = EnrichedResponse(
-            data=RelationshipsOutput(
-                eli=eli,
-                relationship_type=relationship_type,
-                relationships=relationships,
-                total_count=total_count,
-            ),
-            hints=relationships_hints(eli, list(relationships.keys())),
-        )
-
-        return response.model_dump_json()
+        output = await ctx.lifespan_context.relationship_service.get_relationships(eli, relationship_type)
+        return EnrichedResponse(
+            data=output,
+            hints=relationships_hints(eli, list(output.relationships)),
+        ).model_dump_json()

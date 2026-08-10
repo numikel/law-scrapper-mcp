@@ -59,7 +59,7 @@ def register(mcp: FastMCP) -> None:
         - search_in_act(eli="DU/2024/1692", query="termin") - Wszystkie wzmianki o terminach
         """
         assert ctx is not None
-        document_store = ctx.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context.document_store
 
         # Normalize int (MCP clients may send string)
         context_chars_int = 500

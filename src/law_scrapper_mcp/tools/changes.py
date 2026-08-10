@@ -58,33 +58,15 @@ def register(mcp: FastMCP) -> None:
         - track_legal_changes(date_from="2024-01-01", keywords=["zdrowotny"]) - Zmiany zdrowotne
         """
         assert ctx is not None
-        changes_service = ctx.lifespan_context["changes_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        changes_service = ctx.lifespan_context.changes_service
 
-        results, date_range = await changes_service.track_changes(
+        output = await changes_service.track_changes(
             publisher=publisher,
             date_from=date_from,
             date_to=date_to,
             keywords=keywords,
         )
 
-        # Store results for subsequent filtering
-        result_set_id = None
-        if results:
-            query_summary = f"changes: {date_range} | publisher={publisher}"
-            if keywords:
-                query_summary += f" | keywords={','.join(keywords)}"
-            result_set_id = await result_store.store(results, query_summary, len(results))
-
-        response = EnrichedResponse(
-            data=ChangesOutput(
-                date_range=date_range,
-                publisher=publisher,
-                keywords=keywords or [],
-                changes=results,
-                total_count=len(results),
-                result_set_id=result_set_id,
-            ),
-        )
+        response = EnrichedResponse(data=output)
 
         return response.model_dump_json()

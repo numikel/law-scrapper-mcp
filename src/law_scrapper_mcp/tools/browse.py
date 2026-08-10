@@ -62,10 +62,8 @@ def register(mcp: FastMCP) -> None:
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
         """
         assert ctx is not None
-        search_service = ctx.lifespan_context["search_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        search_service = ctx.lifespan_context.search_service
 
-        # Normalize year (MCP clients may send string)
         year_int = 0
         with contextlib.suppress(ValueError, TypeError):
             year_int = int(year)
@@ -75,45 +73,29 @@ def register(mcp: FastMCP) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 limit_int = int(limit)
 
-        # Convert detail_level string to enum
         try:
             detail_enum = DetailLevel(detail_level)
         except ValueError:
             detail_enum = DetailLevel.STANDARD
 
-        results, total_count = await search_service.browse(
+        output = await search_service.browse(
             publisher=publisher,
             year=year_int,
             detail_level=detail_enum,
+            limit=limit_int,
         )
 
-        # Apply default limit if no explicit limit was provided
         effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
-        was_truncated = len(results) > effective_limit
-        if was_truncated:
-            results = results[:effective_limit]
-
-        # Store results for subsequent filtering
-        query_summary = f"publisher={publisher} | year={year}"
-        result_set_id = None
-        if results:
-            result_set_id = await result_store.store(results, query_summary, total_count)
-
-        first_eli = results[0].eli if results else None
+        was_truncated = output.returned_count == effective_limit and output.total_count > effective_limit
+        first_eli = output.results[0].eli if output.results else None
 
         response = EnrichedResponse(
-            data=SearchOutput(
-                results=results,
-                total_count=total_count,
-                query_summary=query_summary,
-                returned_count=len(results),
-                result_set_id=result_set_id,
-            ),
+            data=output,
             hints=search_hints(
-                total_count,
-                len(results) > 0,
+                output.total_count,
+                output.returned_count > 0,
                 first_eli,
-                result_set_id,
+                output.result_set_id,
                 was_truncated=was_truncated,
                 applied_limit=effective_limit,
             ),

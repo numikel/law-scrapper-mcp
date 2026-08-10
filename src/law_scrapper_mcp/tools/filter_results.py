@@ -113,9 +113,8 @@ def register(mcp: FastMCP) -> None:
         - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
         """
         assert ctx is not None
-        result_store = ctx.lifespan_context["result_store"]
+        result_store = ctx.lifespan_context.result_store
 
-        # Normalize params (MCP clients may send int/bool as strings)
         year_int: int | None = None
         if year_equals is not None:
             with contextlib.suppress(ValueError, TypeError):
@@ -128,7 +127,7 @@ def register(mcp: FastMCP) -> None:
 
         sort_desc_bool = sort_desc.lower() in ("true", "1", "yes") if isinstance(sort_desc, str) else bool(sort_desc)
 
-        filtered, original_count = await result_store.filter_results(
+        output = await result_store.filter_and_store(
             result_set_id,
             pattern=pattern,
             field=field,
@@ -143,76 +142,28 @@ def register(mcp: FastMCP) -> None:
             limit=limit_int,
         )
 
-        # Store filtered results as a new set for potential chaining
-        new_set_id = None
-        if filtered:
-            filters_desc = _build_filters_description(
-                pattern=pattern,
-                field=field,
-                type_equals=type_equals,
-                status_equals=status_equals,
-                year_equals=year_int,
-                date_field=date_field,
-                date_from=date_from,
-                date_to=date_to,
-            )
-            new_set_id = await result_store.store(
-                results=filtered,
-                query_summary=f"filtered({result_set_id}): {filters_desc}",
-                total_count=len(filtered),
-            )
-
-        filters_applied = {}
-        if pattern:
-            filters_applied["pattern"] = pattern
-            filters_applied["field"] = field
-        if type_equals:
-            filters_applied["type_equals"] = type_equals
-        if status_equals:
-            filters_applied["status_equals"] = status_equals
-        if year_int:
-            filters_applied["year_equals"] = year_int
-        if date_field:
-            filters_applied["date_field"] = date_field
-            if date_from:
-                filters_applied["date_from"] = date_from
-            if date_to:
-                filters_applied["date_to"] = date_to
-        if sort_by:
-            filters_applied["sort_by"] = sort_by
-            filters_applied["sort_desc"] = sort_desc_bool
-        if limit_int:
-            filters_applied["limit"] = limit_int
-
         hints = []
-        if filtered:
+        if output.results:
             from law_scrapper_mcp.models.tool_outputs import Hint
 
             hints.append(
                 Hint(
                     message="Użyj get_act_details aby zobaczyć szczegóły wybranego aktu.",
                     tool="get_act_details",
-                    parameters={"eli": filtered[0].eli},
+                    parameters={"eli": output.results[0].eli},
                 )
             )
-            if new_set_id:
+            if output.result_set_id:
                 hints.append(
                     Hint(
-                        message=f"Możesz dalej filtrować te wyniki używając result_set_id='{new_set_id}'.",
+                        message=f"Możesz dalej filtrować te wyniki używając result_set_id='{output.result_set_id}'.",
                         tool="filter_results",
-                        parameters={"result_set_id": new_set_id},
+                        parameters={"result_set_id": output.result_set_id},
                     )
                 )
 
         response = EnrichedResponse(
-            data=FilterOutput(
-                source_result_set_id=result_set_id,
-                result_set_id=new_set_id,
-                results=filtered,
-                original_count=original_count,
-                filtered_count=len(filtered),
-                filters_applied=filters_applied,
-            ),
+            data=output,
             hints=hints,
         )
 
@@ -239,7 +190,7 @@ def register(mcp: FastMCP) -> None:
         - list_result_sets() - Wyświetl wszystkie aktywne zestawy wyników
         """
         assert ctx is not None
-        result_store = ctx.lifespan_context["result_store"]
+        result_store = ctx.lifespan_context.result_store
 
         raw_sets = await result_store.list_sets()
         sets = [ResultSetInfo(**s) for s in raw_sets]
@@ -262,12 +213,3 @@ def register(mcp: FastMCP) -> None:
         )
 
         return response.model_dump_json()
-
-
-def _build_filters_description(**kwargs: str | int | None) -> str:
-    """Build a human-readable description of applied filters."""
-    parts = []
-    for key, value in kwargs.items():
-        if value is not None:
-            parts.append(f"{key}={value}")
-    return " | ".join(parts) if parts else "no filters"

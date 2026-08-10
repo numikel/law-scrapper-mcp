@@ -66,7 +66,7 @@ def register(mcp: FastMCP) -> None:
         - read_act_content(eli="MP/2024/100") - Spis treści aktu z MP
         """
         assert ctx is not None
-        document_store = ctx.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context.document_store
 
         if section is None:
             # Return table of contents
@@ -130,7 +130,7 @@ def register(mcp: FastMCP) -> None:
         - list_loaded_documents() - Wyświetl wszystkie załadowane dokumenty
         """
         assert ctx is not None
-        document_store = ctx.lifespan_context["document_store"]
+        document_store = ctx.lifespan_context.document_store
 
         raw_docs = await document_store.list_documents()
         documents = [LoadedDocumentInfo(**d) for d in raw_docs]

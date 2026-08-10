@@ -1,7 +1,7 @@
 """Compare metadata of two legal acts."""
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastmcp import Context, FastMCP
 
@@ -57,83 +57,5 @@ def register(mcp: FastMCP) -> None:
         - compare_acts(eli_a="DU/2021/1500", eli_b="DU/2021/1600") - Porównaj podobne akty
         """
         assert ctx is not None
-        act_service = ctx.lifespan_context["act_service"]
-
-        # Fetch details for both acts (no content loading needed)
-        details_a = await act_service.get_details(eli=eli_a, load_content=False)
-        details_b = await act_service.get_details(eli=eli_b, load_content=False)
-
-        # Build comparison dict
-        comparison: dict[str, Any] = {
-            "title_a": details_a.title,
-            "title_b": details_b.title,
-            "type_a": details_a.type or "N/A",
-            "type_b": details_b.type or "N/A",
-            "status_a": details_a.status,
-            "status_b": details_b.status,
-            "announcement_date_a": details_a.announcement_date or "N/A",
-            "announcement_date_b": details_b.announcement_date or "N/A",
-            "promulgation_date_a": details_a.promulgation_date or "N/A",
-            "promulgation_date_b": details_b.promulgation_date or "N/A",
-            "entry_into_force_a": details_a.entry_into_force or "N/A",
-            "entry_into_force_b": details_b.entry_into_force or "N/A",
-            "keywords_a": details_a.keywords,
-            "keywords_b": details_b.keywords,
-        }
-
-        # Calculate common keywords
-        set_a = set(details_a.keywords)
-        set_b = set(details_b.keywords)
-        common_keywords = sorted(set_a.intersection(set_b))
-
-        # Identify differences
-        differences: list[str] = []
-
-        if details_a.title != details_b.title:
-            differences.append("Tytuły różnią się")
-
-        if (details_a.type or "N/A") != (details_b.type or "N/A"):
-            differences.append(f"Typy różnią się: '{details_a.type or 'N/A'}' vs '{details_b.type or 'N/A'}'")
-
-        if details_a.status != details_b.status:
-            differences.append(f"Statusy różnią się: '{details_a.status}' vs '{details_b.status}'")
-
-        if details_a.promulgation_date != details_b.promulgation_date:
-            differences.append(
-                f"Daty promulgacji różnią się: "
-                f"'{details_a.promulgation_date or 'N/A'}' vs "
-                f"'{details_b.promulgation_date or 'N/A'}'"
-            )
-
-        if details_a.entry_into_force != details_b.entry_into_force:
-            differences.append(
-                f"Daty wejścia w życie różnią się: "
-                f"'{details_a.entry_into_force or 'N/A'}' vs "
-                f"'{details_b.entry_into_force or 'N/A'}'"
-            )
-
-        if set_a != set_b:
-            only_a = set_a - set_b
-            only_b = set_b - set_a
-            if only_a:
-                differences.append(f"Słowa kluczowe tylko w A: {', '.join(sorted(only_a))}")
-            if only_b:
-                differences.append(f"Słowa kluczowe tylko w B: {', '.join(sorted(only_b))}")
-
-        if not differences:
-            differences.append("Brak istotnych różnic w metadanych")
-
-        output = CompareOutput(
-            eli_a=eli_a,
-            eli_b=eli_b,
-            comparison=comparison,
-            common_keywords=common_keywords,
-            differences=differences,
-        )
-
-        response = EnrichedResponse(
-            data=output,
-            hints=compare_hints(eli_a, eli_b),
-        )
-
-        return response.model_dump_json()
+        output = await ctx.lifespan_context.comparison_service.compare(eli_a, eli_b)
+        return EnrichedResponse(data=output, hints=compare_hints(eli_a, eli_b)).model_dump_json()

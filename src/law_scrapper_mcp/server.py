@@ -12,12 +12,16 @@ from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
+from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
+from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
+from law_scrapper_mcp.services.date_service import DateService
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.metadata_service import MetadataService
+from law_scrapper_mcp.services.relationship_service import RelationshipService
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
 from law_scrapper_mcp.tools import register_all_tools
@@ -58,22 +62,30 @@ async def lifespan(server):
         max_records=settings.effective_filter_max_records,
     )
     metadata_service = MetadataService(client)
-    search_service = SearchService(client)
+    search_service = SearchService(client, result_store)
     act_service = ActService(client, document_store, content_processor)
-    changes_service = ChangesService(client)
+    changes_service = ChangesService(client, result_store)
+    comparison_service = ComparisonService(act_service)
+    relationship_service = RelationshipService(client)
+    date_service = DateService()
+
+    context = AppContext(
+        client=client,
+        cache=cache,
+        document_store=document_store,
+        content_processor=content_processor,
+        result_store=result_store,
+        metadata_service=metadata_service,
+        search_service=search_service,
+        act_service=act_service,
+        changes_service=changes_service,
+        comparison_service=comparison_service,
+        relationship_service=relationship_service,
+        date_service=date_service,
+    )
 
     try:
-        yield {
-            "client": client,
-            "cache": cache,
-            "document_store": document_store,
-            "content_processor": content_processor,
-            "result_store": result_store,
-            "metadata_service": metadata_service,
-            "search_service": search_service,
-            "act_service": act_service,
-            "changes_service": changes_service,
-        }
+        yield context
     finally:
         await client.close()
         await cache.clear()

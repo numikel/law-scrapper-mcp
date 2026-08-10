@@ -104,10 +104,8 @@ def register(mcp: FastMCP) -> None:
         - search_legal_acts(title="budżet", year=2024) - Akty budżetowe z 2024
         """
         assert ctx is not None
-        search_service = ctx.lifespan_context["search_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        search_service = ctx.lifespan_context.search_service
 
-        # Normalize params (MCP clients may send int/bool as strings)
         year_int: int | None = None
         if year is not None:
             with contextlib.suppress(ValueError, TypeError):
@@ -127,13 +125,12 @@ def register(mcp: FastMCP) -> None:
         if in_force is not None:
             in_force_bool = in_force.lower() in ("true", "1", "yes") if isinstance(in_force, str) else bool(in_force)
 
-        # Convert detail_level string to enum
         try:
             detail_enum = DetailLevel(detail_level)
         except ValueError:
             detail_enum = DetailLevel.STANDARD
 
-        results, total_count, query_summary = await search_service.search(
+        output = await search_service.search(
             publisher=publisher,
             year=year_int,
             keywords=keywords,
@@ -149,32 +146,17 @@ def register(mcp: FastMCP) -> None:
             detail_level=detail_enum,
         )
 
-        # Apply default limit if no explicit limit was provided
         effective_limit = limit_int if limit_int is not None else DEFAULT_SEARCH_LIMIT
-        was_truncated = len(results) > effective_limit
-        if was_truncated:
-            results = results[:effective_limit]
-
-        # Store results for subsequent filtering
-        result_set_id = None
-        if results:
-            result_set_id = await result_store.store(results, query_summary, total_count)
-
-        first_eli = results[0].eli if results else None
+        was_truncated = output.returned_count == effective_limit and output.total_count > effective_limit
+        first_eli = output.results[0].eli if output.results else None
 
         response = EnrichedResponse(
-            data=SearchOutput(
-                results=results,
-                total_count=total_count,
-                query_summary=query_summary,
-                returned_count=len(results),
-                result_set_id=result_set_id,
-            ),
+            data=output,
             hints=search_hints(
-                total_count,
-                len(results) > 0,
+                output.total_count,
+                output.returned_count > 0,
                 first_eli,
-                result_set_id,
+                output.result_set_id,
                 was_truncated=was_truncated,
                 applied_limit=effective_limit,
             ),

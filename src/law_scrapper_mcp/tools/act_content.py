@@ -6,14 +6,25 @@ from typing import Annotated, Any
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
-from law_scrapper_mcp.models.pagination import error_page_info_for_content
+from law_scrapper_mcp.models.pagination import (
+    DEFAULT_ITEM_LIMIT,
+    DEFAULT_SECTION_CHAR_LIMIT,
+    MAX_ITEM_LIMIT,
+    MAX_SECTION_CHAR_LIMIT,
+    error_page_info_for_content,
+)
 from law_scrapper_mcp.models.tool_outputs import (
     ContentOutput,
     EnrichedResponse,
     LoadedDocumentInfo,
     LoadedDocumentListOutput,
 )
-from law_scrapper_mcp.services.pagination import full_item_page, full_text_page
+from law_scrapper_mcp.services.pagination import (
+    effective_limit,
+    paginate_items,
+    paginate_text,
+    parse_non_negative,
+)
 from law_scrapper_mcp.services.response_enrichment import content_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -51,6 +62,14 @@ def register(mcp: FastMCP) -> None:
             "Aby poznać dostępne section_id, użyj get_act_details(load_content=true) i sprawdź tabelę treści. "
             "Jeśli None — zwraca spis treści z dostępnymi sekcjami.",
         ] = None,
+        limit: Annotated[
+            str | int | None,
+            "Maksymalna liczba elementów lub znaków na stronie. Domyślnie zależy od trybu odczytu.",
+        ] = None,
+        offset: Annotated[
+            str | int,
+            "Nieujemne przesunięcie początku strony. Domyślnie 0.",
+        ] = 0,
         ctx: Context = None,
     ) -> str:
         """
@@ -75,46 +94,46 @@ def register(mcp: FastMCP) -> None:
         assert ctx is not None
         document_store = get_app_context(ctx).document_store
 
+        page_offset = parse_non_negative(offset, name="offset", default=0)
         if section is None:
+            page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
             sections = await document_store.get_toc(eli)
-            all_toc = [{"id": s.id, "title": s.title, "level": s.level} for s in sections]
-            toc, page_info = full_item_page(all_toc)
+            all_toc = [{"id": item.id, "title": item.title, "level": item.level} for item in sections]
+            toc, page_info = paginate_items(all_toc, limit=page_limit, offset=page_offset)
+            output = ContentOutput(
+                eli=eli,
+                section_id=None,
+                section_title="Spis treści",
+                content=f"Znaleziono {page_info.total_count} sekcji",
+                toc=toc,
+                page_info=page_info,
+            )
             response = EnrichedResponse(
-                data=ContentOutput(
-                    eli=eli,
-                    section_id=None,
-                    section_title="Spis treści",
-                    content=f"Znaleziono {page_info.total_count} sekcji",
-                    toc=toc,
-                    page_info=page_info,
-                ),
+                data=output,
                 hints=content_hints(eli, page_info.total_count > 0),
             )
         else:
+            page_limit = effective_limit(
+                limit,
+                default=DEFAULT_SECTION_CHAR_LIMIT,
+                maximum=MAX_SECTION_CHAR_LIMIT,
+            )
             full_content = await document_store.get_section(eli, section)
             if full_content is None:
-                error_response = EnrichedResponse(
-                    data=ContentOutput(
-                        eli=eli,
-                        section_id=section,
-                        section_title="",
-                        content="",
-                        page_info=error_page_info_for_content(section=section),
-                    ),
-                    error=f"Sekcja '{section}' nie znaleziona w akcie {eli}. "
-                    f"Użyj read_act_content(eli='{eli}') aby zobaczyć dostępne sekcje.",
+                raise ValueError(
+                    f"Sekcja '{section}' nie znaleziona w akcie {eli}. "
+                    f"Użyj read_act_content(eli='{eli}') aby zobaczyć dostępne sekcje."
                 )
-                return error_response.model_dump_json()
-
-            content, page_info = full_text_page(full_content)
+            content, page_info = paginate_text(full_content, limit=page_limit, offset=page_offset)
+            output = ContentOutput(
+                eli=eli,
+                section_id=section,
+                section_title=section,
+                content=content,
+                page_info=page_info,
+            )
             response = EnrichedResponse(
-                data=ContentOutput(
-                    eli=eli,
-                    section_id=section,
-                    section_title=section,
-                    content=content,
-                    page_info=page_info,
-                ),
+                data=output,
                 hints=content_hints(eli, True),
             )
 

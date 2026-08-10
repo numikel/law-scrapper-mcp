@@ -57,8 +57,10 @@ class ReadContentRequest(BaseModel):
     eli: str = Field(description="ELI identifier of the act")
     section: str | None = Field(
         default=None,
-        description="Section ID to read (if None, returns table of contents)",
+        description="Section ID to read; when omitted, return the table of contents",
     )
+    limit: int | None = Field(default=None, description="Maximum items or characters returned")
+    offset: int = Field(default=0, description="Non-negative item or character offset")
 
 
 class SearchInActRequest(BaseModel):
@@ -66,7 +68,9 @@ class SearchInActRequest(BaseModel):
 
     eli: str = Field(description="ELI identifier of the act")
     query: str = Field(description="Search query text")
-    context_chars: int = Field(default=500, description="Number of characters of context around matches")
+    context_chars: int = Field(default=500, description="Characters of context around matches")
+    limit: int = Field(default=20, description="Maximum matches returned")
+    offset: int = Field(default=0, description="Non-negative match offset")
 
 
 class MetadataRequest(BaseModel):

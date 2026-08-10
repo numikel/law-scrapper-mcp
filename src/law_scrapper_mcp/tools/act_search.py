@@ -1,15 +1,23 @@
 """Search within loaded legal acts."""
 
-import contextlib
 import logging
 from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 
 from law_scrapper_mcp.context import get_app_context
-from law_scrapper_mcp.models.pagination import empty_item_page_info
+from law_scrapper_mcp.models.pagination import (
+    DEFAULT_ITEM_LIMIT,
+    MAX_CONTEXT_CHARS,
+    MAX_ITEM_LIMIT,
+    empty_item_page_info,
+)
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
-from law_scrapper_mcp.services.pagination import full_item_page
+from law_scrapper_mcp.services.pagination import (
+    effective_limit,
+    paginate_items,
+    parse_non_negative,
+)
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -47,6 +55,14 @@ def register(mcp: FastMCP) -> None:
             str | int,
             "Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500.",
         ] = 500,
+        limit: Annotated[
+            str | int,
+            "Maksymalna liczba trafień na stronie. Domyślnie 20, maksimum 100.",
+        ] = 20,
+        offset: Annotated[
+            str | int,
+            "Nieujemne przesunięcie początku strony. Domyślnie 0.",
+        ] = 0,
         ctx: Context = None,
     ) -> str:
         """
@@ -67,12 +83,13 @@ def register(mcp: FastMCP) -> None:
         assert ctx is not None
         document_store = get_app_context(ctx).document_store
 
-        context_chars_int = 500
-        with contextlib.suppress(ValueError, TypeError):
-            context_chars_int = int(context_chars)
-
-        hits = await document_store.search(eli, query, context_chars_int)
-
+        context_size = min(
+            parse_non_negative(context_chars, name="context_chars", default=500),
+            MAX_CONTEXT_CHARS,
+        )
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        hits = await document_store.search(eli, query, context_size)
         all_matches = [
             {
                 "section_id": hit.section_id,
@@ -82,16 +99,15 @@ def register(mcp: FastMCP) -> None:
             }
             for hit in hits
         ]
-        matches, page_info = full_item_page(all_matches)
-
-        response = EnrichedResponse(
-            data=SearchInActOutput(
-                eli=eli,
-                query=query,
-                matches=matches,
-                total_matches=page_info.total_count,
-                page_info=page_info,
-            ),
+        matches, page_info = paginate_items(all_matches, limit=page_limit, offset=page_offset)
+        output = SearchInActOutput(
+            eli=eli,
+            query=query,
+            matches=matches,
+            total_matches=page_info.total_count,
+            page_info=page_info,
         )
+
+        response = EnrichedResponse(data=output)
 
         return response.model_dump_json()

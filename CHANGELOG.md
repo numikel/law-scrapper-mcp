@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **`filter_results`: fixed ReDoS vulnerability** — Client-supplied patterns now compile through a linear-time matching engine instead of Python's backtracking `re`; lookaround and backreferences are rejected with a validation error instead of executed. Previously, `pattern="(.+)+!"` could freeze the server indefinitely.
+- **Streamable HTTP: restored Host/Origin allowlist regardless of bind address** — The official MCP SDK only auto-enables DNS-rebinding protection (`TransportSecuritySettings`) when the server binds to a literal loopback host (`127.0.0.1`/`localhost`/`::1`). This project defaults to `LAW_MCP_HOST=0.0.0.0` (required for Docker port publishing), which left that validation disabled — any `Host`/`Origin` header was accepted. `server.py` now passes `transport_security` explicitly, restoring the same loopback-only allowlist the pre-3.0.0 FastMCP server enforced unconditionally.
 
 ### Fixed
 

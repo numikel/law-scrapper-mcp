@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Literal, cast
 
 from mcp.server import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -28,6 +29,17 @@ from law_scrapper_mcp.services.search_service import SearchService
 from law_scrapper_mcp.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
+
+# The SDK only auto-enables DNS-rebinding protection when `host` is literally
+# "127.0.0.1"/"localhost"/"::1" (mcp.server.lowlevel.server.streamable_http_app).
+# This project binds "0.0.0.0" for Docker port publishing, which would silently
+# disable Host/Origin validation. Pass this explicitly to keep the loopback-only
+# posture regardless of the configured bind address.
+LOOPBACK_TRANSPORT_SECURITY = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
+    allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+)
 
 SERVER_INSTRUCTIONS = """Jesteś specjalistycznym asystentem do analizy polskiego prawa.
 Odpowiadaj użytkownikowi w jego języku. Dane z narzędzi (tytuły aktów, statusy, typy) są po polsku.
@@ -189,6 +201,7 @@ def main():
             port=settings.port,
             streamable_http_path="/mcp",
             stateless_http=True,
+            transport_security=LOOPBACK_TRANSPORT_SECURITY,
         )
     else:
         app.run(transport="stdio")

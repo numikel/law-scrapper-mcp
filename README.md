@@ -520,6 +520,8 @@ law-scrapper-mcp/
 
 When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
 
+**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). This project defaults `LAW_MCP_HOST` to `0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`LOOPBACK_TRANSPORT_SECURITY`) so requests are still validated against a loopback-only allowlist — `Host` outside `127.0.0.1:*` / `localhost:*` / `[::1]:*` gets `421`, `Origin` outside the matching `http://` variants gets `403` — independent of the bind address. This restores the same posture as the pre-3.0.0 FastMCP server. It does not add authentication or make the HTTP transport safe to expose beyond loopback; that remains a separate, not-yet-scoped project.
+
 ### Dockerfile
 
 The included `Dockerfile` builds a containerized Law Scrapper MCP server:
@@ -601,6 +603,7 @@ If upgrading from v1.0.2, note these breaking changes:
 - **Typed `AppContext`** — Lifespan resources accessed via `ctx.request_context.lifespan_context`
 - **Domain services** — `ComparisonService`, `RelationshipService`, and `DateService` extracted from tool adapters
 - **Transport tests** — Real STDIO subprocess, loopback HTTP, and MCP conformance in CI
+- **Explicit Host/Origin allowlist on HTTP** — `transport_security` is passed explicitly so DNS-rebinding protection applies regardless of the configured bind host; see [Security and deployment](#security-and-deployment)
 
 ## Migration guide (v2 to v3)
 

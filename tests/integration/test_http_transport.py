@@ -17,21 +17,28 @@ from mcp.types import CLIENT_CAPABILITIES_META_KEY, LATEST_PROTOCOL_VERSION, PRO
 from starlette.testclient import TestClient
 
 from law_scrapper_mcp.config import settings
-from law_scrapper_mcp.server import app
+from law_scrapper_mcp.server import LOOPBACK_TRANSPORT_SECURITY, app
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
 PROTOCOL_FLOOR = date(2026, 7, 28)
 PROTOCOL_FLOOR_VERSION = "2026-07-28"
 MAX_PORT_BIND_ATTEMPTS = 10
+LOOPBACK_HOST_HEADER = "127.0.0.1:7683"
 
 
 @pytest.fixture
 def asgi_app():
+    # host="0.0.0.0" mirrors the production bind address (Docker port publishing).
+    # The SDK only auto-enables Host/Origin validation for a literal loopback
+    # `host`, so this fixture must pass `transport_security` explicitly, exactly
+    # like `server.main()` does, or it would silently test a less-protected app
+    # than what actually runs.
     return app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
-        host="testserver",
+        host="0.0.0.0",
+        transport_security=LOOPBACK_TRANSPORT_SECURITY,
     )
 
 
@@ -41,6 +48,7 @@ def _rpc(client: TestClient, method: str, params: dict[str, object], request_id:
         "Content-Type": "application/json",
         "Mcp-Method": method,
         "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+        "Host": LOOPBACK_HOST_HEADER,
     }
     if method == "tools/call":
         headers["Mcp-Name"] = str(params["name"])
@@ -117,6 +125,99 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     ]
     assert failure_messages
     assert any("Nieprawidłowy format ELI" in message for message in failure_messages)
+
+
+def test_forged_host_header_is_rejected(asgi_app) -> None:
+    """A Host header outside the loopback allowlist must be rejected with 421.
+
+    Regression test: binding host="0.0.0.0" (this project's Docker default)
+    disables the SDK's auto-enabled DNS-rebinding protection, because the SDK
+    only auto-enables it for a literal loopback `host` value. Without the
+    explicit `transport_security` passed in `server.main()`, this request
+    returned 200.
+    """
+    with TestClient(asgi_app) as client:
+        response = client.post(
+            "/mcp",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+                "Mcp-Method": "server/discover",
+                "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+                "Host": "evil.example.com",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "server/discover",
+                "params": {
+                    "_meta": {
+                        PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
+                        CLIENT_CAPABILITIES_META_KEY: {},
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 421
+
+
+def test_forged_origin_header_is_rejected(asgi_app) -> None:
+    """An Origin header outside the loopback allowlist must be rejected with 403."""
+    with TestClient(asgi_app) as client:
+        response = client.post(
+            "/mcp",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+                "Mcp-Method": "server/discover",
+                "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+                "Host": LOOPBACK_HOST_HEADER,
+                "Origin": "http://evil.example.com",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "server/discover",
+                "params": {
+                    "_meta": {
+                        PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
+                        CLIENT_CAPABILITIES_META_KEY: {},
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 403
+
+
+def test_legitimate_loopback_origin_is_accepted(asgi_app) -> None:
+    """A loopback Origin must still be accepted; the allowlist is not empty-passes-all."""
+    with TestClient(asgi_app) as client:
+        response = client.post(
+            "/mcp",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+                "Mcp-Method": "server/discover",
+                "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+                "Host": LOOPBACK_HOST_HEADER,
+                "Origin": "http://127.0.0.1:5173",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "server/discover",
+                "params": {
+                    "_meta": {
+                        PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
+                        CLIENT_CAPABILITIES_META_KEY: {},
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 200
 
 
 def _allocate_loopback_port() -> int:

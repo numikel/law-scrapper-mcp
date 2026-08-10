@@ -87,6 +87,7 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
 - ASGI smoke tests for `/health` and `/mcp` JSON-RPC
 - Loopback subprocess on ephemeral port with real `mcp.Client` over Streamable HTTP
 - Asserts `stateless_http=True`, path `/mcp`, protocol version floor
+- DNS-rebinding regression tests: `Host` outside the loopback allowlist → `421`, `Origin` outside it → `403`, legitimate loopback `Origin` → `200` — the `asgi_app` fixture builds with `host="0.0.0.0"` (the production default) and the same explicit `transport_security` `server.main()` passes, so these fail if that wiring is ever dropped
 
 **CI conformance** (`.github/workflows/ci.yml`):
 - Starts server with `LAW_MCP_TRANSPORT=streamable-http`

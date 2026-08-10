@@ -33,8 +33,12 @@ class PageInfo(BaseModel):
     @model_validator(mode="after")
     def validate_page_consistency(self) -> Self:
         """Ensure pagination metadata is internally consistent."""
-        if self.limit > 0 and self.returned_count > self.limit:
-            raise ValueError("returned_count cannot exceed limit when limit is positive")
+        if self.returned_count > self.limit:
+            raise ValueError("returned_count cannot exceed limit")
+
+        available = max(self.total_count - self.offset, 0)
+        if self.returned_count > available:
+            raise ValueError("returned_count cannot exceed remaining items for the current offset")
 
         end = min(self.offset + self.returned_count, self.total_count)
         expected_truncated = end < self.total_count

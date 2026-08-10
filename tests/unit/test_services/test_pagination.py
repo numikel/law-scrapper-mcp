@@ -241,8 +241,52 @@ def test_content_error_page_info_treats_empty_section_as_characters() -> None:
             "next_offset": 99,
             "unit": PageUnit.ITEMS,
         },
+        {
+            "limit": 0,
+            "offset": 0,
+            "returned_count": 1,
+            "total_count": 2,
+            "was_truncated": True,
+            "next_offset": None,
+            "unit": PageUnit.ITEMS,
+        },
+        {
+            "limit": 5,
+            "offset": 10,
+            "returned_count": 1,
+            "total_count": 2,
+            "was_truncated": False,
+            "next_offset": None,
+            "unit": PageUnit.ITEMS,
+        },
     ],
 )
 def test_page_info_rejects_inconsistent_construction(invalid_page_info: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         PageInfo(**invalid_page_info)
+
+
+def test_page_info_rejects_returned_count_above_zero_limit() -> None:
+    with pytest.raises(ValidationError):
+        PageInfo(
+            limit=0,
+            offset=0,
+            returned_count=1,
+            total_count=2,
+            was_truncated=True,
+            next_offset=None,
+            unit=PageUnit.ITEMS,
+        )
+
+
+def test_page_info_rejects_returned_count_beyond_remaining_items() -> None:
+    with pytest.raises(ValidationError):
+        PageInfo(
+            limit=5,
+            offset=10,
+            returned_count=1,
+            total_count=2,
+            was_truncated=False,
+            next_offset=None,
+            unit=PageUnit.ITEMS,
+        )

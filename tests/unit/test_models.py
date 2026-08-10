@@ -13,13 +13,20 @@ from law_scrapper_mcp.models.enums import (
     Publisher,
     RelationshipType,
 )
+from law_scrapper_mcp.models.pagination import PageInfo, PageUnit
 from law_scrapper_mcp.models.tool_inputs import ActDetailsRequest, SearchRequest, parse_eli
 from law_scrapper_mcp.models.tool_outputs import (
     ActSummaryOutput,
+    ChangesOutput,
+    ContentOutput,
     EnrichedResponse,
+    FilterOutput,
     Hint,
+    MetadataOutput,
+    SearchInActOutput,
     SearchOutput,
 )
+from law_scrapper_mcp.services.pagination import DEFAULT_ITEM_LIMIT, paginate_items
 
 
 class TestParseEli:
@@ -222,6 +229,74 @@ class TestToolOutputModels:
         assert len(output.results) == 1
         assert output.total_count == 1
         assert output.returned_count == 1
+
+
+class TestPaginationModels:
+    """Tests for shared pagination models and paginated outputs."""
+
+    def test_page_info_serializes_unit_enum(self) -> None:
+        _, info = paginate_items([1, 2, 3], limit=2, offset=0)
+
+        serialized = info.model_dump()
+
+        assert serialized["unit"] == PageUnit.ITEMS
+        assert serialized["returned_count"] == 2
+        assert serialized["total_count"] == 3
+
+    def test_paginated_outputs_expose_page_info(self) -> None:
+        _, page_info = paginate_items([], limit=DEFAULT_ITEM_LIMIT, offset=0)
+
+        assert ContentOutput(
+            eli="DU/2024/1",
+            section_title="Spis treści",
+            content="",
+            page_info=page_info,
+        ).page_info.unit == PageUnit.ITEMS
+        assert SearchInActOutput(
+            eli="DU/2024/1",
+            query="test",
+            matches=[],
+            total_matches=0,
+            page_info=page_info,
+        ).page_info == page_info
+        assert MetadataOutput(
+            category="all",
+            metadata={},
+            count=0,
+            page_info=page_info,
+        ).page_info == page_info
+        assert ChangesOutput(
+            date_range="2024-01-01 to 2024-12-31",
+            publisher="DU",
+            keywords=[],
+            changes=[],
+            total_count=0,
+            page_info=page_info,
+        ).page_info == page_info
+        assert FilterOutput(
+            source_result_set_id="rs_1",
+            results=[],
+            original_count=0,
+            filtered_count=0,
+            page_info=page_info,
+        ).page_info == page_info
+
+    def test_paginated_outputs_default_empty_item_page_info(self) -> None:
+        output = ContentOutput(
+            eli="DU/2024/1",
+            section_title="Spis treści",
+            content="",
+        )
+
+        assert output.page_info == PageInfo(
+            limit=DEFAULT_ITEM_LIMIT,
+            offset=0,
+            returned_count=0,
+            total_count=0,
+            was_truncated=False,
+            next_offset=None,
+            unit=PageUnit.ITEMS,
+        )
 
 
 class TestApiResponseModels:

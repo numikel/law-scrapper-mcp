@@ -13,7 +13,6 @@ from law_scrapper_mcp.client.cache import TTLCache
 pytestmark = pytest.mark.asyncio
 
 
-
 class TestTTLCacheBasicOperations:
     """Tests for basic cache operations."""
 

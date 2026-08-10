@@ -1,5 +1,7 @@
 """Tests for shared pagination helpers."""
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -138,7 +140,8 @@ def test_full_item_page_matches_payload_without_truncating() -> None:
 
 
 def test_full_item_page_empty_uses_default_limit() -> None:
-    page, info = full_item_page([])
+    empty: list[int] = []
+    page, info = full_item_page(empty)
 
     assert page == []
     assert info.limit == DEFAULT_ITEM_LIMIT
@@ -263,7 +266,7 @@ def test_content_error_page_info_treats_empty_section_as_characters() -> None:
 )
 def test_page_info_rejects_inconsistent_construction(invalid_page_info: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
-        PageInfo(**invalid_page_info)
+        PageInfo(**cast(Any, invalid_page_info))
 
 
 def test_page_info_rejects_returned_count_above_zero_limit() -> None:

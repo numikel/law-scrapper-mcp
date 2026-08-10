@@ -1,4 +1,5 @@
 """Dependency policy tests for the staged MCP migration."""
+
 import tomllib
 from pathlib import Path
 

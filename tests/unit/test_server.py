@@ -29,6 +29,7 @@ EXPECTED_TOOLS = sorted(
     ]
 )
 
+
 async def test_all_tools_registered() -> None:
     """list_tools() returns exactly 13 tools."""
     async with Client(app) as client:

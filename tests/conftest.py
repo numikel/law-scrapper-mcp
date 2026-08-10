@@ -172,4 +172,3 @@ async def mcp_client(mock_api_responses):
 
     async with Client(app) as client:
         yield client
-

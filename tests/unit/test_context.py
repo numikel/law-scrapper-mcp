@@ -34,7 +34,7 @@ async def test_lifespan_yields_frozen_app_context() -> None:
     async with lifespan(app) as app_context:
         assert isinstance(app_context, AppContext)
         with pytest.raises(FrozenInstanceError):
-            app_context.client = None  # type: ignore[misc]
+            app_context.client = None  # type: ignore[misc, assignment]
 
 
 async def test_get_app_context_reads_typed_value_from_request_context() -> None:

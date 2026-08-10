@@ -29,11 +29,7 @@ class SearchService:
     ) -> SearchOutput:
         effective_limit = limit if limit is not None else 20
         page = results[:effective_limit]
-        result_set_id = (
-            await self._result_store.store(page, query_summary, total_count)
-            if page
-            else None
-        )
+        result_set_id = await self._result_store.store(page, query_summary, total_count) if page else None
         return SearchOutput(
             results=page,
             total_count=total_count,

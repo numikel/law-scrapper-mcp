@@ -55,11 +55,7 @@ class MetadataService:
         """Return one deterministic metadata page across categories."""
         raw = await self.get_metadata(category)
         categories = self.METADATA_ORDER if category == MetadataCategory.ALL else (category,)
-        flattened = [
-            (current.value, item)
-            for current in categories
-            for item in raw.get(current.value, [])
-        ]
+        flattened = [(current.value, item) for current in categories for item in raw.get(current.value, [])]
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
         page, page_info = paginate_items(flattened, limit=page_limit, offset=page_offset)

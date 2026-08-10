@@ -133,9 +133,7 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
     parts = eli.split("/")
 
     if len(parts) != 3:
-        raise ValueError(
-            f"Nieprawidłowy format ELI: {eli}. Oczekiwany: wydawca/rok/pozycja (np. DU/2024/1716)"
-        )
+        raise ValueError(f"Nieprawidłowy format ELI: {eli}. Oczekiwany: wydawca/rok/pozycja (np. DU/2024/1716)")
 
     publisher, year_str, pos_str = parts
 

@@ -77,11 +77,7 @@ def _assert_page(
     assert page_info["total_count"] == total
     assert page_info["was_truncated"] is truncated
     assert page_info["unit"] == unit
-    assert page_info["next_offset"] == (
-        offset + returned
-        if limit > 0 and returned > 0 and truncated
-        else None
-    )
+    assert page_info["next_offset"] == (offset + returned if limit > 0 and returned > 0 and truncated else None)
 
 
 async def _assert_item_matrix(
@@ -191,10 +187,7 @@ async def test_section_character_pages_are_contiguous(mcp_client) -> None:
 
     assert first_payload["data"]["page_info"]["unit"] == "characters"
     assert second_payload["data"]["page_info"]["offset"] == 5
-    assert (
-        first_payload["data"]["content"] + second_payload["data"]["content"]
-        == full_payload["data"]["content"][:10]
-    )
+    assert first_payload["data"]["content"] + second_payload["data"]["content"] == full_payload["data"]["content"][:10]
 
     total = int(first_payload["data"]["page_info"]["total_count"])
     for arguments, effective_limit, effective_offset in [

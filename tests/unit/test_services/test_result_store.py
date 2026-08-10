@@ -451,6 +451,7 @@ class TestResultStoreFilterAndStore:
         assert output.page_info.returned_count == 1
         assert output.page_info.total_count == 2
 
+        assert output.result_set_id is not None
         stored = await store.get(output.result_set_id)
         assert stored is not None
         assert len(stored.results) == 2

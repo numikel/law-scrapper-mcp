@@ -33,11 +33,7 @@ class ChangesService:
         query_summary = f"changes: {date_range} | publisher={publisher}"
         if keywords:
             query_summary += f" | keywords={','.join(keywords)}"
-        result_set_id = (
-            await self._result_store.store(results, query_summary, len(results))
-            if results
-            else None
-        )
+        result_set_id = await self._result_store.store(results, query_summary, len(results)) if results else None
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
         changes, page_info = paginate_items(results, limit=page_limit, offset=page_offset)

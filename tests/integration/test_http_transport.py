@@ -101,25 +101,19 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     discover_result = discover.json()["result"]
     supported_versions = discover_result["supportedVersions"]
     assert supported_versions
-    assert any(
-        date.fromisoformat(version) >= PROTOCOL_FLOOR for version in supported_versions
-    )
+    assert any(date.fromisoformat(version) >= PROTOCOL_FLOOR for version in supported_versions)
     assert PROTOCOL_FLOOR_VERSION in supported_versions
 
     assert len(listed.json()["result"]["tools"]) == 13
 
     success_result = success.json()["result"]
     assert success_result["isError"] is False
-    assert (
-        success_result["structuredContent"]["data"]["calculated_date"] == "2026-01-02"
-    )
+    assert success_result["structuredContent"]["data"]["calculated_date"] == "2026-01-02"
 
     failure_result = failure.json()["result"]
     assert failure_result["isError"] is True
     failure_messages = [
-        item["text"]
-        for item in failure_result["content"]
-        if item.get("type") == "text" and item.get("text")
+        item["text"] for item in failure_result["content"] if item.get("type") == "text" and item.get("text")
     ]
     assert failure_messages
     assert any("Nieprawidłowy format ELI" in message for message in failure_messages)
@@ -186,9 +180,7 @@ def live_http_server(tmp_path: Path):
                 if _wait_for_http_server(process, port=port):
                     yield f"http://127.0.0.1:{port}/mcp"
                     return
-                startup_errors.append(
-                    f"port {port} failed:\n{log_path.read_text(encoding='utf-8')}"
-                )
+                startup_errors.append(f"port {port} failed:\n{log_path.read_text(encoding='utf-8')}")
             finally:
                 _stop_http_server(process)
 

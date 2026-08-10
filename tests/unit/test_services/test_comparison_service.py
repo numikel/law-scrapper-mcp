@@ -1,6 +1,7 @@
 """Tests for ComparisonService."""
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -28,7 +29,7 @@ def _details(eli: str, title: str, keywords: list[str]) -> ActDetailOutput:
 
 
 def _minimal_details(**overrides: object) -> ActDetailOutput:
-    defaults: dict[str, object] = {
+    defaults: dict[str, Any] = {
         "eli": "DU/2024/1",
         "publisher": "DU",
         "year": 2024,
@@ -42,7 +43,7 @@ def _minimal_details(**overrides: object) -> ActDetailOutput:
         "keywords": [],
     }
     defaults.update(overrides)
-    return ActDetailOutput(**defaults)
+    return ActDetailOutput.model_validate(defaults)
 
 
 async def test_compare_fetches_both_acts_concurrently() -> None:

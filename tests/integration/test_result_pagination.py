@@ -16,11 +16,7 @@ def _assert_page(
 ) -> None:
     returned = min(limit, max(total - offset, 0))
     truncated = min(offset + returned, total) < total
-    next_offset = (
-        offset + returned
-        if limit > 0 and returned > 0 and truncated
-        else None
-    )
+    next_offset = offset + returned if limit > 0 and returned > 0 and truncated else None
     assert page_info == {
         "limit": limit,
         "offset": offset,

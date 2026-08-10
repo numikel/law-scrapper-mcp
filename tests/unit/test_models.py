@@ -245,47 +245,64 @@ class TestPaginationModels:
     def test_paginated_outputs_expose_page_info(self) -> None:
         _, page_info = paginate_items([], limit=DEFAULT_ITEM_LIMIT, offset=0)
 
-        assert ContentOutput(
-            eli="DU/2024/1",
-            section_title="Spis treści",
-            content="",
-            page_info=page_info,
-        ).page_info.unit == PageUnit.ITEMS
-        assert SearchInActOutput(
-            eli="DU/2024/1",
-            query="test",
-            matches=[],
-            total_matches=0,
-            page_info=page_info,
-        ).page_info == page_info
-        assert MetadataOutput(
-            category="all",
-            metadata={},
-            count=0,
-            page_info=page_info,
-        ).page_info == page_info
-        assert ChangesOutput(
-            date_range="2024-01-01 to 2024-12-31",
-            publisher="DU",
-            keywords=[],
-            changes=[],
-            total_count=0,
-            page_info=page_info,
-        ).page_info == page_info
-        assert FilterOutput(
-            source_result_set_id="rs_1",
-            results=[],
-            original_count=0,
-            filtered_count=0,
-            page_info=page_info,
-        ).page_info == page_info
-
-    def test_paginated_outputs_require_page_info(self) -> None:
-        with pytest.raises(ValidationError):
+        assert (
             ContentOutput(
                 eli="DU/2024/1",
                 section_title="Spis treści",
                 content="",
+                page_info=page_info,
+            ).page_info.unit
+            == PageUnit.ITEMS
+        )
+        assert (
+            SearchInActOutput(
+                eli="DU/2024/1",
+                query="test",
+                matches=[],
+                total_matches=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            MetadataOutput(
+                category="all",
+                metadata={},
+                count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            ChangesOutput(
+                date_range="2024-01-01 to 2024-12-31",
+                publisher="DU",
+                keywords=[],
+                changes=[],
+                total_count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            FilterOutput(
+                source_result_set_id="rs_1",
+                results=[],
+                original_count=0,
+                filtered_count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+
+    def test_paginated_outputs_require_page_info(self) -> None:
+        with pytest.raises(ValidationError):
+            ContentOutput.model_validate(
+                {
+                    "eli": "DU/2024/1",
+                    "section_title": "Spis treści",
+                    "content": "",
+                }
             )
 
     def test_models_package_exports_page_types(self) -> None:

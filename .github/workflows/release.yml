@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Parse version from tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Require per-version changelog
+        run: test -f "docs/changelogs/v${VERSION}.md"
+      - name: Require version match
+        run: |
+          set -euo pipefail
+          toml_version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$toml_version" != "$VERSION" ]; then
+            echo "ERROR: pyproject.toml version ($toml_version) != tag ($VERSION)"
+            exit 1
+          fi
+          echo "Version OK: $VERSION"
+
+  build:
+    name: Build package
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f94383a0e2586940a7d96dd1d2b1297d7350b694 # v5.3.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@4bec352932f913d077d7045c43d9ebbd99499878 # v4.4.3
+        with:
+          name: dist
+          path: dist/
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Parse version from tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Download artifacts
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: dist
+          path: dist
+
+      - name: Compute checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe0f22b73ab194246378bfde45012440d4c15 # v2.2.1
+        with:
+          body_path: docs/changelogs/v${{ env.VERSION }}.md
+          files: |
+            dist/*
+            dist/checksums.txt

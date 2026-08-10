@@ -6,34 +6,141 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  test:
+  pin-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Reject unpinned actions
+        run: |
+          set -euo pipefail
+          if grep -rEn 'uses:\s+[^@]+@v[0-9]' .github/workflows/; then
+            echo "ERROR: found actions pinned to mutable tags; pin to commit SHA"
+            exit 1
+          fi
+          if grep -rEn 'uses:\s+[^@]+@(stable|main|master)\b' .github/workflows/; then
+            echo "ERROR: found actions pinned to mutable refs; pin to commit SHA"
+            exit 1
+          fi
+          echo "All actions pinned to SHA"
 
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@08410f972b78f692dbb3fb550c00b0ed6636d394 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+
+  lint:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@f94383a0e2586940a7d96dd1d2b1297d7350b694 # v5.3.0
         with:
           enable-cache: true
-
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         run: uv python install 3.13
-
       - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
         run: uv sync --extra dev
-
       - name: Ruff check
+        if: needs.changes.outputs.code == 'true'
         run: uv run ruff check src/
-
       - name: Mypy
+        if: needs.changes.outputs.code == 'true'
         run: uv run mypy src/law_scrapper_mcp/
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
 
+  test:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install uv
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@f94383a0e2586940a7d96dd1d2b1297d7350b694 # v5.3.0
+        with:
+          enable-cache: true
+      - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
+        run: uv python install 3.13
+      - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
+        run: uv sync --extra dev
       - name: Unit tests
+        if: needs.changes.outputs.code == 'true'
         run: uv run pytest tests/unit/ -v
-
       - name: Integration tests
+        if: needs.changes.outputs.code == 'true'
         run: uv run pytest tests/integration/ -v -m integration
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
+
+  release-prep-check:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Require changelog when package version changes
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          if ! git diff "$base" "$head" -- pyproject.toml | grep -q '^[+-].*version'; then
+            echo "pyproject.toml version unchanged — skip changelog check"
+            exit 0
+          fi
+          new_version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          changelog="docs/changelogs/v${new_version}.md"
+          if git diff --name-only "$base" "$head" | grep -Fxq "$changelog"; then
+            echo "Found $changelog in PR"
+            exit 0
+          fi
+          echo "ERROR: pyproject.toml version bumped to ${new_version} but ${changelog} not added in this PR"
+          exit 1
+
+  audit:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install uv
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@f94383a0e2586940a7d96dd1d2b1297d7350b694 # v5.3.0
+        with:
+          enable-cache: true
+      - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
+        run: uv python install 3.13
+      - name: Security audit
+        if: needs.changes.outputs.code == 'true'
+        run: uv run --with pip-audit pip-audit
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"

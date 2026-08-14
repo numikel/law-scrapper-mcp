@@ -1,0 +1,35 @@
+# MCP Conformance baseline for this application server.
+#
+# Law Scrapper MCP is a tools-focused domain server (13 legal-act tools).
+# It intentionally does not implement optional MCP surfaces exercised by the
+# published "active" suite (resources payloads, prompts payloads, sampling,
+# elicitation, multi-modal tool results, etc.). List those scenarios here so CI
+# still fails on unexpected regressions while remaining green for known gaps.
+#
+# When @modelcontextprotocol/conformance gains support for the SDK's
+# LATEST_PROTOCOL_VERSION, CI runs the suite with this baseline. Until then the
+# workflow skips the suite with a warning (design: do not mask lag by testing
+# an older protocol era).
+
+server:
+  - logging-set-level
+  - completion-complete
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-with-logging
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  - resources-subscribe
+  - resources-unsubscribe
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image

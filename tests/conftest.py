@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 import respx
 from httpx import Response
 
@@ -64,7 +65,7 @@ def cache() -> TTLCache:
     return TTLCache(max_entries=100)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_client(cache: TTLCache) -> AsyncGenerator[SejmApiClient]:
     """Create a SejmApiClient with mocked httpx.
 
@@ -135,10 +136,17 @@ def mock_api_responses(
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024").mock(return_value=Response(200, json=search_results))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
+        _long_context_padding = "x" * 5_000
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.html").mock(
             return_value=Response(
                 200,
-                text="<html><body><h1>Test Act</h1><p>Art. 1. Content here.</p></body></html>",
+                text=(
+                    "<html><body><h1>Test Act</h1>"
+                    f"<h2>First section</h2><p>{_long_context_padding}Content{_long_context_padding} alpha.</p>"
+                    "<h2>Second section</h2><p>Content beta.</p>"
+                    "<h2>Third section</h2><p>Content gamma.</p>"
+                    "</body></html>"
+                ),
             )
         )
         respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/references").mock(
@@ -150,9 +158,15 @@ def mock_api_responses(
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    """Use asyncio as the anyio backend for MCP client tests."""
+    return "asyncio"
+
+
+@pytest.fixture
 async def mcp_client(mock_api_responses):
-    """FastMCP in-memory client with mocked Sejm API responses."""
-    from fastmcp import Client
+    """Official in-memory MCP client with mocked Sejm API responses."""
+    from mcp import Client
 
     from law_scrapper_mcp.server import app
 

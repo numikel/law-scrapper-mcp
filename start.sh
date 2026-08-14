@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Law Scrapper MCP v2.0 — startup script (Linux/macOS)
+# Law Scrapper MCP v3.0 — startup script (Linux/macOS)
 #
 # Usage:
 #   ./start.sh              # STDIO transport (default)

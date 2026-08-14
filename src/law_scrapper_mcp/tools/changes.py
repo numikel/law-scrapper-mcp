@@ -3,46 +3,55 @@
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
+from law_scrapper_mcp.context import AppContext, get_app_context
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
+from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register changes tracking tool."""
 
-    @mcp.tool(tags={"analysis", "tracking"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: ChangesOutput(
-            date_range=f"{kw.get('date_from', '')} do {kw.get('date_to', 'dziś')}",
-            publisher=kw.get("publisher", "DU"),
-            keywords=kw.get("keywords") or [],
-            changes=[],
-            total_count=0,
-        ),
-    )
+    @mcp.tool(meta={"tags": ["analysis", "tracking"]})
+    @handle_tool_errors
     async def track_legal_changes(
         date_from: Annotated[
             str,
-            "Data początkowa śledzenia (YYYY-MM-DD). Np. '2024-01-01'.",
+            Field(description="Data początkowa śledzenia (YYYY-MM-DD). Np. '2024-01-01'."),
         ],
+        ctx: Context[AppContext],
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'."),
         ] = "DU",
         date_to: Annotated[
             str | None,
-            "Data końcowa śledzenia (YYYY-MM-DD). Domyślnie dzisiejsza data.",
+            Field(description="Data końcowa śledzenia (YYYY-MM-DD). Domyślnie dzisiejsza data."),
         ] = None,
         keywords: Annotated[
             list[str] | None,
-            "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie'].",
+            Field(
+                description=(
+                    "Słowa kluczowe do filtrowania zmian (logika AND). Np. ['podatek'], ['zdrowotny', 'ubezpieczenie']."
+                ),
+            ),
         ] = None,
-        ctx: Context = None,
-    ) -> str:
+        limit: Annotated[
+            str | int | None,
+            Field(description="Maksymalna liczba zmian na stronie odpowiedzi (domyślnie 20, maks. 100)."),
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            Field(description="Nieujemne przesunięcie strony zmian."),
+        ] = 0,
+    ) -> EnrichedResponse[ChangesOutput]:
         """
         Śledź zmiany prawne i nowe publikacje w zakresie dat.
 
@@ -57,34 +66,15 @@ def register(mcp: FastMCP) -> None:
         - track_legal_changes(date_from="2024-06-01", publisher="MP") - Zmiany w MP od czerwca 2024
         - track_legal_changes(date_from="2024-01-01", keywords=["zdrowotny"]) - Zmiany zdrowotne
         """
-        assert ctx is not None
-        changes_service = ctx.lifespan_context["changes_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        changes_service = get_app_context(ctx).changes_service
 
-        results, date_range = await changes_service.track_changes(
+        output = await changes_service.track_changes(
             publisher=publisher,
             date_from=date_from,
             date_to=date_to,
             keywords=keywords,
+            limit=parse_non_negative(limit, name="limit", default=DEFAULT_ITEM_LIMIT),
+            offset=parse_non_negative(offset, name="offset", default=0),
         )
 
-        # Store results for subsequent filtering
-        result_set_id = None
-        if results:
-            query_summary = f"changes: {date_range} | publisher={publisher}"
-            if keywords:
-                query_summary += f" | keywords={','.join(keywords)}"
-            result_set_id = await result_store.store(results, query_summary, len(results))
-
-        response = EnrichedResponse(
-            data=ChangesOutput(
-                date_range=date_range,
-                publisher=publisher,
-                keywords=keywords or [],
-                changes=results,
-                total_count=len(results),
-                result_set_id=result_set_id,
-            ),
-        )
-
-        return response.model_dump_json()
+        return EnrichedResponse[ChangesOutput](data=output)

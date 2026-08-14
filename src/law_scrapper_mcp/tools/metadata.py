@@ -3,8 +3,11 @@
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
@@ -13,28 +16,36 @@ from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 logger = logging.getLogger(__name__)
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register metadata tool."""
 
-    @mcp.tool(tags={"metadata"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: MetadataOutput(
-            category=kw.get("category", "all"),
-            metadata={},
-            count=0,
-        ),
-    )
+    @mcp.tool(meta={"tags": ["metadata"]})
+    @handle_tool_errors
     async def get_system_metadata(
+        ctx: Context[AppContext],
         category: Annotated[
             str,
-            "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
-            "'publishers' (wydawcy: DU, MP), 'statuses' (statusy aktów), "
-            "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
-            "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
-            "Domyślnie 'all'.",
+            Field(
+                description=(
+                    "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
+                    "'publishers' (wydawcy: DU, MP), 'statuses' (statusy aktów), "
+                    "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
+                    "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
+                    "Domyślnie 'all'."
+                ),
+            ),
         ] = "all",
-        ctx: Context = None,
-    ) -> str:
+        limit: Annotated[
+            str | int | None,
+            Field(
+                description="Maksymalna liczba wartości metadanych na stronie odpowiedzi (domyślnie 20, maks. 100).",
+            ),
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            Field(description="Nieujemne przesunięcie strony metadanych."),
+        ] = 0,
+    ) -> EnrichedResponse[MetadataOutput]:
         """
         Pobierz metadane systemu aktów prawnych.
 
@@ -48,24 +59,20 @@ def register(mcp: FastMCP) -> None:
         - get_system_metadata(category="statuses") - Statusy aktów (obowiązujący, uchylony itp.)
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
-        assert ctx is not None
-        metadata_service = ctx.lifespan_context["metadata_service"]
+        metadata_service = get_app_context(ctx).metadata_service
 
-        # Convert string to enum
         try:
             category_enum = MetadataCategory(category)
         except ValueError:
             category_enum = MetadataCategory.ALL
 
-        metadata = await metadata_service.get_metadata(category_enum)
-
-        response = EnrichedResponse(
-            data=MetadataOutput(
-                category=category,
-                metadata=metadata,
-                count=sum(len(v) if isinstance(v, list) else 1 for v in metadata.values()),
-            ),
-            hints=metadata_hints(category),
+        output = await metadata_service.get_metadata_page(
+            category_enum,
+            limit=limit,
+            offset=offset,
         )
 
-        return response.model_dump_json()
+        return EnrichedResponse[MetadataOutput](
+            data=output,
+            hints=metadata_hints(category_enum.value),
+        )

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from fastmcp import Client
+from mcp import Client
 
+from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.server import app, lifespan
+
+pytestmark = pytest.mark.asyncio
 
 EXPECTED_TOOLS = sorted(
     [
@@ -26,23 +29,11 @@ EXPECTED_TOOLS = sorted(
     ]
 )
 
-LIFESPAN_KEYS = {
-    "client",
-    "cache",
-    "document_store",
-    "content_processor",
-    "result_store",
-    "metadata_service",
-    "search_service",
-    "act_service",
-    "changes_service",
-}
-
 
 async def test_all_tools_registered() -> None:
     """list_tools() returns exactly 13 tools."""
     async with Client(app) as client:
-        tools = await client.list_tools()
+        tools = (await client.list_tools()).tools
         tool_names = sorted(tool.name for tool in tools)
 
     assert len(tool_names) == 13
@@ -52,38 +43,44 @@ async def test_all_tools_registered() -> None:
 async def test_tool_names_match_expected() -> None:
     """Tool names match the MCP contract."""
     async with Client(app) as client:
-        tools = await client.list_tools()
+        tools = (await client.list_tools()).tools
         tool_names = {tool.name for tool in tools}
 
     assert tool_names == set(EXPECTED_TOOLS)
 
 
+async def test_all_tools_have_concrete_output_schemas() -> None:
+    async with Client(app) as client:
+        tools = (await client.list_tools()).tools
+
+    assert len(tools) == 13
+    for tool in tools:
+        assert tool.output_schema is not None
+        assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
+        assert set(tool.output_schema["properties"]) != {"result"}
+
+
 async def test_lifespan_yields_services() -> None:
-    """Lifespan initializes all required service keys."""
-    async with lifespan(app) as ctx:
-        assert set(ctx.keys()) == LIFESPAN_KEYS
-        assert ctx["metadata_service"] is not None
-        assert ctx["search_service"] is not None
-        assert ctx["act_service"] is not None
+    """Lifespan initializes all required service attributes."""
+    async with lifespan(app) as app_context:
+        assert isinstance(app_context, AppContext)
+        assert app_context.metadata_service is not None
+        assert app_context.search_service is not None
+        assert app_context.act_service is not None
+        assert app_context.comparison_service is not None
+        assert app_context.relationship_service is not None
+        assert app_context.date_service is not None
 
 
 async def test_lifespan_result_store_receives_configured_limits(monkeypatch) -> None:
-    """Use non-default values on purpose.
-
-    512/False/100 are both the `Settings` defaults AND the `ResultStore`
-    constructor defaults, so a defaults-only test still passes after the
-    injection is removed (false positive) and is sensitive to ambient
-    `LAW_MCP_MAX_PATTERN_LENGTH`/`LAW_MCP_FILTER_MAX_RECORDS` in the runner
-    environment (false negative). Values 256/42 match neither source, so the
-    test fails if the injection disappears from server.py.
-    """
+    """Use non-default values on purpose."""
     from law_scrapper_mcp import server as server_module
 
     monkeypatch.setattr(server_module.settings, "max_pattern_length", 256)
     monkeypatch.setattr(server_module.settings, "filter_max_records", 42)
 
-    async with lifespan(app) as ctx:
-        store = ctx["result_store"]
+    async with lifespan(app) as app_context:
+        store = app_context.result_store
         assert store.max_pattern_length == 256
         assert store.pattern_length_limit_clamped is False
         assert store.max_records == 42
@@ -96,8 +93,8 @@ async def test_lifespan_result_store_uses_clamped_limit(monkeypatch) -> None:
     monkeypatch.setattr(server_module.settings, "max_pattern_length", 10000)
     monkeypatch.setattr(server_module.settings, "filter_max_records", 7)
 
-    async with lifespan(app) as ctx:
-        store = ctx["result_store"]
+    async with lifespan(app) as app_context:
+        store = app_context.result_store
 
         assert store.max_pattern_length == 4096
         assert store.pattern_length_limit_clamped is True
@@ -105,23 +102,17 @@ async def test_lifespan_result_store_uses_clamped_limit(monkeypatch) -> None:
 
 
 async def test_lifespan_result_store_floors_zero_record_limit(monkeypatch) -> None:
-    """The Task 3 floor must apply, not be bypassed via the raw field.
-
-    Without it, `LAW_MCP_FILTER_MAX_RECORDS=0` would permanently break
-    filter_results: every call on a non-empty set would be refused. This test
-    fails if server.py injects `settings.filter_max_records` instead of
-    `settings.effective_filter_max_records`.
-    """
+    """The Task 3 floor must apply, not be bypassed via the raw field."""
     from law_scrapper_mcp import server as server_module
 
     monkeypatch.setattr(server_module.settings, "filter_max_records", 0)
 
-    async with lifespan(app) as ctx:
-        assert ctx["result_store"].max_records == 1
+    async with lifespan(app) as app_context:
+        assert app_context.result_store.max_records == 1
 
 
 async def test_lifespan_warns_about_clamped_pattern_limit(monkeypatch, caplog) -> None:
-    """Clamping must be visible in the startup log"""
+    """Clamping must be visible in the startup log."""
     import logging
 
     from law_scrapper_mcp import server as server_module
@@ -137,18 +128,12 @@ async def test_lifespan_warns_about_clamped_pattern_limit(monkeypatch, caplog) -
 
 
 async def test_lifespan_closes_client_when_body_raises() -> None:
-    """An exception inside `async with lifespan(app)` must not skip cleanup.
-
-    Without `try/finally` around `yield`, an error in the block (e.g. a failed
-    assertion in a test, or a production failure) skipped `await client.close()`
-    and left an open `httpx.AsyncClient`. The assertion checks the public
-    `httpx.AsyncClient.is_closed` state, not merely that close() was called.
-    """
+    """An exception inside `async with lifespan(app)` must not skip cleanup."""
     httpx_client: httpx.AsyncClient | None = None
 
     with pytest.raises(RuntimeError, match="boom"):
-        async with lifespan(app) as ctx:
-            httpx_client = ctx["client"]._client
+        async with lifespan(app) as app_context:
+            httpx_client = app_context.client._client
             raise RuntimeError("boom")
 
     assert httpx_client is not None

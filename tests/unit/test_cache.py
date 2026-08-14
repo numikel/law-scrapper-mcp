@@ -6,7 +6,11 @@ import asyncio
 import time
 from unittest.mock import patch
 
+import pytest
+
 from law_scrapper_mcp.client.cache import TTLCache
+
+pytestmark = pytest.mark.asyncio
 
 
 class TestTTLCacheBasicOperations:

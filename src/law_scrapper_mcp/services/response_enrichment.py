@@ -11,7 +11,8 @@ def search_hints(
     eli: str | None = None,
     result_set_id: str | None = None,
     *,
-    was_truncated: bool = False,
+    offset: int = 0,
+    returned_count: int = 0,
     applied_limit: int | None = None,
 ) -> list[Hint]:
     """Generate hints for search results."""
@@ -32,6 +33,7 @@ def search_hints(
                 parameters={"result_set_id": result_set_id},
             )
         )
+    was_truncated = offset + returned_count < total_count
     if was_truncated and applied_limit:
         hints.append(
             Hint(
@@ -40,7 +42,7 @@ def search_hints(
                 tool="search_legal_acts",
             )
         )
-    elif total_count > 20:
+    elif total_count > 20 and was_truncated:
         hints.append(
             Hint(
                 message="Użyj parametrów 'limit' i 'offset' do paginacji wyników.",

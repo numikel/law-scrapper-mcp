@@ -4,8 +4,11 @@ import contextlib
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -16,72 +19,95 @@ logger = logging.getLogger(__name__)
 DEFAULT_SEARCH_LIMIT = 20
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register search tool."""
 
-    @mcp.tool(tags={"search"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: SearchOutput(results=[], total_count=0, query_summary="", returned_count=0),
-    )
+    @mcp.tool(meta={"tags": ["search"]})
+    @handle_tool_errors
     async def search_legal_acts(
+        ctx: Context[AppContext],
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'.",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'."),
         ] = "DU",
-        year: Annotated[str | int | None, "Rok publikacji (np. 2024)."] = None,
+        year: Annotated[
+            str | int | None,
+            Field(description="Rok publikacji (np. 2024)."),
+        ] = None,
         keywords: Annotated[
             list[str] | None,
-            "Słowa kluczowe z systemu Sejmu (logika AND — wiele słów zawęża wyniki). "
-            "Aby uzyskać logikę OR, wykonaj oddzielne wyszukiwanie dla każdego słowa. "
-            "Użyj get_system_metadata(category='keywords') aby poznać dostępne słowa kluczowe.",
+            Field(
+                description=(
+                    "Słowa kluczowe z systemu Sejmu (logika AND — wiele słów zawęża wyniki). "
+                    "Aby uzyskać logikę OR, wykonaj oddzielne wyszukiwanie dla każdego słowa. "
+                    "Użyj get_system_metadata(category='keywords') aby poznać dostępne słowa kluczowe."
+                ),
+            ),
         ] = None,
         date_from: Annotated[
             str | None,
-            "Data wejścia w życie OD (YYYY-MM-DD). Filtruje akty które weszły w życie od tej daty.",
+            Field(description="Data wejścia w życie OD (YYYY-MM-DD). Filtruje akty które weszły w życie od tej daty."),
         ] = None,
         date_to: Annotated[
             str | None,
-            "Data wejścia w życie DO (YYYY-MM-DD). Filtruje akty które weszły w życie do tej daty.",
+            Field(description="Data wejścia w życie DO (YYYY-MM-DD). Filtruje akty które weszły w życie do tej daty."),
         ] = None,
         title: Annotated[
             str | None,
-            "Szukaj w tytule aktu (dopasowanie podciągu). Np. 'budżet', 'przeciwpożarow', 'podatek dochodowy'.",
+            Field(
+                description=(
+                    "Szukaj w tytule aktu (dopasowanie podciągu). Np. 'budżet', 'przeciwpożarow', 'podatek dochodowy'."
+                ),
+            ),
         ] = None,
         act_type: Annotated[
             str | None,
-            "Typ dokumentu (dokładne dopasowanie). Dostępne wartości: "
-            "'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
-            "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'. "
-            "Użyj get_system_metadata(category='types') aby zobaczyć pełną listę.",
+            Field(
+                description=(
+                    "Typ dokumentu (dokładne dopasowanie). Dostępne wartości: "
+                    "'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
+                    "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'. "
+                    "Użyj get_system_metadata(category='types') aby zobaczyć pełną listę."
+                ),
+            ),
         ] = None,
         pub_date_from: Annotated[
             str | None,
-            "Data publikacji/ogłoszenia OD (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku.",
+            Field(description="Data publikacji/ogłoszenia OD (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku."),
         ] = None,
         pub_date_to: Annotated[
             str | None,
-            "Data publikacji/ogłoszenia DO (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku.",
+            Field(description="Data publikacji/ogłoszenia DO (YYYY-MM-DD). Filtruje po dacie ogłoszenia w dzienniku."),
         ] = None,
         in_force: Annotated[
             str | bool | None,
-            "Filtruj po obowiązywaniu: true = tylko akty obecnie obowiązujące, "
-            "false = tylko akty nieobowiązujące, None = wszystkie.",
+            Field(
+                description=(
+                    "Filtruj po obowiązywaniu: true = tylko akty obecnie obowiązujące, "
+                    "false = tylko akty nieobowiązujące, None = wszystkie."
+                ),
+            ),
         ] = None,
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Przydatne do ograniczenia dużych zbiorów.",
+            Field(
+                description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Przydatne do ograniczenia dużych zbiorów.",
+            ),
         ] = None,
         offset: Annotated[
             str | int | None,
-            "Liczba wyników do pominięcia (paginacja). Użyj z parametrem limit.",
+            Field(description="Liczba wyników do pominięcia (paginacja). Użyj z parametrem limit."),
         ] = None,
         detail_level: Annotated[
             str,
-            "Poziom szczegółowości wyników: 'minimal' (ELI, tytuł, status), "
-            "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
+            Field(
+                description=(
+                    "Poziom szczegółowości wyników: 'minimal' (ELI, tytuł, status), "
+                    "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'."
+                ),
+            ),
         ] = "standard",
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[SearchOutput]:
         """
         Wyszukaj polskie akty prawne z Dziennika Ustaw (DU) i Monitora Polskiego (MP).
 
@@ -103,11 +129,8 @@ def register(mcp: FastMCP) -> None:
         - search_legal_acts(pub_date_from="2024-03-01", pub_date_to="2024-03-31") - Ogłoszone w marcu 2024
         - search_legal_acts(title="budżet", year=2024) - Akty budżetowe z 2024
         """
-        assert ctx is not None
-        search_service = ctx.lifespan_context["search_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        search_service = get_app_context(ctx).search_service
 
-        # Normalize params (MCP clients may send int/bool as strings)
         year_int: int | None = None
         if year is not None:
             with contextlib.suppress(ValueError, TypeError):
@@ -127,13 +150,12 @@ def register(mcp: FastMCP) -> None:
         if in_force is not None:
             in_force_bool = in_force.lower() in ("true", "1", "yes") if isinstance(in_force, str) else bool(in_force)
 
-        # Convert detail_level string to enum
         try:
             detail_enum = DetailLevel(detail_level)
         except ValueError:
             detail_enum = DetailLevel.STANDARD
 
-        results, total_count, query_summary = await search_service.search(
+        output = await search_service.search(
             publisher=publisher,
             year=year_int,
             keywords=keywords,
@@ -149,35 +171,18 @@ def register(mcp: FastMCP) -> None:
             detail_level=detail_enum,
         )
 
-        # Apply default limit if no explicit limit was provided
         effective_limit = limit_int if limit_int is not None else DEFAULT_SEARCH_LIMIT
-        was_truncated = len(results) > effective_limit
-        if was_truncated:
-            results = results[:effective_limit]
+        first_eli = output.results[0].eli if output.results else None
 
-        # Store results for subsequent filtering
-        result_set_id = None
-        if results:
-            result_set_id = await result_store.store(results, query_summary, total_count)
-
-        first_eli = results[0].eli if results else None
-
-        response = EnrichedResponse(
-            data=SearchOutput(
-                results=results,
-                total_count=total_count,
-                query_summary=query_summary,
-                returned_count=len(results),
-                result_set_id=result_set_id,
-            ),
+        return EnrichedResponse[SearchOutput](
+            data=output,
             hints=search_hints(
-                total_count,
-                len(results) > 0,
+                output.total_count,
+                output.returned_count > 0,
                 first_eli,
-                result_set_id,
-                was_truncated=was_truncated,
+                output.result_set_id,
+                offset=offset_int or 0,
+                returned_count=output.returned_count,
                 applied_limit=effective_limit,
             ),
         )
-
-        return response.model_dump_json()

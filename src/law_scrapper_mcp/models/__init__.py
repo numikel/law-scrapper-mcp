@@ -15,6 +15,7 @@ from law_scrapper_mcp.models.enums import (
     Publisher,
     RelationshipType,
 )
+from law_scrapper_mcp.models.pagination import PageInfo, PageUnit
 from law_scrapper_mcp.models.tool_inputs import (
     ActDetailsRequest,
     BrowseRequest,
@@ -55,6 +56,9 @@ __all__ = [
     "MetadataCategory",
     "Publisher",
     "RelationshipType",
+    # Pagination
+    "PageInfo",
+    "PageUnit",
     # Tool inputs
     "ActDetailsRequest",
     "BrowseRequest",

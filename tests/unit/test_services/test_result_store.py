@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from law_scrapper_mcp.models.pagination import PageUnit
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
 from law_scrapper_mcp.services.pattern_matching import (
     CompiledPattern,
@@ -14,6 +15,8 @@ from law_scrapper_mcp.services.pattern_matching import (
     compile_pattern,
 )
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError, ResultStore
+
+pytestmark = pytest.mark.asyncio
 
 
 def _make_act(
@@ -176,10 +179,12 @@ class TestResultStoreFiltering:
         dates = [r.promulgation_date for r in filtered]
         assert dates == sorted(dates, key=lambda d: d or "", reverse=True)
 
-    async def test_filter_limit(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+    async def test_filter_returns_full_set_before_pagination(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
         rs_id = await store.store(sample_results, "test", 5)
-        filtered, _ = await store.filter_results(rs_id, limit=2)
-        assert len(filtered) == 2
+        filtered, _ = await store.filter_results(rs_id)
+        assert len(filtered) == 5
 
     async def test_filter_nonexistent_set_raises(self, store: ResultStore) -> None:
         with pytest.raises(ResultSetNotFoundError, match="Zestaw wyników 'rs_999' nie istnieje lub wygasł"):
@@ -359,3 +364,109 @@ class TestResultStoreRecordCap:
 
         assert original == 5
         assert len(filtered) == 2
+
+
+class TestResultStoreFilterAndStore:
+    async def test_filter_and_store_persists_chained_result_set(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            type_equals="Ustawa",
+        )
+
+        assert output.source_result_set_id == source_id
+        assert output.result_set_id == "rs_2"
+        assert output.filtered_count == 2
+        assert output.original_count == len(sample_results)
+        assert all(result.type == "Ustawa" for result in output.results)
+        assert len(output.results) == output.page_info.returned_count
+        assert output.filtered_count == output.page_info.total_count
+        assert output.page_info.unit == PageUnit.ITEMS
+
+        stored = await store.get(output.result_set_id)
+        assert stored is not None
+        assert stored.query_summary.startswith(f"filtered({source_id}):")
+        assert "type_equals=Ustawa" in stored.query_summary
+
+        chained_output = await store.filter_and_store(
+            output.result_set_id,
+            pattern="podatku",
+            field="title",
+        )
+
+        assert chained_output.source_result_set_id == output.result_set_id
+        assert chained_output.result_set_id == "rs_3"
+        assert chained_output.original_count == output.filtered_count
+        assert chained_output.filtered_count == 1
+        assert chained_output.results[0].eli == "DU/2024/1"
+        assert chained_output.filters_applied == {
+            "pattern": "podatku",
+            "field": "title",
+        }
+
+        chained_stored = await store.get(chained_output.result_set_id)
+        assert chained_stored is not None
+        assert chained_stored.query_summary.startswith(f"filtered({output.result_set_id}):")
+        assert "pattern=podatku" in chained_stored.query_summary
+        assert len(chained_stored.results) == 1
+
+    async def test_filter_and_store_records_applied_filters(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            pattern="Ustawa",
+            field="title",
+            sort_by="title",
+            sort_desc=True,
+        )
+
+        assert output.filters_applied == {
+            "pattern": "Ustawa",
+            "field": "title",
+            "sort_by": "title",
+            "sort_desc": True,
+        }
+        assert output.filtered_count == 2
+
+    async def test_filter_and_store_stores_full_set_but_pages_response(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            type_equals="Ustawa",
+            limit=1,
+            offset=0,
+        )
+
+        assert output.filtered_count == 2
+        assert len(output.results) == 1
+        assert output.page_info.returned_count == 1
+        assert output.page_info.total_count == 2
+
+        assert output.result_set_id is not None
+        stored = await store.get(output.result_set_id)
+        assert stored is not None
+        assert len(stored.results) == 2
+
+    async def test_filter_and_store_leaves_result_set_id_none_for_empty_matches(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id = await store.store(sample_results, "search query", len(sample_results))
+
+        output = await store.filter_and_store(
+            source_id,
+            pattern="nonexistent-pattern-xyz",
+        )
+
+        assert output.results == []
+        assert output.filtered_count == 0
+        assert output.result_set_id is None
+        assert output.filters_applied["pattern"] == "nonexistent-pattern-xyz"

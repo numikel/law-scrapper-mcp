@@ -64,9 +64,23 @@ jobs:
       - name: Install dependencies
         if: needs.changes.outputs.code == 'true'
         run: uv sync --extra dev
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Reject legacy framework remnants
+        run: |
+          if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests; then
+            echo "Legacy framework remnants found"
+            exit 1
+          fi
+
       - name: Ruff check
-        if: needs.changes.outputs.code == 'true'
-        run: uv run ruff check src/
+        run: uv run ruff check src tests
+
+      - name: Ruff format
+        run: uv run ruff format --check src tests
+
       - name: Mypy
         if: needs.changes.outputs.code == 'true'
         run: uv run mypy src/law_scrapper_mcp/
@@ -96,6 +110,7 @@ jobs:
       - name: Integration tests
         if: needs.changes.outputs.code == 'true'
         run: uv run pytest tests/integration/ -v -m integration
+<<<<<<< HEAD
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
@@ -144,3 +159,58 @@ jobs:
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
+=======
+
+      - name: Protocol transport tests
+        run: uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py -v -m integration
+
+      - name: MCP conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LAW_MCP_TRANSPORT=streamable-http
+          export LAW_MCP_HOST=127.0.0.1
+          export LAW_MCP_PORT=7683
+          uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          HEALTH_READY=false
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:7683/health >/dev/null; then
+              HEALTH_READY=true
+              break
+            fi
+            sleep 0.25
+          done
+          if [ "$HEALTH_READY" != "true" ]; then
+            echo "Server /health did not become ready in time"
+            cat server.stderr.log || true
+            cat server.stdout.log || true
+            exit 1
+          fi
+          SDK_SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
+          PROBE_LOG="$(mktemp)"
+          set +e
+          npx --yes @modelcontextprotocol/conformance@latest server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SDK_SPEC_VERSION" \
+            --scenario server-initialize \
+            >"$PROBE_LOG" 2>&1
+          PROBE_STATUS=$?
+          set -e
+          if grep -q "Unknown spec version" "$PROBE_LOG"; then
+            # Design: do not mask upstream lag by running an older protocol era.
+            # Direct STDIO/HTTP transport tests remain the mandatory protocol gate.
+            echo "::warning::@modelcontextprotocol/conformance does not yet support SDK protocol ${SDK_SPEC_VERSION}; skipping suite. Transport tests remain the protocol gate."
+            cat "$PROBE_LOG"
+            exit 0
+          fi
+          if [ "$PROBE_STATUS" -ne 0 ]; then
+            cat "$PROBE_LOG"
+            exit "$PROBE_STATUS"
+          fi
+          npx --yes @modelcontextprotocol/conformance@latest server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SDK_SPEC_VERSION" \
+            --expected-failures ./conformance-baseline.yml
+>>>>>>> 80971d9f7bc18adaf68f94135b553891af2b3467

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+from pydantic import ValidationError
 
 from law_scrapper_mcp.config import (
     FILTER_MAX_RECORDS_FLOOR,
@@ -22,6 +23,23 @@ class TestSettingsDefaults:
         """Test default transport setting."""
         settings = Settings()
         assert settings.transport == "stdio"
+
+    def test_supported_transports_are_accepted(self):
+        """Both supported transports round-trip unchanged."""
+        assert Settings(transport="stdio").transport == "stdio"
+        assert Settings(transport="streamable-http").transport == "streamable-http"
+
+    def test_removed_sse_transport_is_rejected(self):
+        """A 2.x `sse` value must fail loudly instead of falling back to stdio."""
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(transport="sse")
+        assert "'sse' został usunięty w wersji 3.0.0" in str(exc_info.value)
+
+    def test_unknown_transport_is_rejected(self):
+        """An unknown transport must not silently degrade to stdio."""
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(transport="websocket")
+        assert "Nieobsługiwany transport 'websocket'" in str(exc_info.value)
 
     def test_host_and_port_defaults(self):
         """Test default host and port."""
@@ -67,7 +85,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "2.4.0"
+        assert settings.server_version == "3.0.0"
 
 
 class TestSettingsFromEnvironment:
@@ -75,9 +93,9 @@ class TestSettingsFromEnvironment:
 
     def test_transport_from_env(self, monkeypatch):
         """Test loading transport from environment variable."""
-        monkeypatch.setenv("LAW_MCP_TRANSPORT", "sse")
+        monkeypatch.setenv("LAW_MCP_TRANSPORT", "streamable-http")
         settings = Settings()
-        assert settings.transport == "sse"
+        assert settings.transport == "streamable-http"
 
     def test_port_from_env(self, monkeypatch):
         """Test loading port from environment variable."""
@@ -113,20 +131,20 @@ class TestSettingsFromEnvironment:
 
     def test_multiple_env_vars(self, monkeypatch):
         """Test loading multiple settings from environment variables."""
-        monkeypatch.setenv("LAW_MCP_TRANSPORT", "sse")
+        monkeypatch.setenv("LAW_MCP_TRANSPORT", "streamable-http")
         monkeypatch.setenv("LAW_MCP_PORT", "7683")
         monkeypatch.setenv("LAW_MCP_API_TIMEOUT", "45.0")
         monkeypatch.setenv("LAW_MCP_LOG_LEVEL", "WARNING")
 
         settings = Settings()
-        assert settings.transport == "sse"
+        assert settings.transport == "streamable-http"
         assert settings.port == 7683
         assert settings.api_timeout == 45.0
         assert settings.log_level == "WARNING"
 
     def test_env_prefix_required(self, monkeypatch):
         """Test that env vars without LAW_MCP_ prefix are ignored."""
-        monkeypatch.setenv("TRANSPORT", "sse")  # Wrong prefix
+        monkeypatch.setenv("TRANSPORT", "http")  # Wrong prefix
         monkeypatch.setenv("PORT", "9000")  # Wrong prefix
 
         settings = Settings()

@@ -8,7 +8,9 @@ from mcp.server.mcpserver import Context
 from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ChangesOutput, EnrichedResponse
+from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -71,8 +73,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             date_from=date_from,
             date_to=date_to,
             keywords=keywords,
-            limit=int(limit) if limit is not None else 20,
-            offset=int(offset) if offset is not None else 0,
+            limit=parse_non_negative(limit, name="limit", default=DEFAULT_ITEM_LIMIT),
+            offset=parse_non_negative(offset, name="offset", default=0),
         )
 
         return EnrichedResponse[ChangesOutput](data=output)

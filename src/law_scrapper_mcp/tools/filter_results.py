@@ -9,6 +9,7 @@ from mcp.server.mcpserver import Context
 from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
@@ -16,6 +17,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     ResultSetInfo,
     ResultSetListOutput,
 )
+from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -148,8 +150,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 year_int = int(year_equals)
 
-        limit_int = int(limit) if limit is not None else 20
-        offset_int = int(offset) if offset is not None else 0
+        limit_int = parse_non_negative(limit, name="limit", default=DEFAULT_ITEM_LIMIT)
+        offset_int = parse_non_negative(offset, name="offset", default=0)
 
         sort_desc_bool = sort_desc.lower() in ("true", "1", "yes") if isinstance(sort_desc, str) else bool(sort_desc)
 

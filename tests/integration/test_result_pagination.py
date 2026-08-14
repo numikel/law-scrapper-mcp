@@ -207,3 +207,31 @@ async def test_every_result_tool_rejects_negative_pages(
         assert result.is_error is True
         assert result.structured_content is None
         assert field in result.content[0].text
+
+
+@pytest.mark.parametrize("field", ["limit", "offset"])
+async def test_every_result_tool_reports_non_integer_pages_in_polish(
+    mcp_client,
+    field: str,
+) -> None:
+    search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
+    source_id = parse_tool_result(search)["data"]["result_set_id"]
+    calls = [
+        ("filter_results", {"result_set_id": source_id, field: "abc"}),
+        ("get_system_metadata", {"category": "all", field: "abc"}),
+        (
+            "track_legal_changes",
+            {
+                "date_from": "2024-01-01",
+                "date_to": "2024-12-31",
+                field: "abc",
+            },
+        ),
+    ]
+    for tool_name, arguments in calls:
+        result = await mcp_client.call_tool(tool_name, arguments)
+        message = result.content[0].text
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert f"Parametr '{field}' musi być liczbą całkowitą." in message
+        assert "invalid literal" not in message

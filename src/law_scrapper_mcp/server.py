@@ -3,7 +3,6 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal, cast
 
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
@@ -193,8 +192,7 @@ async def health(_request: Request) -> JSONResponse:
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
-    transport = cast(Literal["stdio", "streamable-http"], settings.transport)
-    if transport == "streamable-http":
+    if settings.transport == "streamable-http":
         app.run(
             transport="streamable-http",
             host=settings.host,

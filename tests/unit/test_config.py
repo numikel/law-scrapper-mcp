@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+from pydantic import ValidationError
 
 from law_scrapper_mcp.config import (
     FILTER_MAX_RECORDS_FLOOR,
@@ -22,6 +23,23 @@ class TestSettingsDefaults:
         """Test default transport setting."""
         settings = Settings()
         assert settings.transport == "stdio"
+
+    def test_supported_transports_are_accepted(self):
+        """Both supported transports round-trip unchanged."""
+        assert Settings(transport="stdio").transport == "stdio"
+        assert Settings(transport="streamable-http").transport == "streamable-http"
+
+    def test_removed_sse_transport_is_rejected(self):
+        """A 2.x `sse` value must fail loudly instead of falling back to stdio."""
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(transport="sse")
+        assert "'sse' został usunięty w wersji 3.0.0" in str(exc_info.value)
+
+    def test_unknown_transport_is_rejected(self):
+        """An unknown transport must not silently degrade to stdio."""
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(transport="websocket")
+        assert "Nieobsługiwany transport 'websocket'" in str(exc_info.value)
 
     def test_host_and_port_defaults(self):
         """Test default host and port."""

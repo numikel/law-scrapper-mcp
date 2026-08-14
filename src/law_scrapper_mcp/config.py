@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MAX_PATTERN_LENGTH_FLOOR = 64
@@ -18,9 +19,22 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LAW_MCP_")
 
     # Transport
-    transport: str = "stdio"
+    transport: Literal["stdio", "streamable-http"] = "stdio"
     host: str = "0.0.0.0"
     port: int = 7683
+
+    @field_validator("transport", mode="before")
+    @classmethod
+    def _reject_unsupported_transport(cls, value: object) -> object:
+        """Fail loudly instead of silently falling back to stdio."""
+        if value in ("stdio", "streamable-http"):
+            return value
+        if value == "sse":
+            raise ValueError(
+                "Transport 'sse' został usunięty w wersji 3.0.0. "
+                "Ustaw LAW_MCP_TRANSPORT na 'stdio' albo 'streamable-http'."
+            )
+        raise ValueError(f"Nieobsługiwany transport '{value}'. Dozwolone wartości: 'stdio', 'streamable-http'.")
 
     # API client
     api_timeout: float = 30.0

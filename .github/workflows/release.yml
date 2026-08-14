@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install uv
-        uses: astral-sh/setup-uv@f94383a0e2586940a7d96dd1d2b1297d7350b694 # v5.3.0
+        uses: astral-sh/setup-uv@f94ec6bedd8674c4426838e6b50417d36b6ab231 # v5.3.1
         with:
           enable-cache: true
 
@@ -51,7 +51,7 @@ jobs:
         run: uv build
 
       - name: Upload artifact
-        uses: actions/upload-artifact@4bec352932f913d077d7045c43d9ebbd99499878 # v4.4.3
+        uses: actions/upload-artifact@4cec3d8aa04e096181404664879644f128c94627 # v4.6.0
         with:
           name: dist
           path: dist/
@@ -69,7 +69,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
       - name: Download artifacts
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@cc20336598336d3937397b914a82199f7d490807 # v4.1.8
         with:
           name: dist
           path: dist
@@ -80,7 +80,7 @@ jobs:
           sha256sum * > checksums.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@c95fe0f22b73ab194246378bfde45012440d4c15 # v2.2.1
+        uses: softprops/action-gh-release@c95fe1489396fe830154030767194f1c9117621f # v2.2.0
         with:
           body_path: docs/changelogs/v${{ env.VERSION }}.md
           files: |

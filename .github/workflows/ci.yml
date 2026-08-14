@@ -76,9 +76,11 @@ jobs:
           fi
 
       - name: Ruff check
+        if: needs.changes.outputs.code == 'true'
         run: uv run ruff check src tests
 
       - name: Ruff format
+        if: needs.changes.outputs.code == 'true'
         run: uv run ruff format --check src tests
 
       - name: Mypy

@@ -7,12 +7,15 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import ParamSpec, TypeVar
 
+import httpx
+
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ApiUnavailableError,
     ContentNotAvailableError,
     DocumentNotLoadedError,
     InvalidEliError,
+    SejmApiError,
 )
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
@@ -20,6 +23,8 @@ logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
+# Order matters: `_classify_error` returns the first isinstance match, so the
+# narrow subclasses of `SejmApiError` must precede it.
 _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ActNotFoundError: "not_found",
     InvalidEliError: "validation",
@@ -28,9 +33,15 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ResultSetTooLargeError: "precondition",
     ContentNotAvailableError: "not_found",
     ApiUnavailableError: "unavailable",
+    SejmApiError: "upstream",
+    httpx.TimeoutException: "upstream",
     ValueError: "validation",
     TypeError: "validation",
 }
+
+# `SejmApiError` embeds the upstream response body, so this category must never
+# fall through to `str(exc)`.
+_UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbuj ponownie za chwilę."
 
 
 class ToolExecutionError(Exception):
@@ -47,6 +58,8 @@ def _classify_error(exc: Exception) -> str:
 def _public_message(exc: Exception, category: str) -> str:
     if category == "internal":
         return "Wystąpił wewnętrzny błąd narzędzia. Spróbuj ponownie."
+    if category == "upstream":
+        return _UPSTREAM_MESSAGE
     return str(exc)
 
 

@@ -265,7 +265,11 @@ def live_http_server(tmp_path: Path):
         environment = {
             **os.environ,
             "LAW_MCP_TRANSPORT": "streamable-http",
-            "LAW_MCP_HOST": "127.0.0.1",
+            # Mirror the production bind address. A literal loopback host would
+            # make the SDK enable Host/Origin validation on its own, so the
+            # explicit `transport_security` in `main()` could be deleted without
+            # any test noticing.
+            "LAW_MCP_HOST": "0.0.0.0",
             "LAW_MCP_PORT": str(port),
         }
         with log_path.open("w", encoding="utf-8") as log:
@@ -306,3 +310,47 @@ async def test_live_http_discovery_tools_success_and_error(live_http_server: str
     assert success.is_error is False
     assert success.structured_content["data"]["calculated_date"] == "2026-01-02"
     assert failure.is_error is True
+
+
+@pytest.mark.anyio
+async def test_live_server_enforces_allowlist_and_statelessness(live_http_server: str) -> None:
+    """Guard `main()` itself.
+
+    Every other transport test builds its own ASGI app and supplies
+    `transport_security` from the test side, so deleting it from `main()` would
+    not fail any of them. This test drives the real subprocess instead.
+    """
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {
+            "_meta": {
+                PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
+                CLIENT_CAPABILITIES_META_KEY: {},
+            },
+        },
+    }
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "Mcp-Method": "tools/list",
+        "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        forged_host = await client.post(
+            live_http_server,
+            headers={**headers, "Host": "evil.example.com"},
+            json=body,
+        )
+        forged_origin = await client.post(
+            live_http_server,
+            headers={**headers, "Origin": "http://evil.example.com"},
+            json=body,
+        )
+        legitimate = await client.post(live_http_server, headers=headers, json=body)
+
+    assert forged_host.status_code == 421
+    assert forged_origin.status_code == 403
+    assert legitimate.status_code == 200
+    assert "Mcp-Session-Id" not in legitimate.headers

@@ -32,13 +32,13 @@ class TestSettingsDefaults:
     def test_removed_sse_transport_is_rejected(self):
         """A 2.x `sse` value must fail loudly instead of falling back to stdio."""
         with pytest.raises(ValidationError) as exc_info:
-            Settings(transport="sse")
+            Settings(transport="sse")  # type: ignore[arg-type]
         assert "'sse' został usunięty w wersji 3.0.0" in str(exc_info.value)
 
     def test_unknown_transport_is_rejected(self):
         """An unknown transport must not silently degrade to stdio."""
         with pytest.raises(ValidationError) as exc_info:
-            Settings(transport="websocket")
+            Settings(transport="websocket")  # type: ignore[arg-type]
         assert "Nieobsługiwany transport 'websocket'" in str(exc_info.value)
 
     def test_host_and_port_defaults(self):

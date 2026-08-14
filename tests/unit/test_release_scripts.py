@@ -47,9 +47,9 @@ class TestGitReleaseInfo:
         import re
 
         pyproject_path, pyproject_pattern = git_release_info.VERSION_FILES["pyproject.toml"]
-        expected_version = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE).group(
-            1
-        )
+        pyproject_match = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE)
+        assert pyproject_match is not None, "Version pattern did not match in pyproject.toml"
+        expected_version = pyproject_match.group(1)
 
         for key, (path, pattern) in git_release_info.VERSION_FILES.items():
             assert path.exists(), f"File for {key} does not exist: {path}"
@@ -96,9 +96,9 @@ class TestCheckRelease:
         import re
 
         pyproject_path, pyproject_pattern = git_release_info.VERSION_FILES["pyproject.toml"]
-        expected_version = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE).group(
-            1
-        )
+        pyproject_match = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE)
+        assert pyproject_match is not None, "Version pattern did not match in pyproject.toml"
+        expected_version = pyproject_match.group(1)
 
         sync_ok, ver = check_release.check_version_sync()
         assert sync_ok is True

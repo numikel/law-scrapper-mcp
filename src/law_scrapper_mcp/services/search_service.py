@@ -6,7 +6,8 @@ from typing import Any
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import DetailLevel
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, SearchOutput
+from law_scrapper_mcp.services.result_store import ResultStore
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +15,28 @@ logger = logging.getLogger(__name__)
 class SearchService:
     """Service for searching and browsing legal acts."""
 
-    def __init__(self, client: SejmApiClient):
+    def __init__(self, client: SejmApiClient, result_store: ResultStore) -> None:
         self._client = client
+        self._result_store = result_store
+
+    async def _output(
+        self,
+        results: list[ActSummaryOutput],
+        *,
+        total_count: int,
+        query_summary: str,
+        limit: int | None,
+    ) -> SearchOutput:
+        effective_limit = limit if limit is not None else 20
+        page = results[:effective_limit]
+        result_set_id = await self._result_store.store(page, query_summary, total_count) if page else None
+        return SearchOutput(
+            results=page,
+            total_count=total_count,
+            query_summary=query_summary,
+            returned_count=len(page),
+            result_set_id=result_set_id,
+        )
 
     async def search(
         self,
@@ -32,8 +53,8 @@ class SearchService:
         limit: int | None = None,
         offset: int | None = None,
         detail_level: DetailLevel = DetailLevel.STANDARD,
-    ) -> tuple[list[ActSummaryOutput], int, str]:
-        """Search for legal acts. Returns (results, total_count, query_summary)."""
+    ) -> SearchOutput:
+        """Search for legal acts and return a stored result page."""
         params: dict[str, Any] = {"publisher": publisher}
 
         summary_parts = [f"publisher={publisher}"]
@@ -74,13 +95,23 @@ class SearchService:
         total_count = data.get("count", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
+        query_summary = " | ".join(summary_parts)
 
-        return results, total_count, " | ".join(summary_parts)
+        return await self._output(
+            results,
+            total_count=total_count,
+            query_summary=query_summary,
+            limit=limit,
+        )
 
     async def browse(
-        self, publisher: str, year: int, detail_level: DetailLevel = DetailLevel.STANDARD
-    ) -> tuple[list[ActSummaryOutput], int]:
-        """Browse acts by publisher and year. Returns (results, total_count)."""
+        self,
+        publisher: str,
+        year: int,
+        detail_level: DetailLevel = DetailLevel.STANDARD,
+        limit: int | None = None,
+    ) -> SearchOutput:
+        """Browse acts by publisher and year and return a stored result page."""
         path = f"acts/{publisher}/{year}"
         data = await self._client.get_json(path, cache_ttl=settings.cache_browse_ttl)
 
@@ -88,8 +119,14 @@ class SearchService:
         total_count = data.get("totalCount", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
+        query_summary = f"publisher={publisher} | year={year}"
 
-        return results, total_count
+        return await self._output(
+            results,
+            total_count=total_count,
+            query_summary=query_summary,
+            limit=limit,
+        )
 
     def _format_act(self, item: dict[str, Any], detail_level: DetailLevel) -> ActSummaryOutput:
         """Format an act item based on detail level."""

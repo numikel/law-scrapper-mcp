@@ -1,10 +1,11 @@
 """Law Scrapper MCP Server - Main entry point."""
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal, cast
 
-from fastmcp import FastMCP
+from mcp.server import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -12,78 +13,35 @@ from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
+from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
+from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
+from law_scrapper_mcp.services.content_service import ContentService
+from law_scrapper_mcp.services.date_service import DateService
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.metadata_service import MetadataService
+from law_scrapper_mcp.services.relationship_service import RelationshipService
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
 from law_scrapper_mcp.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
+# The SDK only auto-enables DNS-rebinding protection when `host` is literally
+# "127.0.0.1"/"localhost"/"::1" (mcp.server.lowlevel.server.streamable_http_app).
+# This project binds "0.0.0.0" for Docker port publishing, which would silently
+# disable Host/Origin validation. Pass this explicitly to keep the loopback-only
+# posture regardless of the configured bind address.
+LOOPBACK_TRANSPORT_SECURITY = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
+    allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+)
 
-@asynccontextmanager
-async def lifespan(server):
-    """Initialize and cleanup server resources."""
-    logger.info("Starting Law Scrapper MCP Server v%s", settings.server_version)
-    log_pattern_limit_clamping(settings, logger)
-
-    circuit_breaker = CircuitBreaker(
-        failure_threshold=settings.circuit_breaker_threshold,
-        recovery_timeout=settings.circuit_breaker_recovery_timeout,
-        half_open_max_calls=settings.circuit_breaker_half_open_max_calls,
-    )
-    cache = TTLCache(max_entries=settings.cache_max_entries)
-    client = SejmApiClient(
-        cache=cache,
-        timeout=settings.api_timeout,
-        max_concurrent=settings.api_max_concurrent,
-        circuit_breaker=circuit_breaker,
-    )
-    await client.start()
-
-    document_store = DocumentStore(
-        max_documents=settings.doc_store_max_documents,
-        max_size_bytes=settings.doc_store_max_size_bytes,
-        ttl=settings.doc_store_ttl,
-    )
-    content_processor = ContentProcessor()
-
-    result_store = ResultStore(
-        max_pattern_length=settings.effective_max_pattern_length,
-        pattern_length_limit_clamped=settings.max_pattern_length_was_clamped,
-        max_records=settings.effective_filter_max_records,
-    )
-    metadata_service = MetadataService(client)
-    search_service = SearchService(client)
-    act_service = ActService(client, document_store, content_processor)
-    changes_service = ChangesService(client)
-
-    try:
-        yield {
-            "client": client,
-            "cache": cache,
-            "document_store": document_store,
-            "content_processor": content_processor,
-            "result_store": result_store,
-            "metadata_service": metadata_service,
-            "search_service": search_service,
-            "act_service": act_service,
-            "changes_service": changes_service,
-        }
-    finally:
-        await client.close()
-        await cache.clear()
-        logger.info("Law Scrapper MCP Server stopped")
-
-
-app = FastMCP(
-    name=settings.server_name,
-    version=settings.server_version,
-    instructions="""Jesteś specjalistycznym asystentem do analizy polskiego prawa.
+SERVER_INSTRUCTIONS = """Jesteś specjalistycznym asystentem do analizy polskiego prawa.
 Odpowiadaj użytkownikowi w jego języku. Dane z narzędzi (tytuły aktów, statusy, typy) są po polsku.
 
 DOSTĘPNE NARZĘDZIA (13):
@@ -144,7 +102,78 @@ UWAGI:
 - Wydawcy: DU = Dziennik Ustaw, MP = Monitor Polski
 - Słowa kluczowe API używają logiki AND. Dla OR szukaj każdego osobno.
 - Każda odpowiedź zawiera 'hints' z sugerowanymi kolejnymi krokami.
-- Dane w systemie (typy, statusy, słowa kluczowe) są po polsku.""",
+- Dane w systemie (typy, statusy, słowa kluczowe) są po polsku."""
+
+
+@asynccontextmanager
+async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
+    """Initialize and cleanup server resources."""
+    logger.info("Starting Law Scrapper MCP Server v%s", settings.server_version)
+    log_pattern_limit_clamping(settings, logger)
+
+    circuit_breaker = CircuitBreaker(
+        failure_threshold=settings.circuit_breaker_threshold,
+        recovery_timeout=settings.circuit_breaker_recovery_timeout,
+        half_open_max_calls=settings.circuit_breaker_half_open_max_calls,
+    )
+    cache = TTLCache(max_entries=settings.cache_max_entries)
+    client = SejmApiClient(
+        cache=cache,
+        timeout=settings.api_timeout,
+        max_concurrent=settings.api_max_concurrent,
+        circuit_breaker=circuit_breaker,
+    )
+    await client.start()
+
+    document_store = DocumentStore(
+        max_documents=settings.doc_store_max_documents,
+        max_size_bytes=settings.doc_store_max_size_bytes,
+        ttl=settings.doc_store_ttl,
+    )
+    content_processor = ContentProcessor()
+
+    result_store = ResultStore(
+        max_pattern_length=settings.effective_max_pattern_length,
+        pattern_length_limit_clamped=settings.max_pattern_length_was_clamped,
+        max_records=settings.effective_filter_max_records,
+    )
+    metadata_service = MetadataService(client)
+    search_service = SearchService(client, result_store)
+    act_service = ActService(client, document_store, content_processor)
+    content_service = ContentService(document_store)
+    changes_service = ChangesService(client, result_store)
+    comparison_service = ComparisonService(act_service)
+    relationship_service = RelationshipService(client)
+    date_service = DateService()
+
+    context = AppContext(
+        client=client,
+        cache=cache,
+        document_store=document_store,
+        content_processor=content_processor,
+        result_store=result_store,
+        metadata_service=metadata_service,
+        search_service=search_service,
+        act_service=act_service,
+        content_service=content_service,
+        changes_service=changes_service,
+        comparison_service=comparison_service,
+        relationship_service=relationship_service,
+        date_service=date_service,
+    )
+
+    try:
+        yield context
+    finally:
+        await client.close()
+        await cache.clear()
+        logger.info("Law Scrapper MCP Server stopped")
+
+
+app = MCPServer[AppContext](
+    settings.server_name,
+    version=settings.server_version,
+    instructions=SERVER_INSTRUCTIONS,
     lifespan=lifespan,
 )
 
@@ -166,19 +195,17 @@ async def health(_request: Request) -> JSONResponse:
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
-    transport = cast(
-        Literal["stdio", "http", "sse", "streamable-http"],
-        settings.transport,
-    )
-    if transport == "streamable-http":
+    if settings.transport == "streamable-http":
         app.run(
-            transport=transport,
+            transport="streamable-http",
             host=settings.host,
             port=settings.port,
-            path="/mcp",
+            streamable_http_path="/mcp",
+            stateless_http=True,
+            transport_security=LOOPBACK_TRANSPORT_SECURITY,
         )
     else:
-        app.run(transport=transport)
+        app.run(transport="stdio")
 
 
 if __name__ == "__main__":

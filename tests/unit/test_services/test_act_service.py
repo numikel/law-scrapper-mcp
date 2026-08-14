@@ -11,12 +11,14 @@ from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestActService:
     """Tests for act details service."""
 
     @pytest.fixture
-    async def service(
+    def service(
         self,
         mock_client: SejmApiClient,
         document_store: DocumentStore,

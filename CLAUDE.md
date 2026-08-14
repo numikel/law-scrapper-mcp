@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v2.4.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with FastMCP 3.x, it supports STDIO (default) and streamable-http transport on port 7683.
+Law Scrapper MCP v3.0.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.0.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
 
 ## Development commands
 
@@ -32,13 +32,19 @@ uv run pytest tests/integration/ -v -m integration
 uv run pytest --cov=law_scrapper_mcp --cov-report=term-missing
 
 # Quality gates
-uv run ruff check src/
+uv run ruff check src tests
 uv run mypy src/law_scrapper_mcp/
 ```
 
 ## Testing strategy
 
-The project uses pytest with FastMCP in-memory Client for integration tests (41 tests covering all 13 tools). See README.md "MCP integration testing" section for architecture details.
+Three test layers:
+
+1. **Unit tests** — Models, services, stores, pagination, error handling (`tests/unit/`)
+2. **In-memory integration** — Official `mcp.Client` with mocked Sejm API via `respx` (`tests/integration/test_tools_e2e.py`, pagination suites)
+3. **Transport integration** — Real STDIO subprocess (`test_stdio_transport.py`), loopback Streamable HTTP (`test_http_transport.py`); CI also runs MCP conformance against `/mcp`
+
+See `tests/TEST_SUITE_SUMMARY.md` for exact commands and file layout.
 
 ## Architecture
 
@@ -46,10 +52,11 @@ The project follows a layered architecture with src/ layout:
 
 ```
 src/law_scrapper_mcp/
-├── server.py          # FastMCP app, lifespan, transport config, /health endpoint
+├── server.py          # MCPServer, lifespan, transport config, /health endpoint
+├── context.py         # AppContext dataclass and get_app_context()
 ├── config.py          # pydantic-settings configuration
 ├── logging_config.py  # Structured logging
-├── models/            # Pydantic models (enums, API responses, tool I/O)
+├── models/            # Pydantic models (enums, API responses, tool I/O, pagination)
 ├── client/            # HTTP client (httpx), async cache, circuit breaker, exceptions
 ├── services/          # Business logic, document store, result store, content processor
 └── tools/             # 13 MCP tool definitions + error_handling decorator
@@ -59,11 +66,12 @@ src/law_scrapper_mcp/
 - **Document Store**: Acts loaded into memory for section-level reading and search (asyncio.Lock)
 - **Result Store**: Search results persisted for chained filtering (LRU eviction, TTL, asyncio.Lock)
 - **Circuit Breaker**: CLOSED → OPEN → HALF_OPEN states protecting Sejm API from cascading failures
-- **Enriched responses**: Every tool returns hints for suggested next steps
+- **Enriched responses**: Every tool returns `EnrichedResponse` with hints; native `outputSchema` and object `structuredContent`
+- **Pagination**: `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on list and content tools (defaults: 20 items, 10,000 chars; maxima: 100 items, 50,000 chars)
 - **TTL cache**: Async API response cache with configurable TTL (metadata=24h, search=10min)
-- **Error handling**: `@handle_tool_errors` decorator with error classification and traceback logging
+- **Error handling**: `@handle_tool_errors` re-raises `ToolExecutionError` so failures surface as `is_error=True`
 - **Async throughout**: httpx.AsyncClient with retry (tenacity), semaphore rate limiting, asyncio.Lock
-- **FastMCP 3.x**: Tools access lifespan resources via `ctx.lifespan_context`; HTTP via `app.run(transport=...)`
+- **Official MCP SDK**: Tools access lifespan resources via `ctx.request_context.lifespan_context`; HTTP via `streamable_http_app(stateless_http=True, streamable_http_path="/mcp")`
 
 **Tool categories** (13 tools total):
 - `metadata` — `get_system_metadata` (consolidates 6 old metadata tools)
@@ -86,7 +94,7 @@ src/law_scrapper_mcp/
 
 - Python 3.13+, managed with `uv` (hatchling build backend, src layout)
 - All tool parameters use `typing.Annotated` with description strings in Polish
-- Each tool has `tags` for categorization and at least 5 usage examples in docstrings
+- Each tool has `meta` tags for categorization and at least 5 usage examples in docstrings
 - Each tool has "Kiedy użyć" / "Kiedy NIE używać" decision tree in docstring
 - Services layer handles business logic; tools are thin wrappers with `@handle_tool_errors`
 - Pydantic models for all API responses with `ConfigDict(extra="ignore")`

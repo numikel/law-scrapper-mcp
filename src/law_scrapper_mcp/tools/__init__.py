@@ -1,9 +1,11 @@
 """Tool registration for Law Scrapper MCP."""
 
-from fastmcp import FastMCP
+from mcp.server import MCPServer
+
+from law_scrapper_mcp.context import AppContext
 
 
-def register_all_tools(mcp: FastMCP) -> None:
+def register_all_tools(mcp: MCPServer[AppContext]) -> None:
     """Register all tools with the MCP server."""
     from law_scrapper_mcp.tools.act_content import register as reg_act_content
     from law_scrapper_mcp.tools.act_details import register as reg_act_details

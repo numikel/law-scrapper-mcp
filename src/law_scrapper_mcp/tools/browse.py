@@ -4,8 +4,11 @@ import contextlib
 import logging
 from typing import Annotated
 
-from fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
+from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.response_enrichment import search_hints
@@ -16,35 +19,35 @@ logger = logging.getLogger(__name__)
 DEFAULT_BROWSE_LIMIT = 20
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer[AppContext]) -> None:
     """Register browse tool."""
 
-    @mcp.tool(tags={"search", "browse"})
-    @handle_tool_errors(
-        default_factory=lambda e, kw: SearchOutput(
-            results=[],
-            total_count=0,
-            query_summary=f"publisher={kw.get('publisher', '')} | year={kw.get('year', '')}",
-            returned_count=0,
-        ),
-    )
+    @mcp.tool(meta={"tags": ["search", "browse"]})
+    @handle_tool_errors
     async def browse_acts(
         publisher: Annotated[
             str,
-            "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski).",
+            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski)."),
         ],
-        year: Annotated[str | int, "Rok publikacji (np. 2024)."],
+        year: Annotated[
+            str | int,
+            Field(description="Rok publikacji (np. 2024)."),
+        ],
+        ctx: Context[AppContext],
         limit: Annotated[
             str | int | None,
-            "Maksymalna liczba wyników do zwrócenia. Domyślnie 20.",
+            Field(description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20."),
         ] = None,
         detail_level: Annotated[
             str,
-            "Poziom szczegółowości: 'minimal' (ELI, tytuł, status), "
-            "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'.",
+            Field(
+                description=(
+                    "Poziom szczegółowości: 'minimal' (ELI, tytuł, status), "
+                    "'standard' (+ typ, daty, obowiązywanie), 'full' (wszystkie pola). Domyślnie 'standard'."
+                ),
+            ),
         ] = "standard",
-        ctx: Context = None,
-    ) -> str:
+    ) -> EnrichedResponse[SearchOutput]:
         """
         Przeglądaj wszystkie akty prawne wydane przez wydawcę w danym roku.
 
@@ -61,11 +64,8 @@ def register(mcp: FastMCP) -> None:
         - browse_acts(publisher="DU", year=2024, detail_level="minimal") - Tylko podstawowe info
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
         """
-        assert ctx is not None
-        search_service = ctx.lifespan_context["search_service"]
-        result_store = ctx.lifespan_context["result_store"]
+        search_service = get_app_context(ctx).search_service
 
-        # Normalize year (MCP clients may send string)
         year_int = 0
         with contextlib.suppress(ValueError, TypeError):
             year_int = int(year)
@@ -75,48 +75,29 @@ def register(mcp: FastMCP) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 limit_int = int(limit)
 
-        # Convert detail_level string to enum
         try:
             detail_enum = DetailLevel(detail_level)
         except ValueError:
             detail_enum = DetailLevel.STANDARD
 
-        results, total_count = await search_service.browse(
+        output = await search_service.browse(
             publisher=publisher,
             year=year_int,
             detail_level=detail_enum,
+            limit=limit_int,
         )
 
-        # Apply default limit if no explicit limit was provided
         effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
-        was_truncated = len(results) > effective_limit
-        if was_truncated:
-            results = results[:effective_limit]
+        first_eli = output.results[0].eli if output.results else None
 
-        # Store results for subsequent filtering
-        query_summary = f"publisher={publisher} | year={year}"
-        result_set_id = None
-        if results:
-            result_set_id = await result_store.store(results, query_summary, total_count)
-
-        first_eli = results[0].eli if results else None
-
-        response = EnrichedResponse(
-            data=SearchOutput(
-                results=results,
-                total_count=total_count,
-                query_summary=query_summary,
-                returned_count=len(results),
-                result_set_id=result_set_id,
-            ),
+        return EnrichedResponse[SearchOutput](
+            data=output,
             hints=search_hints(
-                total_count,
-                len(results) > 0,
+                output.total_count,
+                output.returned_count > 0,
                 first_eli,
-                result_set_id,
-                was_truncated=was_truncated,
+                output.result_set_id,
+                returned_count=output.returned_count,
                 applied_limit=effective_limit,
             ),
         )
-
-        return response.model_dump_json()

@@ -57,8 +57,10 @@ class ReadContentRequest(BaseModel):
     eli: str = Field(description="ELI identifier of the act")
     section: str | None = Field(
         default=None,
-        description="Section ID to read (if None, returns table of contents)",
+        description="Section ID to read; when omitted, return the table of contents",
     )
+    limit: int | None = Field(default=None, description="Maximum items or characters returned")
+    offset: int = Field(default=0, description="Non-negative item or character offset")
 
 
 class SearchInActRequest(BaseModel):
@@ -66,13 +68,17 @@ class SearchInActRequest(BaseModel):
 
     eli: str = Field(description="ELI identifier of the act")
     query: str = Field(description="Search query text")
-    context_chars: int = Field(default=500, description="Number of characters of context around matches")
+    context_chars: int = Field(default=500, description="Characters of context around matches")
+    limit: int = Field(default=20, description="Maximum matches returned")
+    offset: int = Field(default=0, description="Non-negative match offset")
 
 
 class MetadataRequest(BaseModel):
     """Parameters for retrieving metadata."""
 
     category: MetadataCategory = Field(default=MetadataCategory.ALL, description="Category of metadata to retrieve")
+    limit: int = Field(default=20, description="Maximum metadata values returned")
+    offset: int = Field(default=0, description="Non-negative metadata value offset")
 
 
 class RelationshipsRequest(BaseModel):
@@ -91,6 +97,8 @@ class TrackChangesRequest(BaseModel):
     date_from: str = Field(description="Start date for tracking (YYYY-MM-DD)")
     date_to: str | None = Field(default=None, description="End date for tracking (YYYY-MM-DD, default: today)")
     keywords: list[str] | None = Field(default=None, description="Filter by keywords")
+    limit: int = Field(default=20, description="Maximum changes returned")
+    offset: int = Field(default=0, description="Non-negative change offset")
 
 
 class DateCalculationRequest(BaseModel):
@@ -118,14 +126,14 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
     if "api.sejm.gov.pl/eli/" in eli:
         eli = eli.split("api.sejm.gov.pl/eli/")[1]
     elif eli.startswith("http"):
-        raise ValueError(f"Invalid ELI URL format: {eli}")
+        raise ValueError(f"Nieprawidłowy format URL ELI: {eli}")
 
     # Remove trailing slashes and split
     eli = eli.rstrip("/")
     parts = eli.split("/")
 
     if len(parts) != 3:
-        raise ValueError(f"Invalid ELI format: {eli}. Expected format: PUBLISHER/YEAR/POS")
+        raise ValueError(f"Nieprawidłowy format ELI: {eli}. Oczekiwany: wydawca/rok/pozycja (np. DU/2024/1716)")
 
     publisher, year_str, pos_str = parts
 
@@ -133,6 +141,6 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
         year = int(year_str)
         pos = int(pos_str)
     except ValueError as e:
-        raise ValueError(f"Invalid year or position in ELI: {eli}") from e
+        raise ValueError(f"Nieprawidłowy rok lub pozycja w ELI: {eli}") from e
 
     return publisher, year, pos

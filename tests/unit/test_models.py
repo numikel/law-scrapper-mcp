@@ -13,13 +13,20 @@ from law_scrapper_mcp.models.enums import (
     Publisher,
     RelationshipType,
 )
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, PageInfo, PageUnit
 from law_scrapper_mcp.models.tool_inputs import ActDetailsRequest, SearchRequest, parse_eli
 from law_scrapper_mcp.models.tool_outputs import (
     ActSummaryOutput,
+    ChangesOutput,
+    ContentOutput,
     EnrichedResponse,
+    FilterOutput,
     Hint,
+    MetadataOutput,
+    SearchInActOutput,
     SearchOutput,
 )
+from law_scrapper_mcp.services.pagination import paginate_items
 
 
 class TestParseEli:
@@ -66,12 +73,12 @@ class TestParseEli:
     )
     def test_invalid_eli_format(self, invalid_eli: str):
         """Test that invalid ELI formats raise ValueError."""
-        with pytest.raises(ValueError, match="Invalid"):
+        with pytest.raises(ValueError, match="Nieprawidłowy"):
             parse_eli(invalid_eli)
 
     def test_invalid_url_format(self):
         """Test that invalid URL format raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid ELI URL format"):
+        with pytest.raises(ValueError, match="Nieprawidłowy format URL ELI"):
             parse_eli("http://example.com/DU/2024/1")
 
 
@@ -175,7 +182,6 @@ class TestToolOutputModels:
         assert len(response.hints) == 1
         assert response.hints[0].message == "Test hint"
         assert response.metadata == {"count": 1}
-        assert response.error is None
 
     def test_enriched_response_serialization(self):
         """Test EnrichedResponse serialization to dict."""
@@ -222,6 +228,90 @@ class TestToolOutputModels:
         assert len(output.results) == 1
         assert output.total_count == 1
         assert output.returned_count == 1
+
+
+class TestPaginationModels:
+    """Tests for shared pagination models and paginated outputs."""
+
+    def test_page_info_serializes_unit_enum(self) -> None:
+        _, info = paginate_items([1, 2, 3], limit=2, offset=0)
+
+        serialized = info.model_dump()
+
+        assert serialized["unit"] == PageUnit.ITEMS
+        assert serialized["returned_count"] == 2
+        assert serialized["total_count"] == 3
+
+    def test_paginated_outputs_expose_page_info(self) -> None:
+        _, page_info = paginate_items([], limit=DEFAULT_ITEM_LIMIT, offset=0)
+
+        assert (
+            ContentOutput(
+                eli="DU/2024/1",
+                section_title="Spis treści",
+                content="",
+                page_info=page_info,
+            ).page_info.unit
+            == PageUnit.ITEMS
+        )
+        assert (
+            SearchInActOutput(
+                eli="DU/2024/1",
+                query="test",
+                matches=[],
+                total_matches=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            MetadataOutput(
+                category="all",
+                metadata={},
+                count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            ChangesOutput(
+                date_range="2024-01-01 to 2024-12-31",
+                publisher="DU",
+                keywords=[],
+                changes=[],
+                total_count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+        assert (
+            FilterOutput(
+                source_result_set_id="rs_1",
+                results=[],
+                original_count=0,
+                filtered_count=0,
+                page_info=page_info,
+            ).page_info
+            == page_info
+        )
+
+    def test_paginated_outputs_require_page_info(self) -> None:
+        with pytest.raises(ValidationError):
+            ContentOutput.model_validate(
+                {
+                    "eli": "DU/2024/1",
+                    "section_title": "Spis treści",
+                    "content": "",
+                }
+            )
+
+    def test_models_package_exports_page_types(self) -> None:
+        from law_scrapper_mcp.models import PageInfo as ExportedPageInfo
+        from law_scrapper_mcp.models import PageUnit as ExportedPageUnit
+
+        assert ExportedPageInfo is PageInfo
+        assert ExportedPageUnit is PageUnit
+        assert ExportedPageUnit.ITEMS == "items"
 
 
 class TestApiResponseModels:

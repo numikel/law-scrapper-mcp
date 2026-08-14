@@ -8,7 +8,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput
+from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
 logger = logging.getLogger(__name__)
@@ -122,7 +124,6 @@ class ResultStore:
         date_to: str | None = None,
         sort_by: str | None = None,
         sort_desc: bool = False,
-        limit: int | None = None,
     ) -> tuple[list[ActSummaryOutput], int]:
         """Filter a stored result set. Returns (filtered_results, original_count)."""
         rs = await self.get(result_set_id)
@@ -162,11 +163,90 @@ class ResultStore:
         if sort_by:
             filtered = _sort_results(filtered, sort_by, sort_desc)
 
-        # Limit
-        if limit is not None and limit > 0:
-            filtered = filtered[:limit]
-
         return filtered, original_count
+
+    async def filter_and_store(
+        self,
+        result_set_id: str,
+        *,
+        pattern: str | None = None,
+        field: str = "title",
+        type_equals: str | None = None,
+        status_equals: str | None = None,
+        year_equals: int | None = None,
+        date_field: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str | None = None,
+        sort_desc: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> FilterOutput:
+        """Filter one set, persist the result, and build its public output."""
+        filtered, original_count = await self.filter_results(
+            result_set_id,
+            pattern=pattern,
+            field=field,
+            type_equals=type_equals,
+            status_equals=status_equals,
+            year_equals=year_equals,
+            date_field=date_field,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
+        filters_applied: dict[str, Any] = {}
+        if pattern:
+            filters_applied.update(pattern=pattern, field=field)
+        if type_equals:
+            filters_applied["type_equals"] = type_equals
+        if status_equals:
+            filters_applied["status_equals"] = status_equals
+        if year_equals is not None:
+            filters_applied["year_equals"] = year_equals
+        if date_field:
+            filters_applied["date_field"] = date_field
+            if date_from:
+                filters_applied["date_from"] = date_from
+            if date_to:
+                filters_applied["date_to"] = date_to
+        if sort_by:
+            filters_applied.update(sort_by=sort_by, sort_desc=sort_desc)
+
+        new_set_id = None
+        if filtered:
+            description = _build_filters_description(
+                pattern=pattern,
+                field=field,
+                type_equals=type_equals,
+                status_equals=status_equals,
+                year_equals=year_equals,
+                date_field=date_field,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            new_set_id = await self.store(
+                filtered,
+                f"filtered({result_set_id}): {description}",
+                len(filtered),
+            )
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        page_results, page_info = paginate_items(
+            filtered,
+            limit=page_limit,
+            offset=page_offset,
+        )
+        return FilterOutput(
+            source_result_set_id=result_set_id,
+            result_set_id=new_set_id,
+            results=page_results,
+            original_count=original_count,
+            filtered_count=len(filtered),
+            filters_applied=filters_applied,
+            page_info=page_info,
+        )
 
     def _evict_expired(self) -> None:
         """Remove expired result sets (called under lock)."""
@@ -215,6 +295,15 @@ class ResultSetTooLargeError(Exception):
 
 
 # --- Helper functions ---
+
+
+def _build_filters_description(**kwargs: str | int | None) -> str:
+    """Build a human-readable description of applied filters."""
+    parts = []
+    for key, value in kwargs.items():
+        if value is not None:
+            parts.append(f"{key}={value}")
+    return " | ".join(parts) if parts else "no filters"
 
 
 _SEARCHABLE_FIELDS = {"title", "eli", "status", "type", "publisher"}

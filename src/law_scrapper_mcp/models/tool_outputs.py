@@ -6,6 +6,8 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
+from law_scrapper_mcp.models.pagination import PageInfo
+
 T = TypeVar("T")
 
 
@@ -22,7 +24,6 @@ class EnrichedResponse(BaseModel, Generic[T]):
 
     data: T = Field(description="The actual response data")
     hints: list[Hint] = Field(default_factory=list, description="Suggested next steps")
-    error: str | None = Field(default=None, description="Error message if any")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
@@ -84,6 +85,7 @@ class ContentOutput(BaseModel):
     section_title: str
     content: str
     toc: list[dict[str, Any]] = []
+    page_info: PageInfo
 
 
 class SearchInActOutput(BaseModel):
@@ -93,6 +95,7 @@ class SearchInActOutput(BaseModel):
     query: str
     matches: list[dict[str, Any]]
     total_matches: int
+    page_info: PageInfo
 
 
 class MetadataOutput(BaseModel):
@@ -101,6 +104,7 @@ class MetadataOutput(BaseModel):
     category: str
     metadata: dict[str, Any]
     count: int
+    page_info: PageInfo
 
 
 class RelationshipsOutput(BaseModel):
@@ -121,6 +125,7 @@ class ChangesOutput(BaseModel):
     changes: list[ActSummaryOutput]
     total_count: int
     result_set_id: str | None = None
+    page_info: PageInfo
 
 
 class FilterOutput(BaseModel):
@@ -132,6 +137,7 @@ class FilterOutput(BaseModel):
     original_count: int
     filtered_count: int
     filters_applied: dict[str, Any] = {}
+    page_info: PageInfo
 
 
 class DateOutput(BaseModel):

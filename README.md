@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-2.4.0-orange.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -20,7 +20,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 - **Content processing** - Automatic PDF-to-text and HTML-to-Markdown conversion
 - **Date calculations** - Specialized date utilities for legal document analysis
 - **System metadata** - Keywords, statuses, document types, and institution data
-- **FastMCP integration** - Built with FastMCP framework, flexible transport options
+- **Official MCP SDK** - Built with `mcp[cli]==2.0.0` and `MCPServer`; STDIO and stateless Streamable HTTP transports
 - **Async HTTP client** - Efficient httpx client with retry logic and connection pooling
 - **TTL caching** - Intelligent response caching with configurable TTL
 - **Structured logging** - JSON and text log formats for easy debugging
@@ -127,7 +127,7 @@ Configure in your MCP client:
 }
 ```
 
-**Note:** The URL must include the `/mcp` path. FastMCP exposes the streamable-http endpoint at `/mcp`, not at the root. Using `http://localhost:7683` without `/mcp` results in 404 (Not Found).
+**Note:** The URL must include the `/mcp` path. The server exposes stateless Streamable HTTP at `/mcp`, not at the root. Using `http://localhost:7683` without `/mcp` results in 404 (Not Found).
 
 ### Docker
 
@@ -469,7 +469,7 @@ law-scrapper-mcp/
 ├── src/law_scrapper_mcp/
 │   ├── __init__.py
 │   ├── __main__.py              # Entry point for python -m
-│   ├── server.py                # FastMCP app, lifespan, transport config
+│   ├── server.py                # MCPServer, lifespan, transport config
 │   ├── config.py                # Pydantic settings (env vars)
 │   ├── logging_config.py        # Structured logging setup
 │   ├── models/                  # Pydantic models
@@ -519,6 +519,10 @@ law-scrapper-mcp/
 ### Security and deployment
 
 When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
+
+**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). This project defaults `LAW_MCP_HOST` to `0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`LOOPBACK_TRANSPORT_SECURITY`) so requests are still validated against a loopback-only allowlist — `Host` outside `127.0.0.1:*` / `localhost:*` / `[::1]:*` gets `421`, `Origin` outside the matching `http://` variants gets `403` — independent of the bind address. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It does not add authentication or make the HTTP transport safe to expose beyond loopback; that remains a separate, not-yet-scoped project.
+
+One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
 
 ### Dockerfile
 
@@ -588,19 +592,41 @@ If upgrading from v1.0.2, note these breaking changes:
 | `get_act_table_of_contents` | `get_act_details` | TOC included in details response |
 | `get_act_relationships` | `analyze_act_relationships` | Renamed for clarity |
 | ELI format | Single string "DU/2024/1" | Changed from separate parameters |
-| SSE transport | STDIO (default) | STDIO is default, HTTP via streamable-http |
+| Legacy event-stream transport | STDIO (default) | STDIO is default, HTTP via streamable-http |
 | Port 7683 | Port 7683 | Same default HTTP port |
+
+## What's new in v3.0.0
+
+- **Official Python MCP SDK** — Replaced the prior third-party framework with `mcp[cli]==2.0.0` and `MCPServer[AppContext]`
+- **Native structured responses** — Tools return `EnrichedResponse` with `outputSchema` and object `structuredContent` (no JSON strings)
+- **Protocol-visible errors** — Tool failures surface as `isError=true` instead of in-body `error` fields
+- **Stateless Streamable HTTP** — `/mcp` endpoint only; legacy event-stream transport removed
+- **Pagination** — `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on search, browse, metadata, changes, TOC, sections, and in-act search
+- **Typed `AppContext`** — Lifespan resources accessed via `ctx.request_context.lifespan_context`
+- **Domain services** — `ComparisonService`, `RelationshipService`, and `DateService` extracted from tool adapters
+- **Transport tests** — Real STDIO subprocess, loopback HTTP, and MCP conformance in CI
+- **Explicit Host/Origin allowlist on HTTP** — `transport_security` is passed explicitly so DNS-rebinding protection applies regardless of the configured bind host; see [Security and deployment](#security-and-deployment)
+
+## Migration guide (v2 to v3)
+
+| v2.x (old) | v3.0.0 (new) | Notes |
+|------------|--------------|-------|
+| `result.content` JSON string | `structuredContent` object | Parse native MCP structured payload |
+| `EnrichedResponse.error` in success body | `isError=true` | Check `result.is_error` before reading content |
+| v2.x in-process client | Official `mcp.Client` | In-memory and transport tests use SDK client |
+| v2.x direct lifespan access | `ctx.request_context.lifespan_context` | Typed `AppContext` dataclass |
+| Legacy event-stream transport | Removed | STDIO or stateless Streamable HTTP only |
 
 ## What's new in v2.4.0
 
-- **Security hardening** — FastMCP 3.x upgrade and dependency overrides close 51 Dependabot alerts (cryptography, urllib3, pillow, starlette, and others)
-- **FastMCP 3.x** — `ctx.lifespan_context` API, `app.run()` for HTTP transport, `@custom_route` for `/health`
-- **Integration tests** — In-memory FastMCP `Client` tests for core tools (metadata, search, dates, act details)
+- **Security hardening** — Framework upgrade and dependency overrides close 51 Dependabot alerts (cryptography, urllib3, pillow, starlette, and others)
+- **Framework 3.x** — Lifespan context API, `app.run()` for HTTP transport, `@custom_route` for `/health`
+- **Integration tests** — In-memory client tests for core tools (metadata, search, dates, act details)
 - **CI and Dependabot** — Automated quality gates and weekly dependency updates
 
 ## What's new in v2.3.1
 
-- **uvx / FastMCP fix** — Fixed `NameError: name 'Annotated' is not defined` when running via `uvx --from "git+https://github.com/numikel/law-scrapper-mcp" law-scrapper`. Removed `from __future__ import annotations` from `compare.py` so parameter type hints resolve correctly during tool registration.
+- **uvx / tool registration fix** — Fixed `NameError: name 'Annotated' is not defined` when running via `uvx --from "git+https://github.com/numikel/law-scrapper-mcp" law-scrapper`. Removed `from __future__ import annotations` from `compare.py` so parameter type hints resolve correctly during tool registration.
 
 ## What's new in v2.3.0
 
@@ -631,7 +657,7 @@ uv sync --extra dev
 # Run unit tests
 uv run pytest tests/unit/ -v
 
-# Run integration tests (requires internet)
+# Run integration tests (mocked Sejm API via respx; no live network required)
 uv run pytest tests/integration/ -v -m integration
 
 # Run all tests with coverage
@@ -643,49 +669,55 @@ uv run pytest --timeout=10 -v
 
 ### MCP integration testing
 
-Law Scrapper MCP uses automated integration tests to verify all 13 tools and their MCP protocol interaction. **The tests do NOT use Playwright or MCP Inspector** — they use a fast, lightweight in-memory testing approach:
+Law Scrapper MCP uses three automated test layers to verify all 13 tools and their MCP protocol interaction:
 
-**What it is:**
-- FastMCP in-memory `Client(app)` calling tools via the MCP protocol without an external server
-- Mock HTTP responses via `respx` (intercepting calls to `api.sejm.gov.pl`)
-- 41 integration tests covering all 13 tools, EnrichedResponse validation, and error handling
-- Tests verify: tool registration, parameter validation, response structure, stateful workflows (search → filter → read), and graceful error degradation
+**Layer 1 — unit tests** (`tests/unit/`):
 
-**What it is NOT:**
-- NOT browser automation (no Playwright, Selenium, or headless browsers)
-- NOT MCP Inspector or any GUI-based testing
-- NOT requiring a running server process
-- NOT real API calls (all Sejm API endpoints are mocked with `respx`)
-
-**How to run:**
 ```bash
-# Run integration tests
-uv run pytest tests/integration/ -v -m integration
-
-# Run specific test class
-uv run pytest tests/integration/test_tools_e2e.py::TestSearchTools -v
-
-# Run with coverage
-uv run pytest tests/integration/ -m integration --cov=law_scrapper_mcp
+uv run pytest tests/unit/ -v
 ```
 
-**Architecture:**
-- **Test framework**: pytest with async support (pytest-asyncio)
-- **HTTP mocking**: respx intercepts httpx calls before they reach the network
-- **MCP protocol**: FastMCP `Client(app)` simulates in-process STDIO transport
-- **Fixtures** (`tests/conftest.py`): Load JSON/HTML samples, mock API responses, provide `mcp_client` fixture
-- **Test file**: `tests/integration/test_tools_e2e.py` (41 tests)
+**Layer 2 — in-memory integration** (official `mcp.Client`, mocked Sejm API via `respx`):
 
-**Key test patterns:**
-1. **Tool listing** — Verify all 13 tools are registered and have descriptions
-2. **Smoke tests** — Each tool returns valid JSON with `{data, hints}` envelope
-3. **Data validation** — Results contain expected fields matching fixture values
-4. **Stateful workflows** — Chain tools: search → filter → load act → read sections → search in content
-5. **Error handling** — Invalid inputs return graceful errors in the response, not exceptions
+```bash
+uv run pytest tests/integration/test_tools_e2e.py \
+  tests/integration/test_content_pagination.py \
+  tests/integration/test_result_pagination.py -v -m integration
+```
+
+**Layer 3 — transport integration** (real STDIO subprocess and loopback Streamable HTTP):
+
+```bash
+uv run pytest tests/integration/test_stdio_transport.py \
+  tests/integration/test_http_transport.py -v -m integration
+```
+
+**Full integration suite:**
+
+```bash
+uv run pytest tests/integration/ -v -m integration
+```
+
+**What the tests verify:**
+- All 13 tools registered with preserved public arguments
+- Native `structuredContent` payloads with `outputSchema` (not JSON strings)
+- `isError=true` on tool execution failures
+- `page_info` (`PageInfo`) pagination metadata on paginated outputs
+- Stateful workflows: search → filter → load act → read sections → search in content
+- Real STDIO and HTTP transports against a running server process
+
+**Architecture:**
+- **Test framework**: pytest with asyncio (unit) and anyio (MCP client tests)
+- **HTTP mocking**: respx intercepts httpx calls in in-memory integration tests
+- **MCP protocol**: Official `mcp.Client` from the Python MCP SDK
+- **Helpers**: `tests/mcp_helpers.py` (`parse_tool_result` for `structuredContent` assertions)
+- **CI**: Legacy dependency gate, protocol transport tests, and MCP conformance against `/mcp`
+
+See `tests/TEST_SUITE_SUMMARY.md` for the full file layout and patterns.
 
 ### Code quality
 
-The project follows FastMCP best practices:
+The project follows MCP SDK best practices:
 - **Modular architecture** - Separated concerns (models, client, services, tools)
 - **Type hints** - Full type annotation with Pydantic models
 - **Async throughout** - Async/await for all I/O operations
@@ -719,7 +751,7 @@ LAW_MCP_LOG_LEVEL=DEBUG uv run python -m law_scrapper_mcp
 
 ### Development guidelines
 
-- Follow FastMCP best practices for tool definitions
+- Follow MCP SDK patterns for tool definitions and structured output
 - Include comprehensive examples and parameter descriptions
 - Add appropriate tags for tool categorization
 - Write async code throughout

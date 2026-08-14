@@ -43,6 +43,7 @@ override-dependencies = [
     "werkzeug>=3.1.6",
     "requests>=2.33.0",
     "pygments>=2.20.0",
+    "click>=8.3.3",
 ]
 
 [tool.hatch.build.targets.wheel]

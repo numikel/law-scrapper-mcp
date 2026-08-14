@@ -243,6 +243,11 @@ def generate_release_notes(grouped: dict[str, list[str]], commit_range: str) -> 
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(description="Extract git release info and check version synchronization.")
     parser.add_argument("--range", help="Git revision range (default: latest_tag..HEAD or initial commit)")
     parser.add_argument("--check-sync", action="store_true", help="Check version sync across project files")

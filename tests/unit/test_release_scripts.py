@@ -44,14 +44,18 @@ class TestGitReleaseInfo:
 
     def test_version_files_exist_and_sync(self):
         """Verify version files list maps to existing files in repository."""
+        import re
+
+        pyproject_path, pyproject_pattern = git_release_info.VERSION_FILES["pyproject.toml"]
+        expected_version = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE).group(1)
+
         for key, (path, pattern) in git_release_info.VERSION_FILES.items():
             assert path.exists(), f"File for {key} does not exist: {path}"
             content = path.read_text(encoding="utf-8")
-            import re
 
             match = re.search(pattern, content, re.MULTILINE)
             assert match is not None, f"Pattern for {key} did not match in {path}"
-            assert match.group(1) == "2.4.0", f"Version mismatch in {key}: got {match.group(1)}"
+            assert match.group(1) == expected_version, f"Version mismatch in {key}: got {match.group(1)}"
 
 
 class TestCheckRelease:
@@ -87,6 +91,11 @@ class TestCheckRelease:
 
     def test_check_version_sync_current_repo(self):
         """Test check_version_sync against repository files."""
+        import re
+
+        pyproject_path, pyproject_pattern = git_release_info.VERSION_FILES["pyproject.toml"]
+        expected_version = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE).group(1)
+
         sync_ok, ver = check_release.check_version_sync()
         assert sync_ok is True
-        assert ver == "2.4.0"
+        assert ver == expected_version

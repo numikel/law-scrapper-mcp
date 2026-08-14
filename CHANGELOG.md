@@ -7,49 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.0.0] - 2026-08-09
+## [3.0.0] - 2026-08-14
 
-### Added
+See [docs/changelogs/v3.0.0.md](docs/changelogs/v3.0.0.md) for details.
 
-- **`PageInfo` pagination metadata** — Paginated tool responses include `page_info` with `limit`, `offset`, `returned_count`, `total_count`, `was_truncated`, `next_offset`, and `unit` (`items` or `characters`)
-- **Pagination parameters** — `limit` and `offset` on search, browse, metadata, changes, TOC, section reads, and in-act search; item limits default to 20 (max 100), section character limits default to 10,000 (max 50,000)
-- **Typed `AppContext`** — Lifespan yields a frozen dataclass accessed via `ctx.request_context.lifespan_context`
-- **Three domain services** — `ComparisonService`, `RelationshipService`, and `DateService` extracted from tool adapters
-- **Real transport tests** — Official MCP `Client` over in-memory fixtures, real STDIO subprocess, and loopback Streamable HTTP; CI runs MCP conformance against `/mcp`
-- **New dependency: `google-re2`** — Ships as prebuilt binary wheels for CPython 3.13 on Windows and manylinux; no compiler needed to install
-- **`LAW_MCP_MAX_PATTERN_LENGTH`** (default 512, range 64-4096) — Out-of-range values are clamped with a startup warning instead of blocking the server
-- **`LAW_MCP_FILTER_MAX_RECORDS`** (default 100, floor 1) — Limits records processed by a single `filter_results` call; operators may raise it, but very high values lengthen the synchronous scan
-
-### Changed
-
-- **Official Python MCP SDK** — Replaced FastMCP with `mcp[cli]==2.0.0` and `MCPServer[AppContext]`
-- **Native structured responses** — Tools return `EnrichedResponse` objects with `outputSchema` and object `structuredContent` instead of JSON strings
-- **Stateless Streamable HTTP** — HTTP transport serves `/mcp` with `stateless_http=True`; STDIO remains the default
-- **`filter_results` breaking change: result set size cap** — Previously unlimited, calls on result sets larger than 100 records (`LAW_MCP_FILTER_MAX_RECORDS`) are now refused, even without a `pattern`; failures surface as `isError=true` with a text message (error category is logged server-side only). Narrow the search or raise `LAW_MCP_FILTER_MAX_RECORDS` to work around it
-- **`filter_results`: pattern compilation has bounded resource budgets** — Some simple-looking patterns, e.g. `\p{L}{0,112}`, are now rejected because their compiled size exceeds the limit. Patterns with more than four variable range quantifiers (such as `{1,900}`) are also rejected before compilation to avoid blocking the event loop. The preflight recognizes only exact RE2 POSIX tokens (`[[:name:]]` / `[[:^name:]]`); incomplete `[.` / `[=` forms cannot hide ranges from the guard
-- **`filter_results` parameter description names the supported pattern syntax** — The `pattern` parameter description now documents the supported regex subset, matching the validation error message
-
-### Removed
-
-- **FastMCP** — No FastMCP dependency or runtime APIs
-- **SSE transport** — Only STDIO and stateless Streamable HTTP are supported
-- **`result: string`** — Tool outputs are no longer serialized JSON strings
-- **Success-envelope `error`** — Failures no longer appear as `{data, hints, error}` inside successful tool results
-- **Dead exception handler in document search** — Removed an unreachable `try/except` around escaped-query compilation
-
-### Breaking
-
-- **Clients must read `structuredContent`** — Parse the native MCP structured payload (`result.structured_content` / `structuredContent`) instead of `result.content` text or `model_dump_json()` strings
-- **Tool failures use `isError=true`** — Invalid inputs and execution errors surface as protocol-visible `is_error` / `isError=true`, not in-body error fields
-
-### Security
-
-- **`filter_results`: fixed ReDoS vulnerability** — Client-supplied patterns now compile through a linear-time matching engine instead of Python's backtracking `re`; lookaround and backreferences are rejected with a validation error instead of executed. Previously, `pattern="(.+)+!"` could freeze the server indefinitely.
-- **Streamable HTTP: restored Host/Origin allowlist regardless of bind address** — The official MCP SDK only auto-enables DNS-rebinding protection (`TransportSecuritySettings`) when the server binds to a literal loopback host (`127.0.0.1`/`localhost`/`::1`). This project defaults to `LAW_MCP_HOST=0.0.0.0` (required for Docker port publishing), which left that validation disabled — any `Host`/`Origin` header was accepted. `server.py` now passes `transport_security` explicitly, restoring the same loopback-only allowlist the pre-3.0.0 FastMCP server enforced unconditionally.
-
-### Fixed
-
-- **HTTP client resource leak on shutdown** — If the server exited through an exception or interruption while running, the HTTP client was never closed; shutdown now always releases it.
+- **Official Python MCP SDK Migration** — Replaced FastMCP with `mcp[cli]==2.0.0` and `MCPServer[AppContext]`, returning native `structuredContent` and protocol-level `isError` signals.
+- **Structured Pagination & Domain Services** — Standardized `PageInfo` pagination across tools; extracted `ComparisonService`, `RelationshipService`, and `DateService`.
+- **Regex Security & Bounded Resource Budgets** — Integrated `google-re2` for linear-time pattern matching in `filter_results`, preventing ReDoS vulnerabilities and capping result set sizes.
+- **Streamable HTTP Transport Hardening** — Enforced Host/Origin allowlist validation for Streamable HTTP independent of server bind address.
 
 ## [2.4.0] - 2026-07-08
 

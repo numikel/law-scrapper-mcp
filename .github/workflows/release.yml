@@ -85,4 +85,3 @@ jobs:
           body_path: docs/changelogs/v${{ env.VERSION }}.md
           files: |
             dist/*
-            dist/checksums.txt

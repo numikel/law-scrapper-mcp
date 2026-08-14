@@ -10,6 +10,7 @@ from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
+from law_scrapper_mcp.services.content_service import ContentService
 from law_scrapper_mcp.services.date_service import DateService
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.metadata_service import MetadataService
@@ -30,6 +31,7 @@ class AppContext:
     metadata_service: MetadataService
     search_service: SearchService
     act_service: ActService
+    content_service: ContentService
     changes_service: ChangesService
     comparison_service: ComparisonService
     relationship_service: RelationshipService

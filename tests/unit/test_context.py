@@ -8,8 +8,6 @@ import pytest
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.server import app, lifespan
 
-pytestmark = pytest.mark.asyncio
-
 EXPECTED_FIELDS = {
     "client",
     "cache",
@@ -19,6 +17,7 @@ EXPECTED_FIELDS = {
     "metadata_service",
     "search_service",
     "act_service",
+    "content_service",
     "changes_service",
     "comparison_service",
     "relationship_service",
@@ -30,6 +29,7 @@ def test_app_context_declares_every_lifespan_dependency() -> None:
     assert {field.name for field in fields(AppContext)} == EXPECTED_FIELDS
 
 
+@pytest.mark.asyncio
 async def test_lifespan_yields_frozen_app_context() -> None:
     async with lifespan(app) as app_context:
         assert isinstance(app_context, AppContext)
@@ -37,6 +37,7 @@ async def test_lifespan_yields_frozen_app_context() -> None:
             app_context.client = None  # type: ignore[misc, assignment]
 
 
+@pytest.mark.asyncio
 async def test_get_app_context_reads_typed_value_from_request_context() -> None:
     async with lifespan(app) as app_context:
         ctx = Mock()

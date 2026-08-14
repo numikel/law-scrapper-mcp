@@ -8,17 +8,7 @@ from mcp.server.mcpserver import Context
 from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
-from law_scrapper_mcp.models.pagination import (
-    DEFAULT_ITEM_LIMIT,
-    MAX_CONTEXT_CHARS,
-    MAX_ITEM_LIMIT,
-)
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
-from law_scrapper_mcp.services.pagination import (
-    effective_limit,
-    paginate_items,
-    parse_non_negative,
-)
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -79,31 +69,14 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - search_in_act(eli="DU/2024/1692", query="kara", limit=5, offset=5) - Kolejna strona trafień
         - search_in_act(eli="DU/2024/1692", query="termin") - Domyślna strona (do 20 trafień)
         """
-        document_store = get_app_context(ctx).document_store
+        content_service = get_app_context(ctx).content_service
 
-        context_size = min(
-            parse_non_negative(context_chars, name="context_chars", default=500),
-            MAX_CONTEXT_CHARS,
-        )
-        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
-        page_offset = parse_non_negative(offset, name="offset", default=0)
-        hits = await document_store.search(eli, query, context_size)
-        all_matches = [
-            {
-                "section_id": hit.section_id,
-                "section_title": hit.section_title,
-                "context": hit.context,
-                "position": f"{hit.match_start}-{hit.match_end}",
-            }
-            for hit in hits
-        ]
-        matches, page_info = paginate_items(all_matches, limit=page_limit, offset=page_offset)
-        output = SearchInActOutput(
-            eli=eli,
-            query=query,
-            matches=matches,
-            total_matches=page_info.total_count,
-            page_info=page_info,
+        output = await content_service.search(
+            eli,
+            query,
+            context_chars=context_chars,
+            limit=limit,
+            offset=offset,
         )
 
         return EnrichedResponse[SearchInActOutput](data=output)

@@ -19,6 +19,7 @@ from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
+from law_scrapper_mcp.services.content_service import ContentService
 from law_scrapper_mcp.services.date_service import DateService
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.metadata_service import MetadataService
@@ -139,6 +140,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     metadata_service = MetadataService(client)
     search_service = SearchService(client, result_store)
     act_service = ActService(client, document_store, content_processor)
+    content_service = ContentService(document_store)
     changes_service = ChangesService(client, result_store)
     comparison_service = ComparisonService(act_service)
     relationship_service = RelationshipService(client)
@@ -153,6 +155,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         metadata_service=metadata_service,
         search_service=search_service,
         act_service=act_service,
+        content_service=content_service,
         changes_service=changes_service,
         comparison_service=comparison_service,
         relationship_service=relationship_service,

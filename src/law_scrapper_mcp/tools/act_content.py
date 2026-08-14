@@ -8,24 +8,12 @@ from mcp.server.mcpserver import Context
 from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
-from law_scrapper_mcp.models.pagination import (
-    DEFAULT_ITEM_LIMIT,
-    DEFAULT_SECTION_CHAR_LIMIT,
-    MAX_ITEM_LIMIT,
-    MAX_SECTION_CHAR_LIMIT,
-)
 from law_scrapper_mcp.models.tool_outputs import (
     ContentOutput,
     EnrichedResponse,
     Hint,
     LoadedDocumentInfo,
     LoadedDocumentListOutput,
-)
-from law_scrapper_mcp.services.pagination import (
-    effective_limit,
-    paginate_items,
-    paginate_text,
-    parse_non_negative,
 )
 from law_scrapper_mcp.services.response_enrichment import content_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -90,49 +78,13 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - read_act_content(eli="DU/2024/1692", section="Dział II") - Treść działu II
         - read_act_content(eli="MP/2024/100") - Spis treści aktu z MP
         """
-        document_store = get_app_context(ctx).document_store
+        content_service = get_app_context(ctx).content_service
 
-        page_offset = parse_non_negative(offset, name="offset", default=0)
-        if section is None:
-            page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
-            sections = await document_store.get_toc(eli)
-            all_toc = [{"id": item.id, "title": item.title, "level": item.level} for item in sections]
-            toc, page_info = paginate_items(all_toc, limit=page_limit, offset=page_offset)
-            output = ContentOutput(
-                eli=eli,
-                section_id=None,
-                section_title="Spis treści",
-                content=f"Znaleziono {page_info.total_count} sekcji",
-                toc=toc,
-                page_info=page_info,
-            )
-            return EnrichedResponse[ContentOutput](
-                data=output,
-                hints=content_hints(eli, page_info.total_count > 0),
-            )
+        output = await content_service.read(eli, section=section, limit=limit, offset=offset)
 
-        page_limit = effective_limit(
-            limit,
-            default=DEFAULT_SECTION_CHAR_LIMIT,
-            maximum=MAX_SECTION_CHAR_LIMIT,
-        )
-        full_content = await document_store.get_section(eli, section)
-        if full_content is None:
-            raise ValueError(
-                f"Sekcja '{section}' nie znaleziona w akcie {eli}. "
-                f"Użyj read_act_content(eli='{eli}') aby zobaczyć dostępne sekcje."
-            )
-        content, page_info = paginate_text(full_content, limit=page_limit, offset=page_offset)
-        output = ContentOutput(
-            eli=eli,
-            section_id=section,
-            section_title=section,
-            content=content,
-            page_info=page_info,
-        )
         return EnrichedResponse[ContentOutput](
             data=output,
-            hints=content_hints(eli, True),
+            hints=content_hints(eli, output.section_id is not None or output.page_info.total_count > 0),
         )
 
     @mcp.tool(meta={"tags": ["utility", "content"]})

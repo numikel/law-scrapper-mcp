@@ -645,16 +645,40 @@ class TestScanAndHydrate:
 
         assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
 
-    async def test_scan_does_not_block_other_store_readers(self) -> None:
-        import asyncio
+    async def test_scan_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import re as re_module
+        from typing import Any
 
         store = DocumentStore()
-        await store.load("DU/2024/1", "podatek " * 5_000, [])
+        await store.load("DU/2024/1", "podatek " * 100, [])
+        observed: list[bool] = []
+        original_compile = re_module.compile
 
-        spans, documents = await asyncio.gather(
-            store.scan("DU/2024/1", "podatek"),
-            store.list_documents(),
-        )
+        def _spy_compile(*args: Any, **kwargs: Any) -> Any:
+            # Check if lock is held when re.compile is called.
+            # This happens after scan() has released the lock.
+            observed.append(store._lock.locked())
+            return original_compile(*args, **kwargs)
 
-        assert len(spans) == 5_000
-        assert [doc["eli"] for doc in documents] == ["DU/2024/1"]
+        monkeypatch.setattr(re_module, "compile", _spy_compile)
+
+        await store.scan("DU/2024/1", "podatek")
+
+        assert observed == [False], "the store lock must not be held during pattern compilation"
+
+    async def test_hydrate_silently_drops_out_of_bounds_spans(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        # Reload with shorter content (simulating document mutation)
+        new_markdown = "Art. 1\npodatek\n"
+        await store.load("DU/2024/1", new_markdown, sections[:1])
+
+        # The old spans (39, 46) are now out of bounds (document is only 14 chars)
+        hits = await store.hydrate("DU/2024/1", [(7, 14), (39, 46)], context_chars=5)
+
+        # Only the in-bounds span should produce a hit
+        assert len(hits) == 1
+        assert hits[0].match_start == 7
+        assert hits[0].match_end == 14

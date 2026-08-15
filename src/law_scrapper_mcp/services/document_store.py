@@ -131,9 +131,13 @@ class DocumentStore:
         ``re.escape(query)`` with ``query`` would reintroduce the ReDoS risk
         addressed by the pattern filtering path.
 
-        The lock is held only long enough to resolve the document; the scan
-        itself runs on an immutable string reference, so concurrent readers
-        are not blocked for the length of the document.
+        The lock is held only long enough to resolve the document and copy the
+        markdown reference; it is released before the pattern matching runs.
+        Other coroutines waiting on this lock are not blocked by the scan
+        itself. Note: the scan is still synchronous CPU-bound work with no
+        ``await`` points, so it occupies the event loop for its duration and
+        may delay unrelated coroutines — only the lock duration is reduced,
+        not the total event-loop occupancy.
         """
         async with self._lock:
             doc = self._get_doc(eli)
@@ -153,7 +157,12 @@ class DocumentStore:
         """Build full hits for the given spans only.
 
         Cost is proportional to `len(spans)`, not to the number of matches in
-        the document. The lock is released before any context slice is cut.
+        the document. The lock is released before any context extraction.
+
+        Spans must originate from a scan() of the same document; the store may
+        have changed between calls (document expired, reloaded). Spans that
+        extend beyond the current document (0 <= start < end <= document_length)
+        are silently dropped rather than corrupting output.
         """
         async with self._lock:
             doc = self._get_doc(eli)
@@ -162,7 +171,12 @@ class DocumentStore:
             sections = doc.sections
             section_starts = doc.section_starts
 
-        return _build_hits(markdown, sections, section_starts, spans, context_chars)
+        document_length = len(markdown)
+        # Filter out spans that are no longer valid for the current document.
+        # This happens if the store mutated between scan and hydrate.
+        valid_spans = [(start, end) for start, end in spans if start >= 0 and end <= document_length]
+
+        return _build_hits(markdown, sections, section_starts, valid_spans, context_chars)
 
     async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
         """Search literal text within a loaded document, returning every hit.

@@ -4,12 +4,16 @@ import asyncio
 import logging
 import re
 import time
+from bisect import bisect_right
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
 
 logger = logging.getLogger(__name__)
+
+UNKNOWN_SECTION = ("unknown", "Unknown section")
 
 
 @dataclass
@@ -22,9 +26,33 @@ class LoadedDocument:
     loaded_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
     size_bytes: int = 0
+    section_starts: tuple[int, ...] = ()
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.size_bytes = len(self.markdown.encode("utf-8"))
+        self.sections = sorted(self.sections, key=lambda section: section.start_pos)
+        self.section_starts = tuple(section.start_pos for section in self.sections)
+
+
+def section_for_position(
+    section_starts: Sequence[int],
+    sections: Sequence[Section],
+    position: int,
+    document_length: int,
+) -> tuple[str, str]:
+    """Return the (id, title) of the section covering `position`.
+
+    Sections occupy disjoint, increasing ranges, so the candidate is the last
+    section starting at or before `position`. A linear scan over `sections`
+    would make in-act search cost matches x sections; this is logarithmic.
+    """
+    index = bisect_right(section_starts, position) - 1
+    if index < 0:
+        return UNKNOWN_SECTION
+    section = sections[index]
+    if position < (section.end_pos or document_length):
+        return section.id, section.title
+    return UNKNOWN_SECTION
 
 
 @dataclass

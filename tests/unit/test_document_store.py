@@ -476,3 +476,95 @@ class TestSearchTreatsQueryLiterally:
 
         assert len(literal_hits) == 1
         assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur
+
+
+from collections.abc import Sequence
+
+from law_scrapper_mcp.services.content_processor import Section
+from law_scrapper_mcp.services.document_store import (
+    UNKNOWN_SECTION,
+    LoadedDocument,
+    section_for_position,
+)
+
+
+class _CountingStarts(Sequence[int]):
+    """A sequence that records how many element reads bisect performed."""
+
+    def __init__(self, values: list[int]) -> None:
+        self._values = values
+        self.reads = 0
+
+    def __getitem__(self, index):  # type: ignore[no-untyped-def]
+        self.reads += 1
+        return self._values[index]
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
+def _numbered_sections(count: int, *, span: int = 100) -> list[Section]:
+    return [
+        Section(
+            id=f"art_{n}",
+            title=f"Art. {n}",
+            level=2,
+            start_pos=n * span,
+            end_pos=(n + 1) * span,
+            content="x",
+        )
+        for n in range(count)
+    ]
+
+
+class TestSectionForPosition:
+    def test_returns_the_section_containing_the_position(self) -> None:
+        sections = _numbered_sections(5)
+        starts = [section.start_pos for section in sections]
+
+        assert section_for_position(starts, sections, 250, 500) == ("art_2", "Art. 2")
+
+    def test_position_before_the_first_section_is_unknown(self) -> None:
+        sections = _numbered_sections(3, span=100)
+        sections = [
+            Section(id=s.id, title=s.title, level=s.level, start_pos=s.start_pos + 50, end_pos=s.end_pos + 50)
+            for s in sections
+        ]
+        starts = [section.start_pos for section in sections]
+
+        assert section_for_position(starts, sections, 10, 400) == UNKNOWN_SECTION
+
+    def test_position_in_a_gap_after_a_section_end_is_unknown(self) -> None:
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=10)]
+
+        assert section_for_position([0], sections, 50, 100) == UNKNOWN_SECTION
+
+    def test_open_ended_last_section_extends_to_the_document_end(self) -> None:
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=None)]
+
+        assert section_for_position([0], sections, 90, 100) == ("art_1", "Art. 1")
+
+    def test_section_lookup_is_logarithmic_in_the_number_of_sections(self) -> None:
+        sections = _numbered_sections(4096)
+        starts = _CountingStarts([section.start_pos for section in sections])
+
+        section_for_position(starts, sections, 4095 * 100 + 1, 4096 * 100)
+
+        assert starts.reads <= 13, f"expected a logarithmic probe count, got {starts.reads}"
+
+
+class TestLoadedDocumentSectionIndex:
+    def test_section_starts_are_derived_from_the_sections(self) -> None:
+        sections = _numbered_sections(3)
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert document.section_starts == (0, 100, 200)
+
+    def test_sections_are_ordered_by_start_position(self) -> None:
+        sections = list(reversed(_numbered_sections(3)))
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert [section.id for section in document.sections] == ["art_0", "art_1", "art_2"]
+        assert document.section_starts == (0, 100, 200)

@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
+from typing import overload
 
 import pytest
 
 from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
-from law_scrapper_mcp.services.document_store import DocumentStore, LoadedDocument
+from law_scrapper_mcp.services.document_store import (
+    UNKNOWN_SECTION,
+    DocumentStore,
+    LoadedDocument,
+    section_for_position,
+)
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 class TestDocumentStoreBasicOperations:
     """Tests for basic document store operations."""
 
@@ -57,6 +63,7 @@ class TestDocumentStoreBasicOperations:
         await document_store.evict("DU/2024/999")  # Should not raise
 
 
+@pytest.mark.asyncio
 class TestGetSection:
     """Tests for getting sections from documents."""
 
@@ -144,6 +151,7 @@ class TestGetSection:
             await document_store.get_section("DU/2024/999", "art_1")
 
 
+@pytest.mark.asyncio
 class TestSearchInDocument:
     """Tests for searching within documents."""
 
@@ -247,6 +255,7 @@ class TestSearchInDocument:
             await document_store.search("DU/2024/999", "keyword")
 
 
+@pytest.mark.asyncio
 class TestTTLExpiration:
     """Tests for TTL-based document expiration."""
 
@@ -287,6 +296,7 @@ class TestTTLExpiration:
         assert await store.is_loaded("DU/2024/1")
 
 
+@pytest.mark.asyncio
 class TestLRUEviction:
     """Tests for LRU eviction when max_documents is reached."""
 
@@ -335,6 +345,7 @@ class TestLRUEviction:
         assert await store.is_loaded("DU/2024/4")
 
 
+@pytest.mark.asyncio
 class TestDocumentSizeLimits:
     """Tests for document size limits."""
 
@@ -414,6 +425,7 @@ class TestLoadedDocument:
         assert before <= doc.last_accessed <= after
 
 
+@pytest.mark.asyncio
 class TestEdgeCases:
     """Tests for edge cases."""
 
@@ -445,6 +457,7 @@ class TestEdgeCases:
         assert len(await document_store.get_toc("DU/2024/1")) == 2
 
 
+@pytest.mark.asyncio
 class TestSearchTreatsQueryLiterally:
     """Regression guard — `query` must not be treated as a raw pattern."""
 
@@ -478,16 +491,6 @@ class TestSearchTreatsQueryLiterally:
         assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur
 
 
-from collections.abc import Sequence
-
-from law_scrapper_mcp.services.content_processor import Section
-from law_scrapper_mcp.services.document_store import (
-    UNKNOWN_SECTION,
-    LoadedDocument,
-    section_for_position,
-)
-
-
 class _CountingStarts(Sequence[int]):
     """A sequence that records how many element reads bisect performed."""
 
@@ -495,7 +498,13 @@ class _CountingStarts(Sequence[int]):
         self._values = values
         self.reads = 0
 
-    def __getitem__(self, index):  # type: ignore[no-untyped-def]
+    @overload
+    def __getitem__(self, index: int) -> int: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[int]: ...
+
+    def __getitem__(self, index: int | slice) -> int | Sequence[int]:
         self.reads += 1
         return self._values[index]
 
@@ -503,14 +512,14 @@ class _CountingStarts(Sequence[int]):
         return len(self._values)
 
 
-def _numbered_sections(count: int, *, span: int = 100) -> list[Section]:
+def _numbered_sections(count: int, *, span: int = 100, offset: int = 0) -> list[Section]:
     return [
         Section(
             id=f"art_{n}",
             title=f"Art. {n}",
             level=2,
-            start_pos=n * span,
-            end_pos=(n + 1) * span,
+            start_pos=offset + n * span,
+            end_pos=offset + (n + 1) * span,
             content="x",
         )
         for n in range(count)
@@ -525,11 +534,7 @@ class TestSectionForPosition:
         assert section_for_position(starts, sections, 250, 500) == ("art_2", "Art. 2")
 
     def test_position_before_the_first_section_is_unknown(self) -> None:
-        sections = _numbered_sections(3, span=100)
-        sections = [
-            Section(id=s.id, title=s.title, level=s.level, start_pos=s.start_pos + 50, end_pos=s.end_pos + 50)
-            for s in sections
-        ]
+        sections = _numbered_sections(3, span=100, offset=50)
         starts = [section.start_pos for section in sections]
 
         assert section_for_position(starts, sections, 10, 400) == UNKNOWN_SECTION
@@ -550,7 +555,7 @@ class TestSectionForPosition:
 
         section_for_position(starts, sections, 4095 * 100 + 1, 4096 * 100)
 
-        assert starts.reads <= 13, f"expected a logarithmic probe count, got {starts.reads}"
+        assert 1 <= starts.reads <= 13, f"expected a logarithmic probe count, got {starts.reads}"
 
 
 class TestLoadedDocumentSectionIndex:

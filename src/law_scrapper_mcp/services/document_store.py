@@ -14,6 +14,7 @@ from law_scrapper_mcp.services.content_processor import Section
 logger = logging.getLogger(__name__)
 
 UNKNOWN_SECTION = ("unknown", "Unknown section")
+MatchSpan = tuple[int, int]
 
 
 @dataclass
@@ -122,46 +123,55 @@ class DocumentStore:
 
             return None
 
-    async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
-        """Search literal text within a loaded document.
+    async def scan(self, eli: str, query: str) -> list[MatchSpan]:
+        """Return the positions of every literal match, without building context.
 
         The query is escaped before compilation, so Python's backtracking
         engine never receives client-supplied regex syntax. Replacing
         ``re.escape(query)`` with ``query`` would reintroduce the ReDoS risk
         addressed by the pattern filtering path.
+
+        The lock is held only long enough to resolve the document; the scan
+        itself runs on an immutable string reference, so concurrent readers
+        are not blocked for the length of the document.
         """
         async with self._lock:
             doc = self._get_doc(eli)
             doc.last_accessed = time.time()
+            markdown = doc.markdown
 
-            hits = []
-            pattern = re.compile(re.escape(query), re.IGNORECASE)
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        return [(match.start(), match.end()) for match in pattern.finditer(markdown)]
 
-            for match in pattern.finditer(doc.markdown):
-                start = max(0, match.start() - context_chars)
-                end = min(len(doc.markdown), match.end() + context_chars)
-                context = doc.markdown[start:end]
+    async def hydrate(
+        self,
+        eli: str,
+        spans: Sequence[MatchSpan],
+        *,
+        context_chars: int,
+    ) -> list[SearchHit]:
+        """Build full hits for the given spans only.
 
-                # Find which section this match belongs to
-                section_id = "unknown"
-                section_title = "Unknown section"
-                for section in doc.sections:
-                    if section.start_pos <= match.start() < (section.end_pos or len(doc.markdown)):
-                        section_id = section.id
-                        section_title = section.title
-                        break
+        Cost is proportional to `len(spans)`, not to the number of matches in
+        the document. The lock is released before any context slice is cut.
+        """
+        async with self._lock:
+            doc = self._get_doc(eli)
+            doc.last_accessed = time.time()
+            markdown = doc.markdown
+            sections = doc.sections
+            section_starts = doc.section_starts
 
-                hits.append(
-                    SearchHit(
-                        section_id=section_id,
-                        section_title=section_title,
-                        context=context,
-                        match_start=match.start(),
-                        match_end=match.end(),
-                    )
-                )
+        return _build_hits(markdown, sections, section_starts, spans, context_chars)
 
-            return hits
+    async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
+        """Search literal text within a loaded document, returning every hit.
+
+        Kept as the unbounded composition of `scan` and `hydrate`. Callers that
+        only need one page must paginate the spans between the two calls.
+        """
+        spans = await self.scan(eli, query)
+        return await self.hydrate(eli, spans, context_chars=context_chars)
 
     async def get_toc(self, eli: str) -> list[Section]:
         """Get table of contents for a loaded document."""
@@ -225,3 +235,29 @@ class DocumentStore:
         lru_key = min(self._store, key=lambda k: self._store[k].last_accessed)
         logger.info(f"Evicting LRU document: {lru_key}")
         del self._store[lru_key]
+
+
+def _build_hits(
+    markdown: str,
+    sections: Sequence[Section],
+    section_starts: Sequence[int],
+    spans: Sequence[MatchSpan],
+    context_chars: int,
+) -> list[SearchHit]:
+    """Turn match spans into hits with context and section attribution."""
+    document_length = len(markdown)
+    hits: list[SearchHit] = []
+    for match_start, match_end in spans:
+        start = max(0, match_start - context_chars)
+        end = min(document_length, match_end + context_chars)
+        section_id, section_title = section_for_position(section_starts, sections, match_start, document_length)
+        hits.append(
+            SearchHit(
+                section_id=section_id,
+                section_title=section_title,
+                context=markdown[start:end],
+                match_start=match_start,
+                match_end=match_end,
+            )
+        )
+    return hits

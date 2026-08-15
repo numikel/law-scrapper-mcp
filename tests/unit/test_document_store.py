@@ -573,3 +573,88 @@ class TestLoadedDocumentSectionIndex:
 
         assert [section.id for section in document.sections] == ["art_0", "art_1", "art_2"]
         assert document.section_starts == (0, 100, 200)
+
+
+def _document_with_two_hits() -> tuple[str, list[Section]]:
+    markdown = "Art. 1\npodatek od nieruchomosci\nArt. 2\npodatek dochodowy\n"
+    sections = [
+        Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=32),
+        Section(id="art_2", title="Art. 2", level=2, start_pos=32, end_pos=len(markdown)),
+    ]
+    return markdown, sections
+
+
+@pytest.mark.asyncio
+class TestScanAndHydrate:
+    async def test_scan_returns_only_match_positions(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        spans = await store.scan("DU/2024/1", "podatek")
+
+        assert spans == [(7, 14), (39, 46)]
+
+    async def test_scan_is_case_insensitive_and_escapes_the_query(self) -> None:
+        store = DocumentStore()
+        await store.load("DU/2024/1", "Art. 1 (a+b) i A+B", [])
+
+        assert await store.scan("DU/2024/1", "a+b") == [(8, 11), (15, 18)]
+
+    async def test_hydrate_builds_hits_only_for_the_given_spans(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        hits = await store.hydrate("DU/2024/1", [(39, 46)], context_chars=5)
+
+        assert len(hits) == 1
+        assert hits[0].section_id == "art_2"
+        assert hits[0].section_title == "Art. 2"
+        assert hits[0].match_start == 39
+        assert hits[0].match_end == 46
+        assert hits[0].context == markdown[34:51]
+
+    async def test_lock_is_released_before_hits_are_built(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from typing import Any
+
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+        observed: list[bool] = []
+        from law_scrapper_mcp.services import document_store as document_store_module
+
+        original = document_store_module._build_hits
+
+        def _spy(*args: Any, **kwargs: Any) -> Any:
+            observed.append(store._lock.locked())
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(document_store_module, "_build_hits", _spy)
+
+        await store.hydrate("DU/2024/1", [(7, 14)], context_chars=5)
+
+        assert observed == [False], "the store lock must not be held while contexts are built"
+
+    async def test_search_still_returns_every_hit(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        hits = await store.search("DU/2024/1", "podatek", context_chars=5)
+
+        assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
+
+    async def test_scan_does_not_block_other_store_readers(self) -> None:
+        import asyncio
+
+        store = DocumentStore()
+        await store.load("DU/2024/1", "podatek " * 5_000, [])
+
+        spans, documents = await asyncio.gather(
+            store.scan("DU/2024/1", "podatek"),
+            store.list_documents(),
+        )
+
+        assert len(spans) == 5_000
+        assert [doc["eli"] for doc in documents] == ["DU/2024/1"]

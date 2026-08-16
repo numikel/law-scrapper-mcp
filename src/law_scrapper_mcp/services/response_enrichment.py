@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from law_scrapper_mcp.models.tool_outputs import Hint
 
 
@@ -123,7 +125,7 @@ def act_details_hints(
     return hints
 
 
-def metadata_hints(category: str) -> list[Hint]:
+def metadata_hints(category: str, failed_categories: Sequence[str] = ()) -> list[Hint]:
     """Generate hints for metadata results."""
     hints = []
     if category in ("all", "keywords"):
@@ -138,6 +140,18 @@ def metadata_hints(category: str) -> list[Hint]:
             Hint(
                 message="Filtruj wyniki wyszukiwania po typie dokumentu (np. 'Ustawa', 'Rozporządzenie').",
                 tool="search_legal_acts",
+            )
+        )
+    if failed_categories:
+        hints.append(
+            Hint(
+                message=(
+                    "Nie udało się pobrać kategorii: "
+                    f"{', '.join(failed_categories)}. Wynik jest niepełny — "
+                    "ponów wywołanie, aby uzupełnić brakujące wartości."
+                ),
+                tool="get_system_metadata",
+                parameters={"category": failed_categories[0]},
             )
         )
     return hints

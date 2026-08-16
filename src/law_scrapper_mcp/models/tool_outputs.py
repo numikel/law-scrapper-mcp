@@ -105,6 +105,7 @@ class MetadataOutput(BaseModel):
     metadata: dict[str, Any]
     count: int
     page_info: PageInfo
+    failed_categories: list[str] = []
 
 
 class RelationshipsOutput(BaseModel):

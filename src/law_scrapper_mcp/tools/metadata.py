@@ -74,5 +74,5 @@ def register(mcp: MCPServer[AppContext]) -> None:
 
         return EnrichedResponse[MetadataOutput](
             data=output,
-            hints=metadata_hints(category_enum.value),
+            hints=metadata_hints(category_enum.value, output.failed_categories),
         )

@@ -152,3 +152,36 @@ async def test_failed_categories_tuple_reports_correctly() -> None:
     assert results["statuses"] == ["value"]
     assert results["types"] == ["value"]
     assert results["institutions"] == ["value"]
+
+
+async def test_failed_category_is_reported_not_silently_dropped() -> None:
+    client = await _client()
+    try:
+        with respx.mock:
+            for endpoint in ENDPOINTS:
+                if endpoint == "statuses":
+                    respx.get(_url(endpoint)).mock(return_value=Response(500))
+                else:
+                    respx.get(_url(endpoint)).mock(return_value=Response(200, json=["value"]))
+
+            output = await MetadataService(client).get_metadata_page(MetadataCategory.ALL)
+    finally:
+        await client.close()
+
+    assert output.failed_categories == ["statuses"]
+    assert output.page_info.total_count == 4
+    assert output.metadata["statuses"] == []
+
+
+async def test_a_fully_successful_call_reports_no_failures() -> None:
+    client = await _client()
+    try:
+        with respx.mock:
+            for endpoint in ENDPOINTS:
+                respx.get(_url(endpoint)).mock(return_value=Response(200, json=["value"]))
+
+            output = await MetadataService(client).get_metadata_page(MetadataCategory.ALL)
+    finally:
+        await client.close()
+
+    assert output.failed_categories == []

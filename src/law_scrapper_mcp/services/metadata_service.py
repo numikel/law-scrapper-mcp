@@ -74,8 +74,17 @@ class MetadataService:
         limit: str | int | None = DEFAULT_ITEM_LIMIT,
         offset: str | int | None = 0,
     ) -> MetadataOutput:
-        """Return one deterministic metadata page across categories."""
-        raw = await self.get_metadata(category)
+        """Return one deterministic metadata page across categories.
+
+        `total_count` covers the categories that were actually retrieved.
+        Categories that failed are named in `failed_categories`, so a partial
+        result is never mistaken for a complete one.
+        """
+        if category == MetadataCategory.ALL:
+            raw, failed = await self._fetch_all(settings.cache_metadata_ttl)
+        else:
+            raw, failed = {category.value: await self._fetch_category(category, settings.cache_metadata_ttl)}, ()
+
         categories = self.METADATA_ORDER if category == MetadataCategory.ALL else (category,)
         flattened = [(current.value, item) for current in categories for item in raw.get(current.value, [])]
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
@@ -89,6 +98,7 @@ class MetadataService:
             metadata=metadata,
             count=page_info.returned_count,
             page_info=page_info,
+            failed_categories=list(failed),
         )
 
     async def _fetch_category(self, category: MetadataCategory, ttl: int) -> Any:

@@ -55,7 +55,10 @@ class MetadataService:
         results: dict[str, Any] = {}
         failed: list[str] = []
         for category, outcome in zip(self.METADATA_ORDER, outcomes, strict=True):
-            if isinstance(outcome, BaseException):
+            # Re-raise non-Exception BaseExceptions (CancelledError, KeyboardInterrupt, SystemExit)
+            if isinstance(outcome, BaseException) and not isinstance(outcome, Exception):
+                raise outcome
+            if isinstance(outcome, Exception):
                 logger.warning("Failed to fetch metadata for %s: %s", category.value, outcome)
                 results[category.value] = []
                 failed.append(category.value)

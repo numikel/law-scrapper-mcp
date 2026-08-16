@@ -125,3 +125,30 @@ async def test_warm_cache_issues_no_requests() -> None:
 
     assert counts_after_cold == dict.fromkeys(ENDPOINTS, 1)
     assert counts_after_warm == counts_after_cold
+
+
+async def test_failed_categories_tuple_reports_correctly() -> None:
+    """Verify _fetch_all returns correct failed category names when requests fail."""
+    client = await _client()
+    try:
+        with respx.mock:
+            # Mock successful responses for 4 endpoints
+            for endpoint in ("keywords", "statuses", "types", "institutions"):
+                respx.get(_url(endpoint)).mock(return_value=Response(200, json=["value"]))
+            # Mock 500 error for 'acts' endpoint (which maps to PUBLISHERS category)
+            respx.get(_url("acts")).mock(return_value=Response(500, json={"error": "Server error"}))
+
+            service = MetadataService(client)
+            results, failed = await service._fetch_all(ttl=60)
+    finally:
+        await client.close()
+
+    # Verify publishers (acts endpoint) is in failed categories
+    assert failed == ("publishers",)
+    # Verify publishers got empty list in results
+    assert results["publishers"] == []
+    # Verify other categories got their data
+    assert results["keywords"] == ["value"]
+    assert results["statuses"] == ["value"]
+    assert results["types"] == ["value"]
+    assert results["institutions"] == ["value"]

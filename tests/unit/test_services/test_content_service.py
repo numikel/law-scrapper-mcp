@@ -139,16 +139,22 @@ class TestSearch:
             assert output.total_matches == 1_000
 
     async def test_non_integer_limit_is_reported_in_polish(self) -> None:
-        service = ContentService(_store())
+        store = _store()
+        service = ContentService(store)
 
         with pytest.raises(ValueError, match="Parametr 'limit' musi być liczbą całkowitą."):
             await service.search("DU/2024/1", "podatek", limit="abc")
 
+        store.scan.assert_not_awaited()
+
     async def test_negative_offset_is_rejected(self) -> None:
-        service = ContentService(_store())
+        store = _store()
+        service = ContentService(store)
 
         with pytest.raises(ValueError, match="Parametr 'offset' nie może być ujemny."):
             await service.search("DU/2024/1", "podatek", offset=-1)
+
+        store.scan.assert_not_awaited()
 
 
 class TestSearchMatchesTheNaiveImplementation:

@@ -91,15 +91,24 @@ class ContentService:
         limit: str | int = DEFAULT_ITEM_LIMIT,
         offset: str | int = 0,
     ) -> SearchInActOutput:
-        """Return one page of in-act matches with their surrounding context."""
+        """Return one page of in-act matches with their surrounding context.
+
+        Scanning covers the whole document, so `total_count` stays exact.
+        Context slicing and section attribution are paid only for the spans
+        that belong to the requested page.
+        """
         context_size = min(
             parse_non_negative(context_chars, name="context_chars", default=DEFAULT_CONTEXT_CHARS),
             MAX_CONTEXT_CHARS,
         )
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
-        hits = await self._document_store.search(eli, query, context_size)
-        all_matches = [
+
+        spans = await self._document_store.scan(eli, query)
+        page_spans, page_info = paginate_items(spans, limit=page_limit, offset=page_offset)
+        hits = await self._document_store.hydrate(eli, page_spans, context_chars=context_size)
+
+        matches = [
             {
                 "section_id": hit.section_id,
                 "section_title": hit.section_title,
@@ -108,7 +117,6 @@ class ContentService:
             }
             for hit in hits
         ]
-        matches, page_info = paginate_items(all_matches, limit=page_limit, offset=page_offset)
         return SearchInActOutput(
             eli=eli,
             query=query,

@@ -6,8 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from law_scrapper_mcp.models.pagination import MAX_CONTEXT_CHARS, MAX_SECTION_CHAR_LIMIT
+from law_scrapper_mcp.services.content_processor import ContentProcessor, Section
 from law_scrapper_mcp.services.content_service import ContentService
-from law_scrapper_mcp.services.document_store import SearchHit
+from law_scrapper_mcp.services.document_store import DocumentStore, SearchHit
 
 pytestmark = pytest.mark.asyncio
 
@@ -17,6 +18,8 @@ def _store(**overrides: object) -> AsyncMock:
     store.get_toc.return_value = []
     store.get_section.return_value = None
     store.search.return_value = []
+    store.scan.return_value = []
+    store.hydrate.return_value = []
     for name, value in overrides.items():
         getattr(store, name).return_value = value
     return store
@@ -93,11 +96,9 @@ class TestReadSection:
 
 class TestSearch:
     async def test_maps_hits_and_paginates(self) -> None:
-        hits = [
-            SearchHit(section_id=f"art_{n}", section_title=f"Art. {n}", context="ctx", match_start=n, match_end=n + 3)
-            for n in range(1, 4)
-        ]
-        service = ContentService(_store(search=hits))
+        spans = [(n, n + 3) for n in range(1, 4)]
+        page_hits = [SearchHit(section_id="art_2", section_title="Art. 2", context="ctx", match_start=2, match_end=5)]
+        service = ContentService(_store(scan=spans, hydrate=page_hits))
 
         output = await service.search("DU/2024/1", "podatek", limit=1, offset=1)
 
@@ -109,21 +110,87 @@ class TestSearch:
         assert output.page_info.next_offset == 2
 
     async def test_context_chars_is_clamped_before_reaching_the_store(self) -> None:
-        store = _store(search=[])
+        store = _store(scan=[(0, 3)], hydrate=[])
         service = ContentService(store)
 
         await service.search("DU/2024/1", "podatek", context_chars=10**6)
 
-        store.search.assert_awaited_once_with("DU/2024/1", "podatek", MAX_CONTEXT_CHARS)
+        store.hydrate.assert_awaited_once_with("DU/2024/1", [(0, 3)], context_chars=MAX_CONTEXT_CHARS)
+
+    async def test_hydration_is_limited_to_the_requested_page(self) -> None:
+        spans = [(n, n + 3) for n in range(1_000)]
+        store = _store(scan=spans, hydrate=[])
+        service = ContentService(store)
+
+        await service.search("DU/2024/1", "podatek", limit=20, offset=0)
+
+        store.hydrate.assert_awaited_once()
+        hydrated_spans = store.hydrate.await_args.args[1]
+        assert len(hydrated_spans) == 20
+        assert hydrated_spans == spans[:20]
+
+    async def test_total_count_is_exact_regardless_of_the_page(self) -> None:
+        spans = [(n, n + 3) for n in range(1_000)]
+        service = ContentService(_store(scan=spans, hydrate=[]))
+
+        for limit, offset in ((1, 0), (20, 0), (5, 900), (100, 999)):
+            output = await service.search("DU/2024/1", "podatek", limit=limit, offset=offset)
+            assert output.page_info.total_count == 1_000
+            assert output.total_matches == 1_000
 
     async def test_non_integer_limit_is_reported_in_polish(self) -> None:
-        service = ContentService(_store(search=[]))
+        service = ContentService(_store())
 
         with pytest.raises(ValueError, match="Parametr 'limit' musi być liczbą całkowitą."):
             await service.search("DU/2024/1", "podatek", limit="abc")
 
     async def test_negative_offset_is_rejected(self) -> None:
-        service = ContentService(_store(search=[]))
+        service = ContentService(_store())
 
         with pytest.raises(ValueError, match="Parametr 'offset' nie może być ujemny."):
             await service.search("DU/2024/1", "podatek", offset=-1)
+
+
+class TestSearchMatchesTheNaiveImplementation:
+    """K4: the change is performance-only; results must be bit-identical."""
+
+    @staticmethod
+    def _naive(markdown: str, sections: list[Section], query: str, context_chars: int) -> list[dict[str, str]]:
+        import re
+
+        matches: list[dict[str, str]] = []
+        for match in re.compile(re.escape(query), re.IGNORECASE).finditer(markdown):
+            start = max(0, match.start() - context_chars)
+            end = min(len(markdown), match.end() + context_chars)
+            section_id, section_title = "unknown", "Unknown section"
+            for section in sections:
+                if section.start_pos <= match.start() < (section.end_pos or len(markdown)):
+                    section_id, section_title = section.id, section.title
+                    break
+            matches.append(
+                {
+                    "section_id": section_id,
+                    "section_title": section_title,
+                    "context": markdown[start:end],
+                    "position": f"{match.start()}-{match.end()}",
+                }
+            )
+        return matches
+
+    async def test_results_match_the_naive_reference_implementation(self) -> None:
+        processor = ContentProcessor()
+        markdown = "\n\n".join(
+            f"Art. {n}\nPrzepis o terminie i o podatku numer {n}. Termin wynosi {n} dni." for n in range(1, 61)
+        )
+        sections = processor.index_sections(markdown)
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+        service = ContentService(store)
+
+        for query in ("podatku", "termin", "Art. 5", "niczego-tu-nie-ma"):
+            for limit, offset in ((20, 0), (5, 3), (1, 0), (100, 0), (10, 500)):
+                expected = self._naive(markdown, sections, query, 500)
+                output = await service.search("DU/2024/1", query, context_chars=500, limit=limit, offset=offset)
+
+                assert output.matches == expected[offset : offset + limit], (query, limit, offset)
+                assert output.total_matches == len(expected), (query, limit, offset)

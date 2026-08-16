@@ -30,15 +30,20 @@ class MetadataService:
     def __init__(self, client: SejmApiClient):
         self._client = client
 
+    async def _fetch(self, category: MetadataCategory) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Fetch metadata, returning (results, failed_categories_tuple).
+
+        Used by both get_metadata and get_metadata_page to ensure consistency.
+        """
+        ttl = settings.cache_metadata_ttl
+        if category == MetadataCategory.ALL:
+            return await self._fetch_all(ttl)
+        return {category.value: await self._fetch_category(category, ttl)}, ()
+
     async def get_metadata(self, category: MetadataCategory) -> dict[str, Any]:
         """Retrieve metadata for the given category or all categories."""
-        ttl = settings.cache_metadata_ttl
-
-        if category == MetadataCategory.ALL:
-            results, _ = await self._fetch_all(ttl)
-            return results
-
-        return {category.value: await self._fetch_category(category, ttl)}
+        raw, _ = await self._fetch(category)
+        return raw
 
     async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Fetch every category concurrently, preserving METADATA_ORDER.
@@ -80,10 +85,7 @@ class MetadataService:
         Categories that failed are named in `failed_categories`, so a partial
         result is never mistaken for a complete one.
         """
-        if category == MetadataCategory.ALL:
-            raw, failed = await self._fetch_all(settings.cache_metadata_ttl)
-        else:
-            raw, failed = {category.value: await self._fetch_category(category, settings.cache_metadata_ttl)}, ()
+        raw, failed = await self._fetch(category)
 
         categories = self.METADATA_ORDER if category == MetadataCategory.ALL else (category,)
         flattened = [(current.value, item) for current in categories for item in raw.get(current.value, [])]

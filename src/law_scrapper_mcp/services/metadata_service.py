@@ -1,5 +1,8 @@
 """Metadata service for legal acts system information."""
 
+from __future__ import annotations
+
+import asyncio
 import logging
 from typing import Any
 
@@ -32,18 +35,34 @@ class MetadataService:
         ttl = settings.cache_metadata_ttl
 
         if category == MetadataCategory.ALL:
-            results = {}
-            for cat in MetadataCategory:
-                if cat == MetadataCategory.ALL:
-                    continue
-                try:
-                    results[cat.value] = await self._fetch_category(cat, ttl)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch metadata for {cat.value}: {e}")
-                    results[cat.value] = []
+            results, _ = await self._fetch_all(ttl)
             return results
 
         return {category.value: await self._fetch_category(category, ttl)}
+
+    async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Fetch every category concurrently, preserving METADATA_ORDER.
+
+        Concurrency is bounded by the client's semaphore, so this shortens the
+        cold path without raising the ceiling of simultaneous requests against
+        the public Sejm API.
+        """
+        outcomes = await asyncio.gather(
+            *(self._fetch_category(category, ttl) for category in self.METADATA_ORDER),
+            return_exceptions=True,
+        )
+
+        results: dict[str, Any] = {}
+        failed: list[str] = []
+        for category, outcome in zip(self.METADATA_ORDER, outcomes, strict=True):
+            if isinstance(outcome, BaseException):
+                logger.warning("Failed to fetch metadata for %s: %s", category.value, outcome)
+                results[category.value] = []
+                failed.append(category.value)
+            else:
+                results[category.value] = outcome
+
+        return results, tuple(failed)
 
     async def get_metadata_page(
         self,

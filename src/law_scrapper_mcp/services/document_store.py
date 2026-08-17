@@ -9,7 +9,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
+from law_scrapper_mcp.models.tool_outputs import LoadedDocumentInfo, LoadedDocumentListOutput
 from law_scrapper_mcp.services.content_processor import Section
+from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +222,24 @@ class DocumentStore:
                 }
                 for doc in self._store.values()
             ]
+
+    async def list_documents_page(
+        self,
+        *,
+        limit: str | int | None = DEFAULT_ITEM_LIMIT,
+        offset: str | int | None = 0,
+    ) -> LoadedDocumentListOutput:
+        """Return one page of the loaded-document listing."""
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        raw = await self.list_documents()
+        entries = [LoadedDocumentInfo.model_validate(item) for item in raw]
+        page, page_info = paginate_items(entries, limit=page_limit, offset=page_offset)
+        return LoadedDocumentListOutput(
+            documents=page,
+            count=page_info.returned_count,
+            page_info=page_info,
+        )
 
     async def evict(self, eli: str) -> None:
         """Manually evict a document."""

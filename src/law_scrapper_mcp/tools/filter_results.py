@@ -14,11 +14,11 @@ from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
     Hint,
-    ResultSetInfo,
     ResultSetListOutput,
 )
 from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
+from law_scrapper_mcp.services.response_enrichment import result_sets_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -195,36 +195,37 @@ def register(mcp: MCPServer[AppContext]) -> None:
     @handle_tool_errors
     async def list_result_sets(
         ctx: Context[AppContext],
+        limit: Annotated[
+            str | int | None,
+            Field(description="Maksymalna liczba zestawów na stronie odpowiedzi (domyślnie 20, maks. 100)."),
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            Field(description="Nieujemne przesunięcie strony zestawów. Domyślnie 0."),
+        ] = 0,
     ) -> EnrichedResponse[ResultSetListOutput]:
         """
         Wyświetl aktywne zestawy wyników przechowywane w pamięci.
 
         Każde wyszukiwanie (search_legal_acts, browse_acts, track_legal_changes)
         oraz filtrowanie (filter_results) tworzy zestaw wyników z unikalnym result_set_id.
-        To narzędzie pokazuje wszystkie aktywne zestawy (TTL: 1h).
+        To narzędzie pokazuje aktywne zestawy (TTL: 1h) wraz z metadanymi paginacji.
 
         Kiedy użyć: Aby sprawdzić jakie result_set_id są dostępne do filtrowania.
         Kiedy NIE używać: Do wyszukiwania nowych aktów → użyj search_legal_acts.
 
         Przykłady:
-        - list_result_sets() - Wyświetl wszystkie aktywne zestawy wyników
+        - list_result_sets() - Pierwsza strona aktywnych zestawów
+        - list_result_sets(limit=5) - Pięć najnowszych wpisów strony
+        - list_result_sets(limit=5, offset=5) - Kolejna strona
+        - list_result_sets(limit=100) - Wszystkie aktywne zestawy
+        - list_result_sets(offset=0) - Jawne przesunięcie od początku
         """
         result_store = get_app_context(ctx).result_store
 
-        raw_sets = await result_store.list_sets()
-        sets = [ResultSetInfo(**s) for s in raw_sets]
-
-        hints = []
-        if sets:
-            hints.append(
-                Hint(
-                    message=f"Użyj filter_results(result_set_id='{sets[0].result_set_id}') aby filtrować wyniki.",
-                    tool="filter_results",
-                    parameters={"result_set_id": sets[0].result_set_id},
-                )
-            )
+        output = await result_store.list_sets_page(limit=limit, offset=offset)
 
         return EnrichedResponse[ResultSetListOutput](
-            data=ResultSetListOutput(sets=sets, count=len(sets)),
-            hints=hints,
+            data=output,
+            hints=result_sets_hints(output.sets),
         )

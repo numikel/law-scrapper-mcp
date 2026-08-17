@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput, ResultSetInfo, ResultSetListOutput
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
@@ -109,6 +109,24 @@ class ResultStore:
                 }
                 for rs in self._store.values()
             ]
+
+    async def list_sets_page(
+        self,
+        *,
+        limit: str | int | None = DEFAULT_ITEM_LIMIT,
+        offset: str | int | None = 0,
+    ) -> ResultSetListOutput:
+        """Return one page of the stored result-set listing."""
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        raw = await self.list_sets()
+        entries = [ResultSetInfo(**item) for item in raw]
+        page, page_info = paginate_items(entries, limit=page_limit, offset=page_offset)
+        return ResultSetListOutput(
+            sets=page,
+            count=page_info.returned_count,
+            page_info=page_info,
+        )
 
     async def filter_results(
         self,

@@ -167,6 +167,7 @@ class ResultSetListOutput(BaseModel):
 
     sets: list[ResultSetInfo]
     count: int
+    page_info: PageInfo
 
 
 class LoadedDocumentInfo(BaseModel):
@@ -184,6 +185,7 @@ class LoadedDocumentListOutput(BaseModel):
 
     documents: list[LoadedDocumentInfo]
     count: int
+    page_info: PageInfo
 
 
 class CompareOutput(BaseModel):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from law_scrapper_mcp.models.tool_outputs import Hint
+from law_scrapper_mcp.models.tool_outputs import Hint, LoadedDocumentInfo, ResultSetInfo
 
 
 def search_hints(
@@ -206,6 +206,32 @@ def date_hints() -> list[Hint]:
             message="Śledź zmiany prawne w zakresie dat.",
             tool="track_legal_changes",
         ),
+    ]
+
+
+def loaded_documents_hints(documents: Sequence[LoadedDocumentInfo]) -> list[Hint]:
+    """Generate hints for the loaded-document listing."""
+    if not documents:
+        return []
+    return [
+        Hint(
+            message=f"Użyj read_act_content(eli='{documents[0].eli}') aby czytać treść.",
+            tool="read_act_content",
+            parameters={"eli": documents[0].eli},
+        )
+    ]
+
+
+def result_sets_hints(sets: Sequence[ResultSetInfo]) -> list[Hint]:
+    """Generate hints for the result-set listing."""
+    if not sets:
+        return []
+    return [
+        Hint(
+            message=f"Użyj filter_results(result_set_id='{sets[0].result_set_id}') aby filtrować wyniki.",
+            tool="filter_results",
+            parameters={"result_set_id": sets[0].result_set_id},
+        )
     ]
 
 

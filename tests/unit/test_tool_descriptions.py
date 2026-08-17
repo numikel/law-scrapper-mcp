@@ -28,7 +28,7 @@ EXPECTED_ARGUMENTS = {
     "browse_acts": {"publisher", "year", "limit", "detail_level"},
     "get_act_details": {"eli", "load_content"},
     "read_act_content": {"eli", "section", "limit", "offset"},
-    "list_loaded_documents": set(),
+    "list_loaded_documents": {"limit", "offset"},
     "search_in_act": {"eli", "query", "context_chars", "limit", "offset"},
     "analyze_act_relationships": {"eli", "relationship_type"},
     "track_legal_changes": {"date_from", "publisher", "date_to", "keywords", "limit", "offset"},
@@ -48,7 +48,7 @@ EXPECTED_ARGUMENTS = {
         "limit",
         "offset",
     },
-    "list_result_sets": set(),
+    "list_result_sets": {"limit", "offset"},
     "compare_acts": {"eli_a", "eli_b"},
 }
 

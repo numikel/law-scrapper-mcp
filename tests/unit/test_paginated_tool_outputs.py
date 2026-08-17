@@ -9,7 +9,9 @@ from law_scrapper_mcp.models.tool_outputs import (
     ChangesOutput,
     ContentOutput,
     FilterOutput,
+    LoadedDocumentListOutput,
     MetadataOutput,
+    ResultSetListOutput,
     SearchInActOutput,
 )
 
@@ -47,6 +49,14 @@ from law_scrapper_mcp.models.tool_outputs import (
                 "original_count": 0,
                 "filtered_count": 0,
             },
+        ),
+        (
+            ResultSetListOutput,
+            {"sets": [], "count": 0},
+        ),
+        (
+            LoadedDocumentListOutput,
+            {"documents": [], "count": 0},
         ),
     ],
 )

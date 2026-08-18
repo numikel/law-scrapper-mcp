@@ -91,7 +91,11 @@ def register(mcp: MCPServer[AppContext]) -> None:
         limit: Annotated[
             str | int | None,
             Field(
-                description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Przydatne do ograniczenia dużych zbiorów.",
+                description=(
+                    "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. "
+                    "Przydatne do ograniczenia dużych zbiorów. Bez górnej granicy — "
+                    "w odróżnieniu od pozostałych narzędzi listujących, gdzie limit jest przycinany do 100."
+                ),
             ),
         ] = None,
         offset: Annotated[

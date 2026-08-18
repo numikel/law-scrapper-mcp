@@ -70,6 +70,20 @@ class TestToolInputSchemaDescriptions:
                     f"Tool '{tool.name}' parameter '{param_name}' is missing input_schema description"
                 )
 
+    @pytest.mark.parametrize("tool_name", ["search_legal_acts", "browse_acts"])
+    async def test_unclamped_limit_is_documented(self, mcp_client, tool_name: str) -> None:
+        """P5 keeps these two tools free of the shared 100-item clamp.
+
+        The asymmetry is only defensible while the schema says so, otherwise a
+        client reading tools/list sees thirteen identical page shapes and two
+        silent exceptions.
+        """
+        tool = await _get_tool(mcp_client, tool_name)
+        description = tool.input_schema["properties"]["limit"]["description"]
+
+        assert "100" in description
+        assert "bez górnej granicy" in description.lower()
+
     async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(self, mcp_client) -> None:
         tools = (await mcp_client.list_tools()).tools
         by_name = {tool.name: tool for tool in tools}

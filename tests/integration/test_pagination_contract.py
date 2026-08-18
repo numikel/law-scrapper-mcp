@@ -69,7 +69,7 @@ async def test_no_tool_is_classified_twice() -> None:
 
 
 async def test_every_exemption_carries_a_reason() -> None:
-    for name, reason in DOCUMENTED_EXEMPTIONS.items():
+    for name, reason in (NO_LIST_PAYLOAD | DOCUMENTED_EXEMPTIONS).items():
         assert len(reason) > 40, f"{name} needs a written reason, not a placeholder"
 
 
@@ -81,8 +81,11 @@ async def test_paginated_models_reject_a_missing_page_info(model_cls: type[BaseM
     fields = {name: info for name, info in model_cls.model_fields.items() if name != "page_info" and info.is_required()}
     payload = {name: _placeholder(info.annotation) for name, info in fields.items()}
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         model_cls(**payload)
+    assert any(err["loc"] == ("page_info",) and err["type"] == "missing" for err in exc_info.value.errors()), (
+        f"{model_cls.__name__} failed validation for an unrelated field: {exc_info.value.errors()}"
+    )
 
 
 def _placeholder(annotation: object) -> object:

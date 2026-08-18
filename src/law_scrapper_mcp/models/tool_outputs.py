@@ -50,6 +50,7 @@ class SearchOutput(BaseModel):
     query_summary: str
     returned_count: int
     result_set_id: str | None = None
+    page_info: PageInfo
 
 
 class ActDetailOutput(BaseModel):

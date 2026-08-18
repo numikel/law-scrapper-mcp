@@ -231,6 +231,25 @@ class TestSearchTools:
         assert payload["data"]["returned_count"] == 3
         assert payload["data"]["result_set_id"] is not None
 
+    async def test_browse_acts_accepts_offset_and_reports_a_page(self, mcp_client) -> None:
+        """browse_acts accepts offset and reports servable page_info metadata."""
+        result = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": 2024, "limit": 1, "offset": 0})
+        payload = parse_tool_result(result)
+
+        page_info = payload["data"]["page_info"]
+        assert page_info["unit"] == "items"
+        assert page_info["limit"] == 1
+        assert page_info["offset"] == 0
+
+    async def test_search_legal_acts_reports_a_page(self, mcp_client) -> None:
+        """search_legal_acts reports page_info consistent with returned_count."""
+        result = await mcp_client.call_tool("search_legal_acts", {"year": 2024, "limit": 1})
+        payload = parse_tool_result(result)
+
+        data = payload["data"]
+        assert data["page_info"]["unit"] == "items"
+        assert data["page_info"]["returned_count"] == data["returned_count"]
+
     async def test_track_legal_changes(self, mcp_client) -> None:
         """track_legal_changes returns acts published in the given date range."""
         result = await mcp_client.call_tool(

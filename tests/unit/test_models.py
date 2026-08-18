@@ -224,6 +224,15 @@ class TestToolOutputModels:
             total_count=1,
             query_summary="Test query",
             returned_count=1,
+            page_info=PageInfo(
+                limit=20,
+                offset=0,
+                returned_count=1,
+                total_count=1,
+                was_truncated=False,
+                next_offset=None,
+                unit=PageUnit.ITEMS,
+            ),
         )
         assert len(output.results) == 1
         assert output.total_count == 1

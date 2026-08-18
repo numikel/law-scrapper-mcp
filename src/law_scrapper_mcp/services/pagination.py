@@ -21,6 +21,7 @@ __all__ = [
     "effective_limit",
     "full_item_page",
     "full_text_page",
+    "item_page_info",
     "paginate_items",
     "paginate_text",
     "parse_non_negative",
@@ -64,6 +65,16 @@ def _page_info(*, limit: int, offset: int, returned: int, total: int, unit: Page
         next_offset=end if limit > 0 and was_truncated else None,
         unit=unit,
     )
+
+
+def item_page_info(*, limit: int, offset: int, returned: int, total: int) -> PageInfo:
+    """Describe an item page whose window was produced elsewhere.
+
+    `paginate_items` both slices and describes. The Sejm API applies limit and
+    offset server-side, so the slice already happened upstream and only the
+    description is needed here.
+    """
+    return _page_info(limit=limit, offset=offset, returned=returned, total=total, unit=PageUnit.ITEMS)
 
 
 def paginate_items[T](items: Sequence[T], *, limit: int, offset: int) -> tuple[list[T], PageInfo]:

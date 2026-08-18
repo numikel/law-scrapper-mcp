@@ -25,7 +25,7 @@ EXPECTED_ARGUMENTS = {
         "offset",
         "detail_level",
     },
-    "browse_acts": {"publisher", "year", "limit", "detail_level"},
+    "browse_acts": {"publisher", "year", "limit", "offset", "detail_level"},
     "get_act_details": {"eli", "load_content"},
     "read_act_content": {"eli", "section", "limit", "offset"},
     "list_loaded_documents": {"limit", "offset"},

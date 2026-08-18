@@ -112,3 +112,16 @@ class TestListingToolsOverTheWire:
 
         assert documents.structured_content["data"]["page_info"]["limit"] == 1
         assert sets.structured_content["data"]["page_info"]["limit"] == 1
+
+    async def test_both_tools_clamp_limit_to_the_shared_maximum(self, mcp_client) -> None:  # type: ignore[no-untyped-def]
+        """K11 claims validation identical to the other listing tools.
+
+        The store-level tests prove the clamp inside the store; this proves it
+        survives the tool layer, which is where a forgotten parameter would
+        actually leak an unbounded page to the client.
+        """
+        documents = await mcp_client.call_tool("list_loaded_documents", {"limit": 500})
+        sets = await mcp_client.call_tool("list_result_sets", {"limit": 500})
+
+        assert documents.structured_content["data"]["page_info"]["limit"] == 100
+        assert sets.structured_content["data"]["page_info"]["limit"] == 100

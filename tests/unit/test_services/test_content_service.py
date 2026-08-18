@@ -209,10 +209,46 @@ class TestSearchMatchesTheNaiveImplementation:
         await store.load("DU/2024/1", markdown, sections)
         service = ContentService(store)
 
-        for query in ("podatku", "termin", "Art. 5", "niczego-tu-nie-ma"):
+        # The empty query is in the matrix on purpose: `finditer("")` yields a
+        # zero-width span per position, and a span filter written as
+        # `start < end` drops every one of them while leaving total_count
+        # intact — a K4 regression that no other query in this list exposes.
+        for query in ("podatku", "termin", "Art. 5", "niczego-tu-nie-ma", ""):
             for limit, offset in ((20, 0), (5, 3), (1, 0), (100, 0), (10, 500)):
                 expected = self._naive(markdown, sections, query, 500)
                 output = await service.search("DU/2024/1", query, context_chars=500, limit=limit, offset=offset)
 
                 assert output.matches == expected[offset : offset + limit], (query, limit, offset)
                 assert output.total_matches == len(expected), (query, limit, offset)
+                # Stated as its own contract rather than left as an implication
+                # of the line above: page metadata must describe the payload
+                # that actually shipped.
+                assert len(output.matches) == output.page_info.returned_count, (query, limit, offset)
+
+
+class TestSearchIsAtomicAgainstAConcurrentReload:
+    """The scan/hydrate split is only safe while no critical section awaits.
+
+    This pins the invariant itself, not one of its effects. It passes today by
+    construction and starts failing on the day someone adds a suspension point
+    inside `DocumentStore` — which is exactly when the page metadata could
+    begin describing a document that no longer exists.
+    """
+
+    async def test_reload_during_search_cannot_desynchronise_the_page(self) -> None:
+        import asyncio
+
+        processor = ContentProcessor()
+        markdown = "\n\n".join(f"Art. {n}\nPrzepis o podatku numer {n}." for n in range(1, 41))
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, processor.index_sections(markdown))
+        service = ContentService(store)
+
+        shorter = "Art. 1\nPrzepis o podatku."
+        reload_task = asyncio.create_task(store.load("DU/2024/1", shorter, processor.index_sections(shorter)))
+        output = await service.search("DU/2024/1", "podatku", limit=20, offset=0)
+        await reload_task
+
+        assert len(output.matches) == output.page_info.returned_count
+        assert output.total_matches == 40
+        assert output.page_info.returned_count == 20

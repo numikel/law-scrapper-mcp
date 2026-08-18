@@ -71,7 +71,22 @@ class SearchHit:
 
 
 class DocumentStore:
-    """In-memory store for loaded legal acts with section-level access."""
+    """In-memory store for loaded legal acts with section-level access.
+
+    Invariant, load-bearing: **no critical section of this class may contain an
+    `await`**. Because none does, the lock is never held across a suspension
+    point, so an uncontended `Lock.acquire()` never yields and the scan/hydrate
+    sequence in `ContentService.search` is atomic with respect to the event
+    loop. That is the only reason `page_info.returned_count` cannot exceed the
+    number of hits actually returned.
+
+    Adding a suspension point inside any critical section — moving the regex
+    scan to `run_in_executor`, for instance — breaks that atomicity and makes
+    it possible for `hydrate` to build context from a document that replaced
+    the one `scan` measured. The span filter guards ranges, not identity, so
+    such a mismatch would be returned silently. Pair any such change with a
+    document generation token checked in `hydrate`.
+    """
 
     def __init__(
         self,
@@ -162,10 +177,14 @@ class DocumentStore:
         Cost is proportional to `len(spans)`, not to the number of matches in
         the document. The lock is released before any context extraction.
 
-        Spans must originate from a scan() of the same document; the store may
-        have changed between calls (document expired, reloaded). Spans that
-        extend beyond the current document (0 <= start < end <= document_length)
-        are silently dropped rather than corrupting output.
+        Spans must originate from a scan() of the same document. Today the
+        store cannot change between the two calls — see the no-`await`
+        invariant on the class — so the filter below is a guard against a
+        future suspension point, not against a reachable state. Spans outside
+        `0 <= start <= end <= document_length` are silently dropped rather than
+        corrupting output. The bound is `<=`, not `<`: an empty query makes
+        `finditer` yield one zero-width span per position, and those spans are
+        legitimate results that predate the pagination work.
         """
         async with self._lock:
             doc = self._get_doc(eli)
@@ -177,7 +196,7 @@ class DocumentStore:
         document_length = len(markdown)
         # Filter out spans that are no longer valid for the current document.
         # This happens if the store mutated between scan and hydrate.
-        valid_spans = [(start, end) for start, end in spans if start >= 0 and end <= document_length]
+        valid_spans = [(start, end) for start, end in spans if 0 <= start <= end <= document_length]
 
         return _build_hits(markdown, sections, section_starts, valid_spans, context_chars)
 
@@ -195,7 +214,10 @@ class DocumentStore:
         async with self._lock:
             doc = self._get_doc(eli)
             doc.last_accessed = time.time()
-            return doc.sections
+            # A copy, not the live list: `section_starts` is an index derived
+            # from it, and a caller mutating the original would desynchronise
+            # the two with no signal.
+            return list(doc.sections)
 
     async def is_loaded(self, eli: str) -> bool:
         """Check if a document is loaded."""

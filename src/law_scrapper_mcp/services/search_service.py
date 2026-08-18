@@ -44,9 +44,10 @@ class SearchService:
         """
         page_limit = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 0)
         page_offset = max(offset, 0)
+        window_offset = max(window_offset, 0)
         local_offset = max(page_offset - window_offset, 0)
         page = results[local_offset : local_offset + page_limit]
-        total = max(total_count, page_offset + len(page))
+        total = max(total_count, page_offset + len(page)) if page else total_count
         result_set_id = await self._result_store.store(page, query_summary, total) if page else None
         return SearchOutput(
             results=page,

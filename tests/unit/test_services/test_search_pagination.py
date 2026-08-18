@@ -91,6 +91,17 @@ class TestSearchPage:
         assert output.page_info.total_count == 0
         assert output.page_info.was_truncated is False
 
+    async def test_negative_offset_does_not_silently_drop_leading_results(self) -> None:
+        """A negative offset must be treated as zero, not as a hidden backward shift."""
+        service, _ = _service({"items": [_item(n) for n in range(20)], "count": 20})
+
+        negative = await service.search(year=2024, limit=20, offset=-5)
+        zero = await service.search(year=2024, limit=20, offset=0)
+
+        assert [act.eli for act in negative.results] == [act.eli for act in zero.results]
+        assert negative.returned_count == 20
+        assert negative.page_info.offset == 0
+
 
 class TestBrowsePage:
     async def test_browse_slices_locally_and_pages_are_disjoint(self) -> None:
@@ -127,5 +138,5 @@ class TestBrowsePage:
         output = await service.browse("DU", 2024, limit=10, offset=99)
 
         assert output.results == []
-        assert output.page_info.total_count == 99
+        assert output.page_info.total_count == 5
         assert output.page_info.was_truncated is False

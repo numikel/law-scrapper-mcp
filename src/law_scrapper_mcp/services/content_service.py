@@ -1,6 +1,7 @@
 """Reading loaded act content and searching inside it."""
 
 from law_scrapper_mcp.models.pagination import (
+    DEFAULT_CONTEXT_CHARS,
     DEFAULT_ITEM_LIMIT,
     DEFAULT_SECTION_CHAR_LIMIT,
     MAX_CONTEXT_CHARS,
@@ -16,7 +17,6 @@ from law_scrapper_mcp.services.pagination import (
     parse_non_negative,
 )
 
-DEFAULT_CONTEXT_CHARS = 500
 TOC_SECTION_TITLE = "Spis treści"
 
 
@@ -97,10 +97,8 @@ class ContentService:
         Context slicing and section attribution are paid only for the spans
         that belong to the requested page.
         """
-        context_size = min(
-            parse_non_negative(context_chars, name="context_chars", default=DEFAULT_CONTEXT_CHARS),
-            MAX_CONTEXT_CHARS,
-        )
+        requested_context = parse_non_negative(context_chars, name="context_chars", default=DEFAULT_CONTEXT_CHARS)
+        context_size = min(requested_context, MAX_CONTEXT_CHARS)
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
 
@@ -123,4 +121,6 @@ class ContentService:
             matches=matches,
             total_matches=page_info.total_count,
             page_info=page_info,
+            context_chars_requested=requested_context,
+            context_chars_applied=context_size,
         )

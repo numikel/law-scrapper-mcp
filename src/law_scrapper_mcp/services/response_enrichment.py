@@ -235,6 +235,22 @@ def result_sets_hints(sets: Sequence[ResultSetInfo]) -> list[Hint]:
     ]
 
 
+def search_in_act_hints(requested: int, applied: int) -> list[Hint]:
+    """Report a clamped context window; stay silent when nothing was clamped."""
+    if requested <= applied:
+        return []
+    return [
+        Hint(
+            message=(
+                f"Parametr context_chars={requested} przekracza granicę {applied} znaków "
+                f"i został przycięty do {applied}. Zwrócony kontekst odpowiada wartości {applied}."
+            ),
+            tool="search_in_act",
+            parameters={"context_chars": applied},
+        )
+    ]
+
+
 def compare_hints(eli_a: str, eli_b: str) -> list[Hint]:
     """Generate hints for act comparison."""
     return [

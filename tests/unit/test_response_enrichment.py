@@ -56,3 +56,19 @@ def test_metadata_hints_stay_silent_when_nothing_failed() -> None:
     after = metadata_hints("all", [])
 
     assert [hint.message for hint in before] == [hint.message for hint in after]
+
+
+def test_clamped_context_chars_produces_a_hint() -> None:
+    from law_scrapper_mcp.services.response_enrichment import search_in_act_hints
+
+    hints = search_in_act_hints(5000, 2000)
+
+    assert len(hints) == 1
+    assert "5000" in hints[0].message
+    assert "2000" in hints[0].message
+
+
+def test_context_chars_within_the_limit_produces_no_hint() -> None:
+    from law_scrapper_mcp.services.response_enrichment import search_in_act_hints
+
+    assert search_in_act_hints(300, 300) == []

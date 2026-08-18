@@ -156,6 +156,22 @@ class TestSearch:
 
         store.scan.assert_not_awaited()
 
+    async def test_oversized_context_chars_is_clamped_not_rejected(self) -> None:
+        service = ContentService(_store(scan=[(0, 3)], hydrate=[]))
+
+        output = await service.search("DU/2024/1", "podatek", context_chars=5000)
+
+        assert output.context_chars_requested == 5000
+        assert output.context_chars_applied == MAX_CONTEXT_CHARS
+
+    async def test_context_chars_within_the_limit_is_reported_unchanged(self) -> None:
+        service = ContentService(_store(scan=[(0, 3)], hydrate=[]))
+
+        output = await service.search("DU/2024/1", "podatek", context_chars=300)
+
+        assert output.context_chars_requested == 300
+        assert output.context_chars_applied == 300
+
 
 class TestSearchMatchesTheNaiveImplementation:
     """K4: the change is performance-only; results must be bit-identical."""

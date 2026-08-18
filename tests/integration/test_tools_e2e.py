@@ -436,6 +436,42 @@ class TestActContentTools:
         assert payload["data"]["total_matches"] == 0
         assert payload["data"]["matches"] == []
 
+    async def test_context_chars_description_states_the_limit(self, mcp_client) -> None:
+        """K15: the input schema must carry the boundary and its consequence."""
+        tools = await mcp_client.list_tools()
+        search_in_act = next(tool for tool in tools.tools if tool.name == "search_in_act")
+
+        description = search_in_act.input_schema["properties"]["context_chars"]["description"]
+
+        assert "2000" in description
+        assert "przycin" in description.lower()
+
+    async def test_oversized_context_chars_succeeds_with_a_clamp_hint(self, mcp_client) -> None:
+        """K16 + K17: the call still succeeds and says what it applied."""
+        await self._load_act(mcp_client)
+
+        result = await mcp_client.call_tool(
+            "search_in_act", {"eli": "DU/2024/1", "query": "Content", "context_chars": 5000}
+        )
+        payload = parse_tool_result(result)
+
+        assert payload["data"]["context_chars_applied"] == 2000
+        assert payload["data"]["context_chars_requested"] == 5000
+        assert any("5000" in hint["message"] and "2000" in hint["message"] for hint in payload["hints"])
+        longest = max(len(match["context"]) for match in payload["data"]["matches"])
+        assert longest <= 2000 + 2000 + len("Content")
+
+    async def test_context_chars_within_the_limit_produces_no_clamp_hint(self, mcp_client) -> None:
+        """K18: no hint when nothing was clamped."""
+        await self._load_act(mcp_client)
+
+        result = await mcp_client.call_tool(
+            "search_in_act", {"eli": "DU/2024/1", "query": "Content", "context_chars": 200}
+        )
+        payload = parse_tool_result(result)
+
+        assert payload["hints"] == []
+
 
 # ---------------------------------------------------------------------------
 # analyze_act_relationships, compare_acts

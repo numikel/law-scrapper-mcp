@@ -96,6 +96,8 @@ class SearchInActOutput(BaseModel):
     matches: list[dict[str, Any]]
     total_matches: int
     page_info: PageInfo
+    context_chars_requested: int = 500
+    context_chars_applied: int = 500
 
 
 class MetadataOutput(BaseModel):

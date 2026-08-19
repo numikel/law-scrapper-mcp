@@ -7,6 +7,7 @@ kodów statusu. Warstwa sieciowa (`sejm_client`) tylko odczytuje werdykt.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import httpx
@@ -44,7 +45,7 @@ def _parse_retry_after(raw: str | None) -> float | None:
         seconds = float(raw.strip())
     except ValueError:
         return None
-    if seconds < 0:
+    if not math.isfinite(seconds) or seconds < 0:
         return None
     return seconds
 

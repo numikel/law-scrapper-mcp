@@ -45,7 +45,7 @@ def test_429_honours_numeric_retry_after() -> None:
     assert verdict.retry_after == pytest.approx(2.0)
 
 
-@pytest.mark.parametrize("raw", ["", "later", "-5", "Wed, 21 Oct 2026 07:28:00 GMT"])
+@pytest.mark.parametrize("raw", ["", "later", "-5", "Wed, 21 Oct 2026 07:28:00 GMT", "inf", "nan", "1e400"])
 def test_unparsable_retry_after_falls_back_to_backoff(raw: str) -> None:
     """Nagłówek w formacie daty lub śmieciowy nie może wywrócić klasyfikacji."""
     verdict = classify_failure(_status_error(429, {"Retry-After": raw}))

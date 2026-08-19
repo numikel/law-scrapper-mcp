@@ -30,6 +30,16 @@ class CircuitBreaker:
         przerwać w połowie — stan jest atomowy z konstrukcji i nie wymaga
         `asyncio.Lock`. Warunek jest przypięty testem; dodanie `await` do
         którejkolwiek z metod `try_acquire` / `release_*` unieważnia to założenie.
+
+        Acquire/release pairing limitation (known, accepted):
+        `release_success()`, `release_failure()`, and `release_probe()` determine
+        their behavior based on the breaker's *current* state at release time, not
+        the state when `try_acquire()` was called. A request admitted while CLOSED
+        but completing after the breaker transitions to HALF_OPEN will be treated
+        as a HALF_OPEN release, decrementing a probe slot it never held and — for
+        `release_success()` — counting toward recovery without having passed through
+        HALF_OPEN admission. This is a known architectural limitation, not a bug to
+        silently hide.
     """
 
     def __init__(

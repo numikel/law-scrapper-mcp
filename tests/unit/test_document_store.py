@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
+from typing import overload
 
 import pytest
 
 from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
-from law_scrapper_mcp.services.document_store import DocumentStore, LoadedDocument
+from law_scrapper_mcp.services.document_store import (
+    UNKNOWN_SECTION,
+    DocumentStore,
+    LoadedDocument,
+    section_for_position,
+)
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 class TestDocumentStoreBasicOperations:
     """Tests for basic document store operations."""
 
@@ -57,6 +63,7 @@ class TestDocumentStoreBasicOperations:
         await document_store.evict("DU/2024/999")  # Should not raise
 
 
+@pytest.mark.asyncio
 class TestGetSection:
     """Tests for getting sections from documents."""
 
@@ -144,6 +151,7 @@ class TestGetSection:
             await document_store.get_section("DU/2024/999", "art_1")
 
 
+@pytest.mark.asyncio
 class TestSearchInDocument:
     """Tests for searching within documents."""
 
@@ -247,6 +255,7 @@ class TestSearchInDocument:
             await document_store.search("DU/2024/999", "keyword")
 
 
+@pytest.mark.asyncio
 class TestTTLExpiration:
     """Tests for TTL-based document expiration."""
 
@@ -287,6 +296,7 @@ class TestTTLExpiration:
         assert await store.is_loaded("DU/2024/1")
 
 
+@pytest.mark.asyncio
 class TestLRUEviction:
     """Tests for LRU eviction when max_documents is reached."""
 
@@ -335,6 +345,7 @@ class TestLRUEviction:
         assert await store.is_loaded("DU/2024/4")
 
 
+@pytest.mark.asyncio
 class TestDocumentSizeLimits:
     """Tests for document size limits."""
 
@@ -414,6 +425,7 @@ class TestLoadedDocument:
         assert before <= doc.last_accessed <= after
 
 
+@pytest.mark.asyncio
 class TestEdgeCases:
     """Tests for edge cases."""
 
@@ -445,6 +457,7 @@ class TestEdgeCases:
         assert len(await document_store.get_toc("DU/2024/1")) == 2
 
 
+@pytest.mark.asyncio
 class TestSearchTreatsQueryLiterally:
     """Regression guard — `query` must not be treated as a raw pattern."""
 
@@ -476,3 +489,196 @@ class TestSearchTreatsQueryLiterally:
 
         assert len(literal_hits) == 1
         assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur
+
+
+class _CountingStarts(Sequence[int]):
+    """A sequence that records how many element reads bisect performed."""
+
+    def __init__(self, values: list[int]) -> None:
+        self._values = values
+        self.reads = 0
+
+    @overload
+    def __getitem__(self, index: int) -> int: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[int]: ...
+
+    def __getitem__(self, index: int | slice) -> int | Sequence[int]:
+        self.reads += 1
+        return self._values[index]
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
+def _numbered_sections(count: int, *, span: int = 100, offset: int = 0) -> list[Section]:
+    return [
+        Section(
+            id=f"art_{n}",
+            title=f"Art. {n}",
+            level=2,
+            start_pos=offset + n * span,
+            end_pos=offset + (n + 1) * span,
+            content="x",
+        )
+        for n in range(count)
+    ]
+
+
+class TestSectionForPosition:
+    def test_returns_the_section_containing_the_position(self) -> None:
+        sections = _numbered_sections(5)
+        starts = [section.start_pos for section in sections]
+
+        assert section_for_position(starts, sections, 250, 500) == ("art_2", "Art. 2")
+
+    def test_position_before_the_first_section_is_unknown(self) -> None:
+        sections = _numbered_sections(3, span=100, offset=50)
+        starts = [section.start_pos for section in sections]
+
+        assert section_for_position(starts, sections, 10, 400) == UNKNOWN_SECTION
+
+    def test_position_in_a_gap_after_a_section_end_is_unknown(self) -> None:
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=10)]
+
+        assert section_for_position([0], sections, 50, 100) == UNKNOWN_SECTION
+
+    def test_open_ended_last_section_extends_to_the_document_end(self) -> None:
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=None)]
+
+        assert section_for_position([0], sections, 90, 100) == ("art_1", "Art. 1")
+
+    def test_section_lookup_is_logarithmic_in_the_number_of_sections(self) -> None:
+        sections = _numbered_sections(4096)
+        starts = _CountingStarts([section.start_pos for section in sections])
+
+        section_for_position(starts, sections, 4095 * 100 + 1, 4096 * 100)
+
+        assert 1 <= starts.reads <= 13, f"expected a logarithmic probe count, got {starts.reads}"
+
+
+class TestLoadedDocumentSectionIndex:
+    def test_section_starts_are_derived_from_the_sections(self) -> None:
+        sections = _numbered_sections(3)
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert document.section_starts == (0, 100, 200)
+
+    def test_sections_are_ordered_by_start_position(self) -> None:
+        sections = list(reversed(_numbered_sections(3)))
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert [section.id for section in document.sections] == ["art_0", "art_1", "art_2"]
+        assert document.section_starts == (0, 100, 200)
+
+
+def _document_with_two_hits() -> tuple[str, list[Section]]:
+    markdown = "Art. 1\npodatek od nieruchomosci\nArt. 2\npodatek dochodowy\n"
+    sections = [
+        Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=32),
+        Section(id="art_2", title="Art. 2", level=2, start_pos=32, end_pos=len(markdown)),
+    ]
+    return markdown, sections
+
+
+@pytest.mark.asyncio
+class TestScanAndHydrate:
+    async def test_scan_returns_only_match_positions(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        spans = await store.scan("DU/2024/1", "podatek")
+
+        assert spans == [(7, 14), (39, 46)]
+
+    async def test_scan_is_case_insensitive_and_escapes_the_query(self) -> None:
+        store = DocumentStore()
+        await store.load("DU/2024/1", "Art. 1 (a+b) i A+B", [])
+
+        assert await store.scan("DU/2024/1", "a+b") == [(8, 11), (15, 18)]
+
+    async def test_hydrate_builds_hits_only_for_the_given_spans(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        hits = await store.hydrate("DU/2024/1", [(39, 46)], context_chars=5)
+
+        assert len(hits) == 1
+        assert hits[0].section_id == "art_2"
+        assert hits[0].section_title == "Art. 2"
+        assert hits[0].match_start == 39
+        assert hits[0].match_end == 46
+        assert hits[0].context == markdown[34:51]
+
+    async def test_lock_is_released_before_hits_are_built(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from typing import Any
+
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+        observed: list[bool] = []
+        from law_scrapper_mcp.services import document_store as document_store_module
+
+        original = document_store_module._build_hits
+
+        def _spy(*args: Any, **kwargs: Any) -> Any:
+            observed.append(store._lock.locked())
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(document_store_module, "_build_hits", _spy)
+
+        await store.hydrate("DU/2024/1", [(7, 14)], context_chars=5)
+
+        assert observed == [False], "the store lock must not be held while contexts are built"
+
+    async def test_search_still_returns_every_hit(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        hits = await store.search("DU/2024/1", "podatek", context_chars=5)
+
+        assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
+
+    async def test_scan_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import re as re_module
+        from typing import Any
+
+        store = DocumentStore()
+        await store.load("DU/2024/1", "podatek " * 100, [])
+        observed: list[bool] = []
+        original_compile = re_module.compile
+
+        def _spy_compile(*args: Any, **kwargs: Any) -> Any:
+            # Check if lock is held when re.compile is called.
+            # This happens after scan() has released the lock.
+            observed.append(store._lock.locked())
+            return original_compile(*args, **kwargs)
+
+        monkeypatch.setattr(re_module, "compile", _spy_compile)
+
+        await store.scan("DU/2024/1", "podatek")
+
+        assert observed == [False], "the store lock must not be held during pattern compilation"
+
+    async def test_hydrate_silently_drops_out_of_bounds_spans(self) -> None:
+        markdown, sections = _document_with_two_hits()
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, sections)
+
+        # Reload with shorter content (simulating document mutation)
+        new_markdown = "Art. 1\npodatek\n"
+        await store.load("DU/2024/1", new_markdown, sections[:1])
+
+        # The old spans (39, 46) are now out of bounds (document is only 14 chars)
+        hits = await store.hydrate("DU/2024/1", [(7, 14), (39, 46)], context_chars=5)
+
+        # Only the in-bounds span should produce a hit
+        assert len(hits) == 1
+        assert hits[0].match_start == 7
+        assert hits[0].match_end == 14

@@ -201,6 +201,8 @@ async def test_every_result_tool_rejects_negative_pages(
                 field: -1,
             },
         ),
+        ("list_result_sets", {field: -1}),
+        ("list_loaded_documents", {field: -1}),
     ]
     for tool_name, arguments in calls:
         result = await mcp_client.call_tool(tool_name, arguments)
@@ -227,6 +229,8 @@ async def test_every_result_tool_reports_non_integer_pages_in_polish(
                 field: "abc",
             },
         ),
+        ("list_result_sets", {field: "abc"}),
+        ("list_loaded_documents", {field: "abc"}),
     ]
     for tool_name, arguments in calls:
         result = await mcp_client.call_tool(tool_name, arguments)

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from law_scrapper_mcp.models.tool_outputs import Hint
+from collections.abc import Sequence
+
+from law_scrapper_mcp.models.tool_outputs import Hint, LoadedDocumentInfo, ResultSetInfo
 
 
 def search_hints(
@@ -123,7 +125,7 @@ def act_details_hints(
     return hints
 
 
-def metadata_hints(category: str) -> list[Hint]:
+def metadata_hints(category: str, failed_categories: Sequence[str] = ()) -> list[Hint]:
     """Generate hints for metadata results."""
     hints = []
     if category in ("all", "keywords"):
@@ -138,6 +140,18 @@ def metadata_hints(category: str) -> list[Hint]:
             Hint(
                 message="Filtruj wyniki wyszukiwania po typie dokumentu (np. 'Ustawa', 'Rozporządzenie').",
                 tool="search_legal_acts",
+            )
+        )
+    if failed_categories:
+        hints.append(
+            Hint(
+                message=(
+                    "Nie udało się pobrać kategorii: "
+                    f"{', '.join(failed_categories)}. Wynik jest niepełny — "
+                    "ponów wywołanie, aby uzupełnić brakujące wartości."
+                ),
+                tool="get_system_metadata",
+                parameters={"category": failed_categories[0]},
             )
         )
     return hints
@@ -192,6 +206,48 @@ def date_hints() -> list[Hint]:
             message="Śledź zmiany prawne w zakresie dat.",
             tool="track_legal_changes",
         ),
+    ]
+
+
+def loaded_documents_hints(documents: Sequence[LoadedDocumentInfo]) -> list[Hint]:
+    """Generate hints for the loaded-document listing."""
+    if not documents:
+        return []
+    return [
+        Hint(
+            message=f"Użyj read_act_content(eli='{documents[0].eli}') aby czytać treść.",
+            tool="read_act_content",
+            parameters={"eli": documents[0].eli},
+        )
+    ]
+
+
+def result_sets_hints(sets: Sequence[ResultSetInfo]) -> list[Hint]:
+    """Generate hints for the result-set listing."""
+    if not sets:
+        return []
+    return [
+        Hint(
+            message=f"Użyj filter_results(result_set_id='{sets[0].result_set_id}') aby filtrować wyniki.",
+            tool="filter_results",
+            parameters={"result_set_id": sets[0].result_set_id},
+        )
+    ]
+
+
+def search_in_act_hints(requested: int, applied: int) -> list[Hint]:
+    """Report a clamped context window; stay silent when nothing was clamped."""
+    if requested <= applied:
+        return []
+    return [
+        Hint(
+            message=(
+                f"Parametr context_chars={requested} przekracza granicę {applied} znaków "
+                f"i został przycięty do {applied}. Zwrócony kontekst odpowiada wartości {applied}."
+            ),
+            tool="search_in_act",
+            parameters={"context_chars": applied},
+        )
     ]
 
 

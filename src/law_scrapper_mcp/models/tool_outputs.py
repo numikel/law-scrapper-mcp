@@ -50,6 +50,7 @@ class SearchOutput(BaseModel):
     query_summary: str
     returned_count: int
     result_set_id: str | None = None
+    page_info: PageInfo
 
 
 class ActDetailOutput(BaseModel):
@@ -96,6 +97,8 @@ class SearchInActOutput(BaseModel):
     matches: list[dict[str, Any]]
     total_matches: int
     page_info: PageInfo
+    context_chars_requested: int = 500
+    context_chars_applied: int = 500
 
 
 class MetadataOutput(BaseModel):
@@ -105,6 +108,7 @@ class MetadataOutput(BaseModel):
     metadata: dict[str, Any]
     count: int
     page_info: PageInfo
+    failed_categories: list[str] = []
 
 
 class RelationshipsOutput(BaseModel):
@@ -166,6 +170,7 @@ class ResultSetListOutput(BaseModel):
 
     sets: list[ResultSetInfo]
     count: int
+    page_info: PageInfo
 
 
 class LoadedDocumentInfo(BaseModel):
@@ -183,6 +188,7 @@ class LoadedDocumentListOutput(BaseModel):
 
     documents: list[LoadedDocumentInfo]
     count: int
+    page_info: PageInfo
 
 
 class CompareOutput(BaseModel):

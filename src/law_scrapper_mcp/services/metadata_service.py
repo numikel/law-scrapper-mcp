@@ -1,5 +1,8 @@
 """Metadata service for legal acts system information."""
 
+from __future__ import annotations
+
+import asyncio
 import logging
 from typing import Any
 
@@ -27,23 +30,47 @@ class MetadataService:
     def __init__(self, client: SejmApiClient):
         self._client = client
 
+    async def _fetch(self, category: MetadataCategory) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Fetch metadata, returning (results, failed_categories_tuple).
+
+        Used by both get_metadata and get_metadata_page to ensure consistency.
+        """
+        ttl = settings.cache_metadata_ttl
+        if category == MetadataCategory.ALL:
+            return await self._fetch_all(ttl)
+        return {category.value: await self._fetch_category(category, ttl)}, ()
+
     async def get_metadata(self, category: MetadataCategory) -> dict[str, Any]:
         """Retrieve metadata for the given category or all categories."""
-        ttl = settings.cache_metadata_ttl
+        raw, _ = await self._fetch(category)
+        return raw
 
-        if category == MetadataCategory.ALL:
-            results = {}
-            for cat in MetadataCategory:
-                if cat == MetadataCategory.ALL:
-                    continue
-                try:
-                    results[cat.value] = await self._fetch_category(cat, ttl)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch metadata for {cat.value}: {e}")
-                    results[cat.value] = []
-            return results
+    async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Fetch every category concurrently, preserving METADATA_ORDER.
 
-        return {category.value: await self._fetch_category(category, ttl)}
+        Concurrency is bounded by the client's semaphore, so this shortens the
+        cold path without raising the ceiling of simultaneous requests against
+        the public Sejm API.
+        """
+        outcomes = await asyncio.gather(
+            *(self._fetch_category(category, ttl) for category in self.METADATA_ORDER),
+            return_exceptions=True,
+        )
+
+        results: dict[str, Any] = {}
+        failed: list[str] = []
+        for category, outcome in zip(self.METADATA_ORDER, outcomes, strict=True):
+            # Re-raise non-Exception BaseExceptions (CancelledError, KeyboardInterrupt, SystemExit)
+            if isinstance(outcome, BaseException) and not isinstance(outcome, Exception):
+                raise outcome
+            if isinstance(outcome, Exception):
+                logger.warning("Failed to fetch metadata for %s: %s", category.value, outcome)
+                results[category.value] = []
+                failed.append(category.value)
+            else:
+                results[category.value] = outcome
+
+        return results, tuple(failed)
 
     async def get_metadata_page(
         self,
@@ -52,8 +79,14 @@ class MetadataService:
         limit: str | int | None = DEFAULT_ITEM_LIMIT,
         offset: str | int | None = 0,
     ) -> MetadataOutput:
-        """Return one deterministic metadata page across categories."""
-        raw = await self.get_metadata(category)
+        """Return one deterministic metadata page across categories.
+
+        `total_count` covers the categories that were actually retrieved.
+        Categories that failed are named in `failed_categories`, so a partial
+        result is never mistaken for a complete one.
+        """
+        raw, failed = await self._fetch(category)
+
         categories = self.METADATA_ORDER if category == MetadataCategory.ALL else (category,)
         flattened = [(current.value, item) for current in categories for item in raw.get(current.value, [])]
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
@@ -67,6 +100,7 @@ class MetadataService:
             metadata=metadata,
             count=page_info.returned_count,
             page_info=page_info,
+            failed_categories=list(failed),
         )
 
     async def _fetch_category(self, category: MetadataCategory, ttl: int) -> Any:

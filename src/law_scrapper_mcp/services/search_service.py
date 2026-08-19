@@ -6,7 +6,9 @@ from typing import Any
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import DetailLevel
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, SearchOutput
+from law_scrapper_mcp.services.pagination import item_page_info
 from law_scrapper_mcp.services.result_store import ResultStore
 
 logger = logging.getLogger(__name__)
@@ -26,16 +28,39 @@ class SearchService:
         total_count: int,
         query_summary: str,
         limit: int | None,
+        offset: int = 0,
+        window_offset: int = 0,
     ) -> SearchOutput:
-        effective_limit = limit if limit is not None else 20
-        page = results[:effective_limit]
-        result_set_id = await self._result_store.store(page, query_summary, total_count) if page else None
+        """Build one page of results together with truthful page metadata.
+
+        `window_offset` is the offset the Sejm API already applied server-side:
+        `search` passes the request offset, because the API skipped those
+        records itself, while `browse` passes zero, because the whole year
+        arrives in one response and the slice happens here.
+
+        `total` is clamped up to the records actually held. A `count` smaller
+        than the payload would otherwise fail `PageInfo` validation and turn a
+        quirky upstream response into a tool error.
+        """
+        page_limit = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 0)
+        page_offset = max(offset, 0)
+        window_offset = max(window_offset, 0)
+        local_offset = max(page_offset - window_offset, 0)
+        page = results[local_offset : local_offset + page_limit]
+        total = max(total_count, page_offset + len(page)) if page else total_count
+        result_set_id = await self._result_store.store(page, query_summary, total) if page else None
         return SearchOutput(
             results=page,
-            total_count=total_count,
+            total_count=total,
             query_summary=query_summary,
             returned_count=len(page),
             result_set_id=result_set_id,
+            page_info=item_page_info(
+                limit=page_limit,
+                offset=page_offset,
+                returned=len(page),
+                total=total,
+            ),
         )
 
     async def search(
@@ -102,6 +127,8 @@ class SearchService:
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
+            offset=offset or 0,
+            window_offset=offset or 0,
         )
 
     async def browse(
@@ -110,6 +137,7 @@ class SearchService:
         year: int,
         detail_level: DetailLevel = DetailLevel.STANDARD,
         limit: int | None = None,
+        offset: int | None = None,
     ) -> SearchOutput:
         """Browse acts by publisher and year and return a stored result page."""
         path = f"acts/{publisher}/{year}"
@@ -126,6 +154,8 @@ class SearchService:
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
+            offset=offset or 0,
+            window_offset=0,
         )
 
     def _format_act(self, item: dict[str, Any], detail_level: DetailLevel) -> ActSummaryOutput:

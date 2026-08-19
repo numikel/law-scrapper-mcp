@@ -9,6 +9,7 @@ from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
+from law_scrapper_mcp.services.response_enrichment import search_in_act_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,13 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         context_chars: Annotated[
             str | int,
-            Field(description="Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500."),
+            Field(
+                description=(
+                    "Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500. "
+                    "Maksymalnie 2000 — wartości większe są przycinane do 2000, "
+                    "a odpowiedź zawiera wtedy wskazówkę o przycięciu. Wywołanie nie kończy się błędem."
+                ),
+            ),
         ] = 500,
         limit: Annotated[
             str | int,
@@ -79,4 +86,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
             offset=offset,
         )
 
-        return EnrichedResponse[SearchInActOutput](data=output)
+        return EnrichedResponse[SearchInActOutput](
+            data=output,
+            hints=search_in_act_hints(output.context_chars_requested, output.context_chars_applied),
+        )

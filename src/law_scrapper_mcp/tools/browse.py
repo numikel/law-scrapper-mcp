@@ -36,7 +36,16 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         limit: Annotated[
             str | int | None,
-            Field(description="Maksymalna liczba wyników do zwrócenia. Domyślnie 20."),
+            Field(
+                description=(
+                    "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Bez górnej granicy — "
+                    "w odróżnieniu od pozostałych narzędzi listujących, gdzie limit jest przycinany do 100."
+                ),
+            ),
+        ] = None,
+        offset: Annotated[
+            str | int | None,
+            Field(description="Liczba wyników do pominięcia (paginacja). Użyj razem z limit. Domyślnie 0."),
         ] = None,
         detail_level: Annotated[
             str,
@@ -63,6 +72,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - browse_acts(publisher="DU", year=2024, detail_level="full") - Ze szczegółami
         - browse_acts(publisher="DU", year=2024, detail_level="minimal") - Tylko podstawowe info
         - browse_acts(publisher="DU", year=2000) - Akty z roku 2000
+        - browse_acts(publisher="DU", year=2024, limit=20, offset=20) - Druga strona rocznika
         """
         search_service = get_app_context(ctx).search_service
 
@@ -75,6 +85,11 @@ def register(mcp: MCPServer[AppContext]) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 limit_int = int(limit)
 
+        offset_int: int | None = None
+        if offset is not None:
+            with contextlib.suppress(ValueError, TypeError):
+                offset_int = int(offset)
+
         try:
             detail_enum = DetailLevel(detail_level)
         except ValueError:
@@ -85,6 +100,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
             year=year_int,
             detail_level=detail_enum,
             limit=limit_int,
+            offset=offset_int,
         )
 
         effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
@@ -97,6 +113,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 output.returned_count > 0,
                 first_eli,
                 output.result_set_id,
+                offset=offset_int or 0,
                 returned_count=output.returned_count,
                 applied_limit=effective_limit,
             ),

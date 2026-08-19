@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `list_loaded_documents` i `list_result_sets` przyjmują `limit`/`offset` i zwracają `page_info` (klaster 2, L3)
+- `search_legal_acts` i `browse_acts` zwracają `page_info`; `browse_acts` przyjmuje `offset` (klaster 2, rozszerzenie zakresu)
+- `MetadataOutput.failed_categories` — jawna lista kategorii metadanych, których nie udało się pobrać (klaster 2, L2)
+- `SearchInActOutput.context_chars_requested` / `context_chars_applied` oraz podpowiedź o przycięciu (klaster 2, L4)
+
+### Changed
+- `search_in_act` buduje kontekst i ustala sekcję wyłącznie dla trafień bieżącej strony; mapowanie sekcji korzysta z wyszukiwania binarnego (klaster 2, L1)
+- `get_system_metadata(category="all")` pobiera pięć kategorii współbieżnie zamiast sekwencyjnie, w granicach semafora klienta (klaster 2, L2)
+- Opis `context_chars` w `inputSchema` narzędzia `search_in_act` podaje granicę 2000 znaków i skutek jej przekroczenia (klaster 2, L4)
+
+### Fixed
+- Awaria pobrania pojedynczej kategorii metadanych nie zaniża już cicho `total_count` (klaster 2, L2)
+- `SearchOutput.total_count` jest podnoszony do liczby faktycznie zwróconych rekordów, gdy API Sejmu poda `count` mniejszy od własnej odpowiedzi (klaster 2, Task 8)
+
 ## [3.0.0] - 2026-08-14
 
 See [docs/changelogs/v3.0.0.md](docs/changelogs/v3.0.0.md) for details.

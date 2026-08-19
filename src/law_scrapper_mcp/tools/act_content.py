@@ -11,11 +11,9 @@ from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import (
     ContentOutput,
     EnrichedResponse,
-    Hint,
-    LoadedDocumentInfo,
     LoadedDocumentListOutput,
 )
-from law_scrapper_mcp.services.response_enrichment import content_hints
+from law_scrapper_mcp.services.response_enrichment import content_hints, loaded_documents_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -91,6 +89,14 @@ def register(mcp: MCPServer[AppContext]) -> None:
     @handle_tool_errors
     async def list_loaded_documents(
         ctx: Context[AppContext],
+        limit: Annotated[
+            str | int | None,
+            Field(description="Maksymalna liczba dokumentów na stronie odpowiedzi (domyślnie 20, maks. 100)."),
+        ] = 20,
+        offset: Annotated[
+            str | int | None,
+            Field(description="Nieujemne przesunięcie strony dokumentów. Domyślnie 0."),
+        ] = 0,
     ) -> EnrichedResponse[LoadedDocumentListOutput]:
         """
         Wyświetl dokumenty załadowane do pamięci (Document Store).
@@ -98,28 +104,23 @@ def register(mcp: MCPServer[AppContext]) -> None:
         Dokumenty ładowane są przez get_act_details(eli=..., load_content=True).
         Każdy dokument ma TTL 2h — po tym czasie wymaga ponownego załadowania.
 
+        Zwraca jedną stronę listy wraz z metadanymi paginacji (page_info).
+
         Kiedy użyć: Aby sprawdzić jakie akty są załadowane i dostępne do czytania/wyszukiwania.
         Kiedy NIE używać: Do wyszukiwania aktów → użyj search_legal_acts.
 
         Przykłady:
-        - list_loaded_documents() - Wyświetl wszystkie załadowane dokumenty
+        - list_loaded_documents() - Wyświetl pierwszą stronę załadowanych dokumentów
+        - list_loaded_documents(limit=5) - Pierwsze pięć dokumentów
+        - list_loaded_documents(limit=5, offset=5) - Kolejna strona
+        - list_loaded_documents(limit=100) - Cała zawartość Document Store
+        - list_loaded_documents(offset=0) - Jawne przesunięcie od początku
         """
         document_store = get_app_context(ctx).document_store
 
-        raw_docs = await document_store.list_documents()
-        documents = [LoadedDocumentInfo.model_validate(d) for d in raw_docs]
-
-        hints = []
-        if documents:
-            hints.append(
-                Hint(
-                    message=f"Użyj read_act_content(eli='{documents[0].eli}') aby czytać treść.",
-                    tool="read_act_content",
-                    parameters={"eli": documents[0].eli},
-                )
-            )
+        output = await document_store.list_documents_page(limit=limit, offset=offset)
 
         return EnrichedResponse[LoadedDocumentListOutput](
-            data=LoadedDocumentListOutput(documents=documents, count=len(documents)),
-            hints=hints,
+            data=output,
+            hints=loaded_documents_hints(output.documents),
         )

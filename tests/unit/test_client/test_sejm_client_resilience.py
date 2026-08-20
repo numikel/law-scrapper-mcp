@@ -399,3 +399,35 @@ async def test_breaker_counts_failure_seen_before_a_trailing_429(
     assert route.call_count == 3
     assert slept == [1.0, 2.0]
     assert breaker.failure_count == 1
+
+
+def test_settings_expose_retry_budget_and_attempts() -> None:
+    """Kryterium 4.3: obie nastawy istnieją z wartościami domyślnymi ze spec."""
+    from law_scrapper_mcp.config import Settings
+
+    settings = Settings()
+    assert settings.api_max_attempts == 3
+    assert settings.api_retry_budget == pytest.approx(45.0)
+
+
+def test_lifespan_wires_retry_settings_into_the_client() -> None:
+    """Nastawy muszą realnie docierać do klienta, a nie tylko istnieć w configu."""
+    import inspect
+
+    from law_scrapper_mcp import server
+
+    source = inspect.getsource(server.lifespan)
+    assert "max_attempts=settings.api_max_attempts" in source
+    assert "retry_budget=settings.api_retry_budget" in source
+
+
+def test_tenacity_is_not_a_runtime_dependency() -> None:
+    """D9: jedyny konsument zniknął, zależność też."""
+    import tomllib
+    from pathlib import Path
+
+    project_root = Path(__file__).parents[3]
+    with (project_root / "pyproject.toml").open("rb") as pyproject:
+        dependencies = tomllib.load(pyproject)["project"]["dependencies"]
+
+    assert not any(dependency.lower().startswith("tenacity") for dependency in dependencies)

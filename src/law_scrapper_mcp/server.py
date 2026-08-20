@@ -122,6 +122,8 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         timeout=settings.api_timeout,
         max_concurrent=settings.api_max_concurrent,
         circuit_breaker=circuit_breaker,
+        max_attempts=settings.api_max_attempts,
+        retry_budget=settings.api_retry_budget,
     )
     await client.start()
 

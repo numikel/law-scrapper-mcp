@@ -328,3 +328,74 @@ async def test_open_circuit_rejects_before_sending(
         await client.get_json(ACT_PATH)
 
     assert route.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_cancelled_probe_releases_the_half_open_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fix (Critical): anulowanie żądania nie może trwale zablokować bezpiecznika.
+
+    `asyncio.CancelledError` nie jest wyjątkiem `httpx`, więc omija klasyfikację
+    polityki (`classify_failure` przyjmuje tylko `httpx.HTTPError`). Bez
+    dedykowanej obsługi slot HALF_OPEN nigdy nie wraca do zera, a bezpiecznik
+    nie może już dojść do `release_failure()` (jedynej drogi z powrotem do OPEN)
+    — więc odrzuca wszystko w nieskończoność.
+    """
+    breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.0, half_open_max_calls=3)
+    api = SejmApiClient(
+        cache=TTLCache(max_entries=100),
+        timeout=30.0,
+        max_concurrent=10,
+        circuit_breaker=breaker,
+        max_attempts=3,
+        retry_budget=45.0,
+    )
+    await api.start()
+
+    for _ in range(5):
+        breaker.release_failure()
+    assert breaker.state is CircuitState.OPEN
+
+    async def cancelled_send(*args: object, **kwargs: object) -> httpx.Response:
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(api, "_send", cancelled_send)
+
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert breaker.state is CircuitState.HALF_OPEN
+    assert breaker.try_acquire() is True
+    assert breaker.try_acquire() is True
+    assert breaker.try_acquire() is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_breaker_counts_failure_seen_before_a_trailing_429(
+    client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
+) -> None:
+    """Fix (Important): awaria 5xx wcześniej w sekwencji nie może zniknąć za 429 na końcu.
+
+    `give_up` patrzył wyłącznie na werdykt ostatniej próby — bez zatrzasku
+    ponad wszystkimi próbami sekwencja 500 → 500 → 429 zwalniałaby wyłącznie
+    sondę mimo dwóch potwierdzonych awarii serwera, więc wyłącznik nigdy by
+    się nie otworzył przeciw API, które degraduje się dokładnie w ten sposób.
+    """
+    route = respx.get(ACT_URL).mock(
+        side_effect=[
+            httpx.Response(500),
+            httpx.Response(500),
+            httpx.Response(429, headers={"Retry-After": "1"}),
+        ]
+    )
+
+    with pytest.raises(SejmApiError) as caught:
+        await client.get_json(ACT_PATH)
+
+    assert not isinstance(caught.value, ApiUnavailableError)
+    assert route.call_count == 3
+    assert slept == [1.0, 2.0]
+    assert breaker.failure_count == 1

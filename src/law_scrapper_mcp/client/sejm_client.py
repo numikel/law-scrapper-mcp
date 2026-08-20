@@ -103,6 +103,7 @@ class SejmApiClient:
         """
         deadline = monotonic() + self._retry_budget
         throttled = False
+        breaker_failure_seen = False
 
         for attempt in range(1, self._max_attempts + 1):
             if not self._circuit_breaker.try_acquire():
@@ -115,6 +116,8 @@ class SejmApiClient:
                 response = await self._send(method, path, **kwargs)
             except httpx.HTTPError as exc:
                 verdict = classify_failure(exc)
+                if verdict.breaker_failure:
+                    breaker_failure_seen = True
                 delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)
 
                 give_up = (
@@ -125,7 +128,7 @@ class SejmApiClient:
                 )
 
                 if give_up:
-                    if verdict.breaker_failure:
+                    if breaker_failure_seen:
                         self._circuit_breaker.release_failure()
                     else:
                         self._circuit_breaker.release_probe()
@@ -135,6 +138,9 @@ class SejmApiClient:
                 if verdict.rate_limited:
                     throttled = True
                 await _delay(delay)
+            except BaseException:
+                self._circuit_breaker.release_probe()
+                raise
             else:
                 self._circuit_breaker.release_success()
                 return response

@@ -146,18 +146,6 @@ class CircuitBreaker:
         if self._state == CircuitState.HALF_OPEN:
             self._half_open_in_flight = max(0, self._half_open_in_flight - 1)
 
-    def can_execute(self) -> bool:
-        """Przestarzałe: delegat do `try_acquire()`, usuwany w Task 3."""
-        return self.try_acquire()
-
-    def record_success(self) -> None:
-        """Przestarzałe: delegat do `release_success()`, usuwany w Task 3."""
-        self.release_success()
-
-    def record_failure(self) -> None:
-        """Przestarzałe: delegat do `release_failure()`, usuwany w Task 3."""
-        self.release_failure()
-
     def reset(self) -> None:
         """Przywróć wyłącznik do stanu zamkniętego."""
         self._state = CircuitState.CLOSED

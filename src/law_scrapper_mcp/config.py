@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     api_timeout: float = 30.0
     api_max_concurrent: int = 10
     api_max_retries: int = 3
+    api_max_attempts: int = 3
+    api_retry_budget: float = 45.0
 
     # Cache TTL (seconds)
     cache_metadata_ttl: int = 86400

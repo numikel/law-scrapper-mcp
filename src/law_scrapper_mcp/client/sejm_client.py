@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from time import monotonic
 from typing import Any
 
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
@@ -20,6 +15,15 @@ from law_scrapper_mcp.client.exceptions import (
     ApiUnavailableError,
     SejmApiError,
 )
+from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
+
+
+async def _delay(seconds: float) -> None:
+    """Jedyny punkt oczekiwania w pętli ponowień.
+
+    Wydzielone, żeby testy mogły podmienić opóźnienie zamiast je odczekiwać.
+    """
+    await asyncio.sleep(seconds)
 
 
 class SejmApiClient:
@@ -33,12 +37,16 @@ class SejmApiClient:
         timeout: float = 30.0,
         max_concurrent: int = 10,
         circuit_breaker: CircuitBreaker | None = None,
+        max_attempts: int = 3,
+        retry_budget: float = 45.0,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
+        self._max_attempts = max_attempts
+        self._retry_budget = retry_budget
 
     async def start(self) -> None:
         """Initialize the HTTP client."""
@@ -58,33 +66,15 @@ class SejmApiClient:
             await self._client.aclose()
             self._client = None
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(min=1, max=10),
-        retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError)),
-    )
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Make HTTP request with retry logic and circuit breaker.
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Wyślij pojedyncze żądanie HTTP.
 
-        Args:
-            method: HTTP method
-            path: URL path (relative to BASE_URL)
-            **kwargs: Additional httpx request parameters
-
-        Returns:
-            HTTP response
+        Warstwa najniższa: buduje URL, pilnuje semafora i podnosi wyłącznie
+        wyjątki `httpx`. Nie ponawia i nie tłumaczy błędów.
 
         Raises:
-            ActNotFoundError: If resource not found (404)
-            ApiUnavailableError: If API is unavailable (502, 503) or circuit breaker open
-            SejmApiError: For other HTTP errors
+            httpx.HTTPError: Dowolny błąd transportowy lub statusowy.
         """
-        if not self._circuit_breaker.can_execute():
-            raise ApiUnavailableError(
-                "API Sejmu tymczasowo niedostępne (circuit breaker otwarty)",
-                status_code=503,
-            )
-
         if self._client is None:
             await self.start()
 
@@ -93,30 +83,107 @@ class SejmApiClient:
         url = f"{self.BASE_URL}/{path.lstrip('/')}"
 
         async with self._semaphore:
+            response = await self._client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+
+    async def _execute_with_resilience(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Wykonaj żądanie z ponawianiem, budżetem czasu i księgowaniem wyłącznika.
+
+        Warstwa środkowa widzi wyłącznie surowe wyjątki `httpx`, więc żaden blok
+        `except` nie może zmienić typu, zanim polityka zdąży go ocenić.
+
+        Jedna operacja użytkownika rejestruje najwyżej jedną awarię wyłącznika,
+        a stan wyłącznika sprawdzany jest przed każdą próbą — obwód otwarty przez
+        równoległy ruch przerywa sekwencję zamiast dobijać API.
+
+        Raises:
+            ApiUnavailableError: Gdy wyłącznik nie wpuszcza żądania.
+            httpx.HTTPError: Ostatni błąd po wyczerpaniu prób lub budżetu.
+        """
+        deadline = monotonic() + self._retry_budget
+        throttled = False
+
+        for attempt in range(1, self._max_attempts + 1):
+            if not self._circuit_breaker.try_acquire():
+                raise ApiUnavailableError(
+                    "API Sejmu tymczasowo niedostępne (bezpiecznik otwarty)",
+                    status_code=503,
+                )
+
             try:
-                response = await self._client.request(method, url, **kwargs)
-                response.raise_for_status()
-                self._circuit_breaker.record_success()
+                response = await self._send(method, path, **kwargs)
+            except httpx.HTTPError as exc:
+                verdict = classify_failure(exc)
+                delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)
+
+                give_up = (
+                    not verdict.retryable
+                    or attempt == self._max_attempts
+                    or (verdict.rate_limited and throttled)
+                    or monotonic() + delay >= deadline
+                )
+
+                if give_up:
+                    if verdict.breaker_failure:
+                        self._circuit_breaker.release_failure()
+                    else:
+                        self._circuit_breaker.release_probe()
+                    raise
+
+                self._circuit_breaker.release_probe()
+                if verdict.rate_limited:
+                    throttled = True
+                await _delay(delay)
+            else:
+                self._circuit_breaker.release_success()
                 return response
-            except httpx.TimeoutException:
-                self._circuit_breaker.record_failure()
-                raise
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    raise ActNotFoundError(path) from e
-                elif e.response.status_code in (502, 503):
-                    self._circuit_breaker.record_failure()
-                    raise ApiUnavailableError(
-                        f"API temporarily unavailable: {e.response.status_code}",
-                        status_code=e.response.status_code,
-                        url=url,
-                    ) from e
-                else:
-                    raise SejmApiError(
-                        f"HTTP {e.response.status_code}: {e.response.text}",
-                        status_code=e.response.status_code,
-                        url=url,
-                    ) from e
+
+        # Nieosiągalne: pętla zawsze kończy się przez return albo raise.
+        raise ApiUnavailableError("API Sejmu nie odpowiedziało w ramach dozwolonych prób", status_code=503)
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Wykonaj żądanie i przetłumacz błędy `httpx` na wyjątki domenowe.
+
+        Warstwa najwyższa. Translacja dzieje się na zewnątrz ponawiania, więc
+        polityka zawsze ocenia oryginalny typ wyjątku.
+
+        Args:
+            method: Metoda HTTP.
+            path: Ścieżka względem BASE_URL.
+            **kwargs: Dodatkowe parametry żądania httpx.
+
+        Returns:
+            Odpowiedź HTTP.
+
+        Raises:
+            ActNotFoundError: Gdy zasób nie istnieje (404).
+            ApiUnavailableError: Gdy API zwróciło 5xx, zawiódł transport
+                albo wyłącznik jest otwarty.
+            SejmApiError: Dla pozostałych błędów po stronie zapytania.
+        """
+        try:
+            return await self._execute_with_resilience(method, path, **kwargs)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            url = str(exc.request.url)
+            if status == 404:
+                raise ActNotFoundError(path) from exc
+            if 500 <= status <= 599:
+                raise ApiUnavailableError(
+                    f"API Sejmu chwilowo niedostępne (HTTP {status})",
+                    status_code=status,
+                    url=url,
+                ) from exc
+            raise SejmApiError(
+                f"HTTP {status}: {exc.response.text}",
+                status_code=status,
+                url=url,
+            ) from exc
+        except httpx.TransportError as exc:
+            raise ApiUnavailableError(f"Błąd połączenia z API Sejmu: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise SejmApiError(f"Błędne żądanie do API Sejmu: {exc}") from exc
 
     async def get_json(self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None) -> Any:
         """Get JSON response from API with optional caching.

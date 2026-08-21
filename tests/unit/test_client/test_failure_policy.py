@@ -1,4 +1,4 @@
-"""Testy czystej polityki klasyfikacji błędów (ustalenie F14, kryterium 5.6)."""
+"""Tests for the pure failure-classification policy (finding F14, criterion 5.6)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _status_error(status: int, headers: dict[str, str] | None = None) -> httpx.H
 
 @pytest.mark.parametrize("status", [500, 501, 502, 503, 504, 505, 599])
 def test_5xx_is_retryable_and_counts_as_breaker_failure(status: int) -> None:
-    """F19: całe 5xx otwiera obwód, nie tylko 502/503."""
+    """F19: the whole 5xx range opens the circuit, not just 502/503."""
     verdict = classify_failure(_status_error(status))
     assert verdict.retryable is True
     assert verdict.breaker_failure is True
@@ -26,14 +26,14 @@ def test_5xx_is_retryable_and_counts_as_breaker_failure(status: int) -> None:
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 410, 418, 422])
 def test_4xx_other_than_429_is_terminal(status: int) -> None:
-    """Błąd zapytania, nie serwera — ponawianie obciążałoby Sejm bez szansy na inny wynik."""
+    """A request error, not a server one — retrying would load Sejm for nothing."""
     verdict = classify_failure(_status_error(status))
     assert verdict.retryable is False
     assert verdict.breaker_failure is False
 
 
 def test_429_is_retryable_but_never_a_breaker_failure() -> None:
-    """D6: 429 znaczy 'my przesadzamy', nie 'Sejm padł'."""
+    """D6: 429 means "we are overdoing it", not "Sejm is down"."""
     verdict = classify_failure(_status_error(429))
     assert verdict.retryable is True
     assert verdict.breaker_failure is False
@@ -47,7 +47,7 @@ def test_429_honours_numeric_retry_after() -> None:
 
 @pytest.mark.parametrize("raw", ["", "later", "-5", "Wed, 21 Oct 2026 07:28:00 GMT", "inf", "nan", "1e400"])
 def test_unparsable_retry_after_falls_back_to_backoff(raw: str) -> None:
-    """Nagłówek w formacie daty lub śmieciowy nie może wywrócić klasyfikacji."""
+    """An HTTP-date or junk header must not upset the classification."""
     verdict = classify_failure(_status_error(429, {"Retry-After": raw}))
     assert verdict.retryable is True
     assert verdict.retry_after is None
@@ -62,12 +62,14 @@ def test_unparsable_retry_after_falls_back_to_backoff(raw: str) -> None:
         httpx.ConnectTimeout("przekroczono czas łączenia", request=REQUEST),
         httpx.ReadTimeout("przekroczono czas odczytu", request=REQUEST),
         httpx.PoolTimeout("przekroczono czas puli", request=REQUEST),
+        httpx.WriteTimeout("przekroczono czas zapisu", request=REQUEST),
         httpx.RemoteProtocolError("błąd protokołu", request=REQUEST),
         httpx.ProxyError("błąd proxy", request=REQUEST),
+        httpx.CloseError("błąd zamknięcia", request=REQUEST),
     ],
 )
 def test_transport_errors_are_retryable_failures(exc: httpx.TransportError) -> None:
-    """F11: jeden blok obejmuje timeouty i pozostałe błędy transportowe."""
+    """F11: one branch covers timeouts and the remaining transport errors."""
     verdict = classify_failure(exc)
     assert verdict.retryable is True
     assert verdict.breaker_failure is True
@@ -79,10 +81,16 @@ def test_transport_errors_are_retryable_failures(exc: httpx.TransportError) -> N
         httpx.DecodingError("błąd dekodowania", request=REQUEST),
         httpx.TooManyRedirects("za dużo przekierowań", request=REQUEST),
         httpx.UnsupportedProtocol("nieobsługiwany protokół", request=REQUEST),
+        httpx.LocalProtocolError("źle zbudowane żądanie"),
     ],
 )
 def test_non_transport_request_errors_are_terminal(exc: httpx.RequestError) -> None:
-    """Błędy kontraktu lub konfiguracji — ponowienie nigdy nie pomoże."""
+    """Contract or configuration errors — a retry can never help.
+
+    `LocalProtocolError` sits under `TransportError` in the httpx hierarchy but is
+    a fault on our side of the wire: retrying rebuilds the same malformed request,
+    costing Sejm traffic (O1) and risking a circuit opened against a healthy API.
+    """
     verdict = classify_failure(exc)
     assert verdict.retryable is False
     assert verdict.breaker_failure is False
@@ -90,7 +98,7 @@ def test_non_transport_request_errors_are_terminal(exc: httpx.RequestError) -> N
 
 @pytest.mark.parametrize("status", list(range(100, 600)))
 def test_every_status_code_has_a_defined_verdict(status: int) -> None:
-    """5.6: przemiatanie 100–599 — żaden kod nie może wypaść z klasyfikacji."""
+    """5.6: sweep 100-599 — no status code may fall out of the classification."""
     verdict = classify_failure(_status_error(status))
     assert isinstance(verdict, Verdict)
     if 500 <= status <= 599:
@@ -102,7 +110,7 @@ def test_every_status_code_has_a_defined_verdict(status: int) -> None:
 
 
 def test_verdict_is_immutable() -> None:
-    """Werdykt jest wartością, nie stanem — nikt go po drodze nie podmieni."""
+    """The verdict is a value, not state — nobody can swap it along the way."""
     verdict = classify_failure(_status_error(503))
     with pytest.raises(AttributeError):
         verdict.retryable = False  # type: ignore[misc]
@@ -113,5 +121,5 @@ def test_verdict_is_immutable() -> None:
     [(1, 1.0), (2, 2.0), (3, 4.0), (4, 8.0), (5, 10.0), (10, 10.0)],
 )
 def test_backoff_is_exponential_and_capped(attempt: int, expected: float) -> None:
-    """Zachowuje charakterystykę usuwanego wait_exponential(min=1, max=10)."""
+    """Preserves the shape of the removed wait_exponential(min=1, max=10)."""
     assert backoff(attempt) == pytest.approx(expected)

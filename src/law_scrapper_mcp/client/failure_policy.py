@@ -1,8 +1,8 @@
-"""Czysta polityka klasyfikacji błędów żądań do API Sejmu.
+"""Pure failure-classification policy for Sejm API requests.
 
-Moduł nie dotyka sieci, zegara ani stanu współdzielonego — dzięki temu cała
-polityka ponawiania jest testowalna offline, łącznie z przemiataniem wszystkich
-kodów statusu. Warstwa sieciowa (`sejm_client`) tylko odczytuje werdykt.
+The module touches neither the network, the clock, nor shared state, which keeps
+the whole retry policy testable offline — including a sweep over every status
+code. The network layer (`sejm_client`) only reads the verdict.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ DEFAULT_BACKOFF_CAP = 10.0
 
 @dataclass(frozen=True)
 class Verdict:
-    """Werdykt polityki dla pojedynczej nieudanej próby.
+    """Policy verdict for a single failed attempt.
 
     Attributes:
-        retryable: Czy próbę wolno powtórzyć.
-        breaker_failure: Czy zdarzenie liczy się jako awaria wyłącznika obwodu.
-        retry_after: Czas oczekiwania narzucony przez serwer, w sekundach.
-        rate_limited: Czy serwer zgłosił przekroczenie limitu (HTTP 429).
+        retryable: Whether the attempt may be repeated.
+        breaker_failure: Whether the event counts as a circuit breaker failure.
+        retry_after: Wait time imposed by the server, in seconds.
+        rate_limited: Whether the server reported a rate limit (HTTP 429).
     """
 
     retryable: bool
@@ -34,10 +34,10 @@ class Verdict:
 
 
 def _parse_retry_after(raw: str | None) -> float | None:
-    """Odczytaj nagłówek Retry-After wyrażony w sekundach.
+    """Read a Retry-After header expressed in seconds.
 
-    Wariant z datą HTTP jest świadomie pomijany — API Sejmu go nie zwraca,
-    a nieodczytany nagłówek bezpiecznie degraduje się do zwykłego backoffu.
+    The HTTP-date form is deliberately skipped — the Sejm API does not return
+    it, and an unparsed header degrades safely into the ordinary backoff.
     """
     if raw is None:
         return None
@@ -51,13 +51,13 @@ def _parse_retry_after(raw: str | None) -> float | None:
 
 
 def classify_failure(exc: httpx.HTTPError) -> Verdict:
-    """Zaklasyfikuj nieudaną próbę żądania.
+    """Classify a failed request attempt.
 
     Args:
-        exc: Wyjątek podniesiony przez warstwę `httpx`.
+        exc: Exception raised by the `httpx` layer.
 
     Returns:
-        Werdykt mówiący, czy ponawiać i czy liczyć awarię wyłącznika.
+        A verdict stating whether to retry and whether to book a breaker failure.
     """
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
@@ -73,12 +73,15 @@ def classify_failure(exc: httpx.HTTPError) -> Verdict:
             return Verdict(retryable=True, breaker_failure=True, retry_after=retry_after)
         return Verdict(retryable=False, breaker_failure=False)
 
-    # UnsupportedProtocol to błąd konfiguracji, nie sieciowy — nie ponawiaj.
-    if isinstance(exc, httpx.UnsupportedProtocol):
+    # Both are faults on our side of the wire, not the server's: UnsupportedProtocol
+    # is a configuration error, LocalProtocolError means we built a malformed request.
+    # A retry would rebuild the same broken request, so it only costs Sejm traffic —
+    # and booking it as a breaker failure would open the circuit against a healthy API.
+    if isinstance(exc, httpx.UnsupportedProtocol | httpx.LocalProtocolError):
         return Verdict(retryable=False, breaker_failure=False)
 
-    # TimeoutException jest w httpx podklasą TransportError, więc F11 i dotychczasowe
-    # zachowanie dla timeoutów obsługuje jedna gałąź.
+    # TimeoutException is an httpx subclass of TransportError, so a single branch
+    # covers both F11 and the previous behaviour for timeouts.
     if isinstance(exc, httpx.TransportError):
         return Verdict(retryable=True, breaker_failure=True)
 
@@ -91,14 +94,14 @@ def backoff(
     base: float = DEFAULT_BACKOFF_BASE,
     cap: float = DEFAULT_BACKOFF_CAP,
 ) -> float:
-    """Zwróć opóźnienie wykładnicze przed próbą numer `attempt` + 1.
+    """Return the exponential delay preceding attempt number `attempt` + 1.
 
     Args:
-        attempt: Numer właśnie zakończonej próby, liczony od 1.
-        base: Opóźnienie po pierwszej nieudanej próbie, w sekundach.
-        cap: Górne ograniczenie opóźnienia, w sekundach.
+        attempt: Number of the attempt just finished, counted from 1.
+        base: Delay after the first failed attempt, in seconds.
+        cap: Upper bound on the delay, in seconds.
 
     Returns:
-        Liczba sekund oczekiwania.
+        Number of seconds to wait.
     """
     return min(base * (2 ** (attempt - 1)), cap)

@@ -12,8 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search_legal_acts` i `browse_acts` zwracają `page_info`; `browse_acts` przyjmuje `offset` (klaster 2, rozszerzenie zakresu)
 - `MetadataOutput.failed_categories` — jawna lista kategorii metadanych, których nie udało się pobrać (klaster 2, L2)
 - `SearchInActOutput.context_chars_requested` / `context_chars_applied` oraz podpowiedź o przycięciu (klaster 2, L4)
+- `LAW_MCP_API_MAX_ATTEMPTS` (domyślnie 3) i `LAW_MCP_API_RETRY_BUDGET` (domyślnie 45.0 s) — nastawy pętli ponowień klienta API (klaster 4)
 
 ### Changed
+- `SejmApiClient` rozdziela żądanie na trzy warstwy (`_send` / `_execute_with_resilience` / `_request`); translacja wyjątków dzieje się poza pętlą ponowień (klaster 4, F10)
+- Wyłącznik obwodu ma kontrakt `try_acquire` / `release_success` / `release_failure` / `release_probe`; licznik sond rośnie w chwili wpuszczenia, nie po zakończeniu żądania (klaster 4, F21)
+- HTTP 500 i 504 podnoszą `ApiUnavailableError` zamiast ogólnego `SejmApiError` — typ zgadza się teraz z klasyfikacją wyłącznika. `ApiUnavailableError` dziedziczy po `SejmApiError`, więc istniejące bloki `except` łapią tak samo jak dotąd (klaster 4, F19/D7)
 - `search_in_act` buduje kontekst i ustala sekcję wyłącznie dla trafień bieżącej strony; mapowanie sekcji korzysta z wyszukiwania binarnego (klaster 2, L1)
 - `get_system_metadata(category="all")` pobiera pięć kategorii współbieżnie zamiast sekwencyjnie, w granicach semafora klienta (klaster 2, L2)
 - Opis `context_chars` w `inputSchema` narzędzia `search_in_act` podaje granicę 2000 znaków i skutek jej przekroczenia (klaster 2, L4)
@@ -21,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Awaria pobrania pojedynczej kategorii metadanych nie zaniża już cicho `total_count` (klaster 2, L2)
 - `SearchOutput.total_count` jest podnoszony do liczby faktycznie zwróconych rekordów, gdy API Sejmu poda `count` mniejszy od własnej odpowiedzi (klaster 2, Task 8)
+- Błędy statusowe 5xx są ponawiane — dotąd przechwycenie wyjątku przed polityką ponawiania sprawiało, że ponawiany był wyłącznie timeout (klaster 4, F10)
+- Błędy transportowe inne niż timeout (`ConnectError`, `ReadError`, `RemoteProtocolError`) są obsługiwane i nie docierają do warstwy `services/` jako surowe wyjątki `httpx` (klaster 4, F11)
+- Jedna nieudana operacja zwiększa licznik wyłącznika o 1, nie o liczbę prób; sekwencja ponowień ma budżet czasu i przerywa się, gdy równoległy ruch otworzy obwód (klaster 4, F20)
+- Awaria potwierdzona wcześniej w sekwencji jest księgowana także wtedy, gdy wyłącznik odmówi wpuszczenia kolejnej próby — bez tego 5xx zaobserwowane w HALF_OPEN nie przeprowadzało obwodu z powrotem do OPEN (klaster 4, review)
+- `httpx.LocalProtocolError` (źle zbudowane żądanie po naszej stronie) nie jest już ponawiany ani liczony jako awaria wyłącznika — ponowienie odtwarzałoby to samo zepsute żądanie, a wyłącznik otwierałby się przeciwko zdrowemu API (klaster 4, review)
+- `LAW_MCP_API_MAX_ATTEMPTS` i `LAW_MCP_API_RETRY_BUDGET` są walidowane (`ge=1` / `gt=0`); wartość 0 dawała dotąd cichą pętlę zerową bez wysłania żądania (klaster 4, review)
+
+### Removed
+- Zależność `tenacity` — jawna pętla ponowień w `client/sejm_client.py` zastąpiła dekorator `@retry` (klaster 4, D9)
 
 ## [3.0.0] - 2026-08-14
 

@@ -1,7 +1,7 @@
-"""Testy warstwy odporności klienta Sejm API (F10, F11, F19, F20; kryteria 5.1-5.4, 5.7).
+"""Sejm API client resilience tests (F10, F11, F19, F20; criteria 5.1-5.4, 5.7).
 
-Cały zestaw działa offline na respx, a oczekiwanie jest wstrzykiwane przez
-podmianę `_delay` — żaden test nie odmierza czasu rzeczywistego (O6).
+The whole suite runs offline on respx, and waiting is injected by substituting
+`_delay` — no test measures real elapsed time (O6).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ ACT_PATH = "acts/DU/2024/1"
 
 @pytest.fixture
 def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Przechwyć żądane opóźnienia zamiast ich odczekiwać."""
+    """Capture the requested delays instead of sitting them out."""
     recorded: list[float] = []
 
     async def fake_delay(seconds: float) -> None:
@@ -63,7 +63,7 @@ async def client(breaker: CircuitBreaker) -> AsyncGenerator[SejmApiClient]:
 @pytest.mark.asyncio
 @respx.mock
 async def test_503_is_retried_until_success(client: SejmApiClient, slept: list[float]) -> None:
-    """F10, kryterium 5.1: dwie odpowiedzi 503, potem 200 — trzy żądania, dane wracają."""
+    """F10, criterion 5.1: two 503s then a 200 — three requests, data comes back."""
     route = respx.get(ACT_URL).mock(
         side_effect=[
             httpx.Response(503),
@@ -82,7 +82,7 @@ async def test_503_is_retried_until_success(client: SejmApiClient, slept: list[f
 @pytest.mark.asyncio
 @respx.mock
 async def test_500_exhausts_attempts_then_raises(client: SejmApiClient, slept: list[float]) -> None:
-    """F10 + D7, kryterium 5.1: 500 jest ponawiane i kończy się ApiUnavailableError."""
+    """F10 + D7, criterion 5.1: 500 is retried and ends as ApiUnavailableError."""
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(500))
 
     with pytest.raises(ApiUnavailableError):
@@ -94,7 +94,7 @@ async def test_500_exhausts_attempts_then_raises(client: SejmApiClient, slept: l
 @pytest.mark.asyncio
 @respx.mock
 async def test_connect_error_is_retried(client: SejmApiClient, slept: list[float]) -> None:
-    """F11, kryterium 5.2: błąd transportowy przy pierwszej próbie, sukces przy drugiej."""
+    """F11, criterion 5.2: a transport error on attempt one, success on attempt two."""
     route = respx.get(ACT_URL).mock(
         side_effect=[
             httpx.ConnectError("brak połączenia"),
@@ -109,7 +109,7 @@ async def test_connect_error_is_retried(client: SejmApiClient, slept: list[float
 @pytest.mark.asyncio
 @respx.mock
 async def test_read_error_surfaces_as_domain_exception(client: SejmApiClient, slept: list[float]) -> None:
-    """F11, kryterium 5.2: wywołujący nigdy nie widzi surowego wyjątku httpx."""
+    """F11, criterion 5.2: the caller never sees a raw httpx exception."""
     respx.get(ACT_URL).mock(side_effect=httpx.ReadError("błąd odczytu"))
 
     with pytest.raises(ApiUnavailableError):
@@ -121,7 +121,7 @@ async def test_read_error_surfaces_as_domain_exception(client: SejmApiClient, sl
 async def test_repeated_transport_error_counts_one_failure(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """F11 + F20, kryteria 5.2 i 5.4: trzy próby, dokładnie jedna awaria wyłącznika."""
+    """F11 + F20, criteria 5.2 and 5.4: three attempts, exactly one breaker failure."""
     respx.get(ACT_URL).mock(side_effect=httpx.ConnectError("brak połączenia"))
 
     with pytest.raises(ApiUnavailableError):
@@ -135,7 +135,7 @@ async def test_repeated_transport_error_counts_one_failure(
 async def test_five_failed_operations_open_the_circuit(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """F19 + F20, kryteria 5.3 i 5.4: próg 5 znaczy pięć operacji, nie dwie."""
+    """F19 + F20, criteria 5.3 and 5.4: a threshold of 5 means five operations, not two."""
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(500))
 
     for _ in range(4):
@@ -159,7 +159,7 @@ async def test_five_failed_operations_open_the_circuit(
 async def test_budget_cuts_the_retry_sequence(
     breaker: CircuitBreaker, slept: list[float], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F20, kryterium 5.4: przekroczony budżet ucina próby, zamiast zasypiać."""
+    """F20, criterion 5.4: an exceeded budget cuts the attempts instead of sleeping."""
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(503))
     api = SejmApiClient(
         cache=TTLCache(max_entries=100),
@@ -183,7 +183,7 @@ async def test_budget_cuts_the_retry_sequence(
 @pytest.mark.asyncio
 @respx.mock
 async def test_budget_is_never_exceeded_by_planned_sleeps(client: SejmApiClient, slept: list[float]) -> None:
-    """F20, kryterium 5.4: suma zaplanowanych oczekiwań mieści się w budżecie."""
+    """F20, criterion 5.4: the planned waits sum to less than the budget."""
     respx.get(ACT_URL).mock(return_value=httpx.Response(503))
 
     with pytest.raises(ApiUnavailableError):
@@ -194,14 +194,44 @@ async def test_budget_is_never_exceeded_by_planned_sleeps(client: SejmApiClient,
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_read_timeout_is_cut_by_the_budget(breaker: CircuitBreaker, slept: list[float]) -> None:
+    """F20, criterion 5.4c: a repeated read timeout ends within the budget.
+
+    The other budget tests drive HTTP 503. This one drives an actual
+    `httpx.ReadTimeout` — the failure mode criterion 5.4c names, and the one whose
+    30 s read timeout is the reason the budget exists at all.
+    """
+    route = respx.get(ACT_URL).mock(side_effect=httpx.ReadTimeout("przekroczono czas odczytu"))
+    api = SejmApiClient(
+        cache=TTLCache(max_entries=100),
+        timeout=30.0,
+        max_concurrent=10,
+        circuit_breaker=breaker,
+        max_attempts=3,
+        retry_budget=0.5,
+    )
+    await api.start()
+    try:
+        with pytest.raises(ApiUnavailableError):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert route.call_count == 1
+    assert slept == []
+    assert breaker.failure_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_circuit_opened_mid_sequence_aborts_retries(
     client: SejmApiClient, breaker: CircuitBreaker, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """D2, kryterium 5.4: obwód otwarty przez równoległy ruch przerywa naszą sekwencję.
+    """D2, criterion 5.4: a circuit opened by concurrent traffic aborts our sequence.
 
-    Podmieniamy `_delay` na taki, który w trakcie oczekiwania symuluje równoległy
-    ruch dobijający wyłącznik do progu — to najwierniejsze odwzorowanie wyścigu,
-    o którym mówi D2, bez polegania na kolejności zadań.
+    We swap `_delay` for one that, while waiting, simulates concurrent traffic
+    driving the breaker to its threshold — the truest rendering of the race D2
+    describes, without relying on task ordering.
     """
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(503))
 
@@ -221,10 +251,10 @@ async def test_circuit_opened_mid_sequence_aborts_retries(
 @pytest.mark.asyncio
 @respx.mock
 async def test_half_open_admits_exactly_max_calls(slept: list[float]) -> None:
-    """F21, kryterium 5.5: dziesięć współbieżnych operacji, trzy docierają do API.
+    """F21, criterion 5.5: ten concurrent operations, three reach the API.
 
-    Wyłącznik z zerowym czasem odzysku wchodzi w HALF_OPEN przy pierwszym
-    `try_acquire()`, więc test nie musi manipulować zegarem ani polem prywatnym.
+    A breaker with a zero recovery timeout enters HALF_OPEN on the first
+    `try_acquire()`, so the test manipulates neither the clock nor a private field.
     """
     breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.0, half_open_max_calls=3)
     api = SejmApiClient(
@@ -242,10 +272,10 @@ async def test_half_open_admits_exactly_max_calls(slept: list[float]) -> None:
     assert breaker.state is CircuitState.OPEN
 
     async def respond(request: httpx.Request) -> httpx.Response:
-        # Punkt zawieszenia jest tu konieczny: bez niego respx zwraca
-        # odpowiedź w pełni synchronicznie, więc `asyncio.gather` wykonuje
-        # dziesięć zadań kolejno (każde do końca), zanim zacznie kolejne —
-        # zero realnej współbieżności i próg HALF_OPEN nigdy nie jest napięty.
+        # A suspension point is required here: without it respx answers fully
+        # synchronously, so `asyncio.gather` runs the ten tasks one after another
+        # (each to completion) before starting the next — zero real concurrency,
+        # and the HALF_OPEN limit is never put under pressure.
         await asyncio.sleep(0)
         return httpx.Response(200, json={"ok": True})
 
@@ -270,7 +300,7 @@ async def test_half_open_admits_exactly_max_calls(slept: list[float]) -> None:
 async def test_429_retries_once_honouring_retry_after(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """D6, kryterium 5.7: jedno ponowienie po czasie z nagłówka, bez awarii wyłącznika."""
+    """D6, criterion 5.7: one retry after the header delay, no breaker failure."""
     route = respx.get(ACT_URL).mock(
         return_value=httpx.Response(429, headers={"Retry-After": "2"}),
     )
@@ -289,7 +319,7 @@ async def test_429_retries_once_honouring_retry_after(
 async def test_404_is_terminal_and_invisible_to_the_breaker(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """Kryterium 5.7: 404 nadal podnosi ActNotFoundError, bez ponowień i bez awarii."""
+    """Criterion 5.7: 404 still raises ActNotFoundError, with no retry and no failure."""
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(404))
 
     with pytest.raises(ActNotFoundError):
@@ -303,7 +333,7 @@ async def test_404_is_terminal_and_invisible_to_the_breaker(
 @pytest.mark.asyncio
 @respx.mock
 async def test_client_error_stays_a_generic_api_error(client: SejmApiClient, slept: list[float]) -> None:
-    """O3 + D7: 4xx inne niż 404 nie awansuje do ApiUnavailableError."""
+    """O3 + D7: a 4xx other than 404 is not promoted to ApiUnavailableError."""
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(400, text="złe zapytanie"))
 
     with pytest.raises(SejmApiError) as caught:
@@ -319,7 +349,7 @@ async def test_client_error_stays_a_generic_api_error(client: SejmApiClient, sle
 async def test_open_circuit_rejects_before_sending(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """Otwarty obwód odrzuca żądanie bez ruchu wychodzącego (O1)."""
+    """An open circuit rejects the request with no outbound traffic (O1)."""
     for _ in range(5):
         breaker.release_failure()
     route = respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ok": True}))
@@ -332,13 +362,13 @@ async def test_open_circuit_rejects_before_sending(
 
 @pytest.mark.asyncio
 async def test_cancelled_probe_releases_the_half_open_slot(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fix (Critical): anulowanie żądania nie może trwale zablokować bezpiecznika.
+    """Fix (Critical): cancelling a request must not wedge the breaker permanently.
 
-    `asyncio.CancelledError` nie jest wyjątkiem `httpx`, więc omija klasyfikację
-    polityki (`classify_failure` przyjmuje tylko `httpx.HTTPError`). Bez
-    dedykowanej obsługi slot HALF_OPEN nigdy nie wraca do zera, a bezpiecznik
-    nie może już dojść do `release_failure()` (jedynej drogi z powrotem do OPEN)
-    — więc odrzuca wszystko w nieskończoność.
+    `asyncio.CancelledError` is not an `httpx` exception, so it bypasses policy
+    classification (`classify_failure` only accepts `httpx.HTTPError`). Without
+    dedicated handling the HALF_OPEN slot never returns to zero, and the breaker
+    can no longer reach `release_failure()` — the only route back to OPEN — so it
+    rejects everything forever.
     """
     breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.0, half_open_max_calls=3)
     api = SejmApiClient(
@@ -377,12 +407,12 @@ async def test_cancelled_probe_releases_the_half_open_slot(monkeypatch: pytest.M
 async def test_breaker_counts_failure_seen_before_a_trailing_429(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:
-    """Fix (Important): awaria 5xx wcześniej w sekwencji nie może zniknąć za 429 na końcu.
+    """Fix (Important): an earlier 5xx must not vanish behind a trailing 429.
 
-    `give_up` patrzył wyłącznie na werdykt ostatniej próby — bez zatrzasku
-    ponad wszystkimi próbami sekwencja 500 → 500 → 429 zwalniałaby wyłącznie
-    sondę mimo dwóch potwierdzonych awarii serwera, więc wyłącznik nigdy by
-    się nie otworzył przeciw API, które degraduje się dokładnie w ten sposób.
+    `give_up` looked only at the verdict of the last attempt — without a latch
+    spanning all attempts, a 500 -> 500 -> 429 sequence would release only the
+    probe despite two confirmed server failures, so the breaker would never open
+    against an API that degrades in exactly this way.
     """
     route = respx.get(ACT_URL).mock(
         side_effect=[
@@ -401,8 +431,50 @@ async def test_breaker_counts_failure_seen_before_a_trailing_429(
     assert breaker.failure_count == 1
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_failure_survives_admission_refusal_mid_sequence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fix (Critical): a failure confirmed before admission is refused must not vanish.
+
+    In HALF_OPEN our probe gets a 500, frees its slot for the wait, and on the next
+    attempt finds the slot taken by concurrent traffic. Without booking the latched
+    failure the breaker stays HALF_OPEN, so an API confirmed broken can be declared
+    recovered by the probes that happened to succeed.
+    """
+    breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.0, half_open_max_calls=1)
+    api = SejmApiClient(
+        cache=TTLCache(max_entries=100),
+        timeout=30.0,
+        max_concurrent=10,
+        circuit_breaker=breaker,
+        max_attempts=3,
+        retry_budget=45.0,
+    )
+    await api.start()
+
+    for _ in range(5):
+        breaker.release_failure()
+    assert breaker.state is CircuitState.OPEN
+
+    route = respx.get(ACT_URL).mock(return_value=httpx.Response(500))
+
+    async def steal_the_only_slot(_seconds: float) -> None:
+        assert breaker.try_acquire() is True
+
+    monkeypatch.setattr(client_module, "_delay", steal_the_only_slot)
+    try:
+        with pytest.raises(ApiUnavailableError):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert route.call_count == 1
+    assert breaker.state is CircuitState.OPEN
+    assert breaker.failure_count == 6
+
+
 def test_settings_expose_retry_budget_and_attempts() -> None:
-    """Kryterium 4.3: obie nastawy istnieją z wartościami domyślnymi ze spec."""
+    """Criterion 4.3: both settings exist with the default values from the spec."""
     from law_scrapper_mcp.config import Settings
 
     settings = Settings()
@@ -411,7 +483,7 @@ def test_settings_expose_retry_budget_and_attempts() -> None:
 
 
 def test_lifespan_wires_retry_settings_into_the_client() -> None:
-    """Nastawy muszą realnie docierać do klienta, a nie tylko istnieć w configu."""
+    """The settings must actually reach the client, not merely exist in the config."""
     import inspect
 
     from law_scrapper_mcp import server
@@ -422,7 +494,7 @@ def test_lifespan_wires_retry_settings_into_the_client() -> None:
 
 
 def test_tenacity_is_not_a_runtime_dependency() -> None:
-    """D9: jedyny konsument zniknął, zależność też."""
+    """D9: the only consumer is gone, and so is the dependency."""
     import tomllib
     from pathlib import Path
 

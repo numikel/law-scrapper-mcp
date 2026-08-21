@@ -19,9 +19,9 @@ from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
 
 
 async def _delay(seconds: float) -> None:
-    """Jedyny punkt oczekiwania w pętli ponowień.
+    """Sole waiting point of the retry loop.
 
-    Wydzielone, żeby testy mogły podmienić opóźnienie zamiast je odczekiwać.
+    Extracted so that tests can substitute the delay instead of sitting it out.
     """
     await asyncio.sleep(seconds)
 
@@ -67,13 +67,13 @@ class SejmApiClient:
             self._client = None
 
     async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Wyślij pojedyncze żądanie HTTP.
+        """Send a single HTTP request.
 
-        Warstwa najniższa: buduje URL, pilnuje semafora i podnosi wyłącznie
-        wyjątki `httpx`. Nie ponawia i nie tłumaczy błędów.
+        Lowest layer: builds the URL, guards the semaphore and raises `httpx`
+        exceptions only. It neither retries nor translates errors.
 
         Raises:
-            httpx.HTTPError: Dowolny błąd transportowy lub statusowy.
+            httpx.HTTPError: Any transport or status error.
         """
         if self._client is None:
             await self.start()
@@ -88,18 +88,18 @@ class SejmApiClient:
             return response
 
     async def _execute_with_resilience(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Wykonaj żądanie z ponawianiem, budżetem czasu i księgowaniem wyłącznika.
+        """Run a request with retries, a time budget and breaker accounting.
 
-        Warstwa środkowa widzi wyłącznie surowe wyjątki `httpx`, więc żaden blok
-        `except` nie może zmienić typu, zanim polityka zdąży go ocenić.
+        The middle layer sees raw `httpx` exceptions only, so no `except` block
+        can change the type before the policy gets to judge it.
 
-        Jedna operacja użytkownika rejestruje najwyżej jedną awarię wyłącznika,
-        a stan wyłącznika sprawdzany jest przed każdą próbą — obwód otwarty przez
-        równoległy ruch przerywa sekwencję zamiast dobijać API.
+        One user operation records at most one breaker failure, and the breaker
+        state is checked before every attempt — a circuit opened by concurrent
+        traffic aborts the sequence instead of hammering the API further.
 
         Raises:
-            ApiUnavailableError: Gdy wyłącznik nie wpuszcza żądania.
-            httpx.HTTPError: Ostatni błąd po wyczerpaniu prób lub budżetu.
+            ApiUnavailableError: When the breaker refuses admission.
+            httpx.HTTPError: The last error once attempts or budget run out.
         """
         deadline = monotonic() + self._retry_budget
         throttled = False
@@ -107,6 +107,12 @@ class SejmApiClient:
 
         for attempt in range(1, self._max_attempts + 1):
             if not self._circuit_breaker.try_acquire():
+                # A failure already confirmed earlier in this sequence must not
+                # vanish just because admission was refused before we could book
+                # it. In HALF_OPEN that loss would let a still-broken API be
+                # declared recovered by the probes that happened to succeed.
+                if breaker_failure_seen:
+                    self._circuit_breaker.release_failure()
                 raise ApiUnavailableError(
                     "API Sejmu tymczasowo niedostępne (bezpiecznik otwarty)",
                     status_code=503,
@@ -145,28 +151,28 @@ class SejmApiClient:
                 self._circuit_breaker.release_success()
                 return response
 
-        # Nieosiągalne: pętla zawsze kończy się przez return albo raise.
+        # Unreachable: the loop always exits through a return or a raise.
         raise ApiUnavailableError("API Sejmu nie odpowiedziało w ramach dozwolonych prób", status_code=503)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Wykonaj żądanie i przetłumacz błędy `httpx` na wyjątki domenowe.
+        """Run a request and translate `httpx` errors into domain exceptions.
 
-        Warstwa najwyższa. Translacja dzieje się na zewnątrz ponawiania, więc
-        polityka zawsze ocenia oryginalny typ wyjątku.
+        Topmost layer. Translation happens outside the retry loop, so the policy
+        always judges the original exception type.
 
         Args:
-            method: Metoda HTTP.
-            path: Ścieżka względem BASE_URL.
-            **kwargs: Dodatkowe parametry żądania httpx.
+            method: HTTP method.
+            path: Path relative to BASE_URL.
+            **kwargs: Additional httpx request parameters.
 
         Returns:
-            Odpowiedź HTTP.
+            HTTP response.
 
         Raises:
-            ActNotFoundError: Gdy zasób nie istnieje (404).
-            ApiUnavailableError: Gdy API zwróciło 5xx, zawiódł transport
-                albo wyłącznik jest otwarty.
-            SejmApiError: Dla pozostałych błędów po stronie zapytania.
+            ActNotFoundError: When the resource does not exist (404).
+            ApiUnavailableError: When the API returned 5xx, transport failed,
+                or the circuit breaker is open.
+            SejmApiError: For the remaining request-side errors.
         """
         try:
             return await self._execute_with_resilience(method, path, **kwargs)

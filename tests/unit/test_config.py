@@ -56,7 +56,15 @@ class TestSettingsDefaults:
         """Test default API concurrency settings."""
         settings = Settings()
         assert settings.api_max_concurrent == 10
-        assert settings.api_max_retries == 3
+
+    def test_dead_retry_knob_is_gone(self):
+        """api_max_retries never reached the client; keeping it advertised a lie.
+
+        The attempt count was hardcoded in the old tenacity decorator, so setting
+        LAW_MCP_API_MAX_RETRIES changed nothing. Unknown prefixed env vars are
+        ignored, so removing the field breaks nobody.
+        """
+        assert not hasattr(Settings(), "api_max_retries")
 
     def test_retry_loop_defaults(self):
         """Test default retry loop settings."""

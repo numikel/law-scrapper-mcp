@@ -17,6 +17,11 @@ from law_scrapper_mcp.client.exceptions import (
 )
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
 
+# Deliberately carries no version: a hardcoded one drifts, and a client built
+# without settings has no honest version to claim. Production passes
+# `Settings.user_agent`, which derives both name and version from configuration.
+DEFAULT_USER_AGENT = "law-scrapper-mcp"
+
 
 async def _delay(seconds: float) -> None:
     """Sole waiting point of the retry loop.
@@ -39,6 +44,7 @@ class SejmApiClient:
         circuit_breaker: CircuitBreaker | None = None,
         max_attempts: int = 3,
         retry_budget: float = 45.0,
+        user_agent: str = DEFAULT_USER_AGENT,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
@@ -47,6 +53,7 @@ class SejmApiClient:
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
+        self._user_agent = user_agent
 
     async def start(self) -> None:
         """Initialize the HTTP client."""
@@ -54,7 +61,7 @@ class SejmApiClient:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=5.0, read=self._timeout, write=10.0, pool=10.0),
                 headers={
-                    "User-Agent": "law-scrapper-mcp/2.0",
+                    "User-Agent": self._user_agent,
                     "Accept": "application/json",
                 },
                 follow_redirects=True,

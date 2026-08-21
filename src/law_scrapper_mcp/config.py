@@ -12,6 +12,10 @@ MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
 FILTER_MAX_RECORDS_FLOOR = 1
 
+# Contact channel advertised to api.sejm.gov.pl. The API is run by a state
+# institution, so its administrator needs a way to reach us that is not a ban.
+USER_AGENT_CONTACT = "https://github.com/numikel/law-scrapper-mcp"
+
 
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
@@ -39,7 +43,6 @@ class Settings(BaseSettings):
     # API client
     api_timeout: float = 30.0
     api_max_concurrent: int = 10
-    api_max_retries: int = 3
     # Bounded so that a misconfigured value degrades loudly at startup instead of
     # silently turning the retry loop into zero attempts.
     api_max_attempts: int = Field(default=3, ge=1)
@@ -97,6 +100,16 @@ class Settings(BaseSettings):
     # Server info
     server_name: str = "law-scrapper-mcp"
     server_version: str = "3.0.0"
+
+    @property
+    def user_agent(self) -> str:
+        """Identity sent to api.sejm.gov.pl on every request.
+
+        Derived rather than written out, so the header cannot drift away from
+        the version the server actually reports — which is exactly what happened
+        while it was a literal in the client.
+        """
+        return f"{self.server_name}/{self.server_version} (+{USER_AGENT_CONTACT})"
 
 
 def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:

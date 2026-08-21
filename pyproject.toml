@@ -8,7 +8,6 @@ dependencies = [
     "mcp[cli]==2.0.0",
     "google-re2>=1.1.20251105",
     "httpx>=0.28",
-    "tenacity>=9.0",
     "pydantic>=2.12",
     "pydantic-settings>=2.7",
     "python-dateutil>=2.9",

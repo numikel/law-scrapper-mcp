@@ -27,9 +27,13 @@ class ActNotFoundError(SejmApiError):
 
 
 class ApiUnavailableError(SejmApiError):
-    """API is temporarily unavailable."""
+    """API is temporarily unavailable.
 
-    pass
+    Covers the whole 5xx range, transport errors and rejection by an open
+    circuit breaker — exactly the events the breaker counts as a failure.
+    Inherits from `SejmApiError`, so existing `except SejmApiError` blocks catch
+    them just as before.
+    """
 
 
 class ContentNotAvailableError(LawScrapperError):

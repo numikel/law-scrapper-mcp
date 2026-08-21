@@ -56,7 +56,40 @@ class TestSettingsDefaults:
         """Test default API concurrency settings."""
         settings = Settings()
         assert settings.api_max_concurrent == 10
-        assert settings.api_max_retries == 3
+
+    def test_dead_retry_knob_is_gone(self):
+        """api_max_retries never reached the client; keeping it advertised a lie.
+
+        The attempt count was hardcoded in the old tenacity decorator, so setting
+        LAW_MCP_API_MAX_RETRIES changed nothing. Unknown prefixed env vars are
+        ignored, so removing the field breaks nobody.
+        """
+        assert not hasattr(Settings(), "api_max_retries")
+
+    def test_retry_loop_defaults(self):
+        """Test default retry loop settings."""
+        settings = Settings()
+        assert settings.api_max_attempts == 3
+        assert settings.api_retry_budget == pytest.approx(45.0)
+
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_api_max_attempts_below_one_is_rejected(self, monkeypatch, value):
+        """A zero attempt budget would silently disable the retry loop.
+
+        With ``range(1, 1)`` the loop body never runs, so the client raises
+        ApiUnavailableError without ever contacting the API and without recording
+        anything on the circuit breaker. Fail loudly at startup instead.
+        """
+        monkeypatch.setenv("LAW_MCP_API_MAX_ATTEMPTS", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+    @pytest.mark.parametrize("value", ["0", "-0.5"])
+    def test_api_retry_budget_must_be_positive(self, monkeypatch, value):
+        """A non-positive budget makes every planned wait exceed the deadline."""
+        monkeypatch.setenv("LAW_MCP_API_RETRY_BUDGET", value)
+        with pytest.raises(ValidationError):
+            Settings()
 
     def test_cache_ttl_defaults(self):
         """Test default cache TTL values."""

@@ -165,7 +165,8 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_PORT` | `7683` | HTTP server port (when using streamable-http) |
 | `LAW_MCP_API_TIMEOUT` | `30.0` | HTTP request timeout in seconds |
 | `LAW_MCP_API_MAX_CONCURRENT` | `10` | Maximum concurrent API requests |
-| `LAW_MCP_API_MAX_RETRIES` | `3` | Maximum API request retries |
+| `LAW_MCP_API_MAX_ATTEMPTS` | `3` | Attempts per operation, retries included |
+| `LAW_MCP_API_RETRY_BUDGET` | `45.0` | Seconds the retry sequence of one operation may plan to wait |
 | `LAW_MCP_CACHE_METADATA_TTL` | `86400` | Metadata cache TTL (24 hours) |
 | `LAW_MCP_CACHE_SEARCH_TTL` | `600` | Search results cache TTL (10 minutes) |
 | `LAW_MCP_CACHE_BROWSE_TTL` | `3600` | Browse results cache TTL (1 hour) |

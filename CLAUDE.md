@@ -74,7 +74,7 @@ src/law_scrapper_mcp/
 - **Pagination**: `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on list and content tools (defaults: 20 items, 10,000 chars; maxima: 100 items, 50,000 chars)
 - **TTL cache**: Async API response cache with configurable TTL (metadata=24h, search=10min)
 - **Error handling**: `@handle_tool_errors` re-raises `ToolExecutionError` so failures surface as `is_error=True`
-- **Async throughout**: httpx.AsyncClient with retry (tenacity), semaphore rate limiting, asyncio.Lock
+- **Async throughout**: httpx.AsyncClient with an explicit retry loop (budget-bounded, `client/failure_policy.py`), semaphore rate limiting, asyncio.Lock
 - **Official MCP SDK**: Tools access lifespan resources via `ctx.request_context.lifespan_context`; HTTP via `streamable_http_app(stateless_http=True, streamable_http_path="/mcp")`
 
 **Tool categories** (13 tools total):
@@ -105,4 +105,10 @@ src/law_scrapper_mcp/
 - Configuration via environment variables with `LAW_MCP_` prefix
 - Logging to stderr, format configurable via `LAW_MCP_LOG_FORMAT` (text/json)
 - All exception messages in Polish
+- English everywhere except the agent-facing surface: docstrings, code comments (tests included),
+  commit messages, PR text, `README.md` and `CHANGELOG.md`. Polish is reserved for strings an
+  agent or end user actually reads — tool parameter descriptions, the "Kiedy użyć" trees inside
+  tool docstrings, and exception messages. A Polish docstring in `client/` or `services/`, or a
+  Polish `CHANGELOG` entry, is a convention violation, not a style preference. Match the file's
+  convention, not the nearest neighbouring lines — that is how both drifts started
 - asyncio.Lock for all in-memory stores (Cache, DocumentStore, ResultStore)

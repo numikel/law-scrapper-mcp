@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from time import monotonic
 from typing import Any
 
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
@@ -20,6 +15,20 @@ from law_scrapper_mcp.client.exceptions import (
     ApiUnavailableError,
     SejmApiError,
 )
+from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
+
+# Deliberately carries no version: a hardcoded one drifts, and a client built
+# without settings has no honest version to claim. Production passes
+# `Settings.user_agent`, which derives both name and version from configuration.
+DEFAULT_USER_AGENT = "law-scrapper-mcp"
+
+
+async def _delay(seconds: float) -> None:
+    """Sole waiting point of the retry loop.
+
+    Extracted so that tests can substitute the delay instead of sitting it out.
+    """
+    await asyncio.sleep(seconds)
 
 
 class SejmApiClient:
@@ -33,12 +42,18 @@ class SejmApiClient:
         timeout: float = 30.0,
         max_concurrent: int = 10,
         circuit_breaker: CircuitBreaker | None = None,
+        max_attempts: int = 3,
+        retry_budget: float = 45.0,
+        user_agent: str = DEFAULT_USER_AGENT,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
+        self._max_attempts = max_attempts
+        self._retry_budget = retry_budget
+        self._user_agent = user_agent
 
     async def start(self) -> None:
         """Initialize the HTTP client."""
@@ -46,7 +61,7 @@ class SejmApiClient:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=5.0, read=self._timeout, write=10.0, pool=10.0),
                 headers={
-                    "User-Agent": "law-scrapper-mcp/2.0",
+                    "User-Agent": self._user_agent,
                     "Accept": "application/json",
                 },
                 follow_redirects=True,
@@ -58,33 +73,15 @@ class SejmApiClient:
             await self._client.aclose()
             self._client = None
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(min=1, max=10),
-        retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError)),
-    )
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Make HTTP request with retry logic and circuit breaker.
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send a single HTTP request.
 
-        Args:
-            method: HTTP method
-            path: URL path (relative to BASE_URL)
-            **kwargs: Additional httpx request parameters
-
-        Returns:
-            HTTP response
+        Lowest layer: builds the URL, guards the semaphore and raises `httpx`
+        exceptions only. It neither retries nor translates errors.
 
         Raises:
-            ActNotFoundError: If resource not found (404)
-            ApiUnavailableError: If API is unavailable (502, 503) or circuit breaker open
-            SejmApiError: For other HTTP errors
+            httpx.HTTPError: Any transport or status error.
         """
-        if not self._circuit_breaker.can_execute():
-            raise ApiUnavailableError(
-                "API Sejmu tymczasowo niedostępne (circuit breaker otwarty)",
-                status_code=503,
-            )
-
         if self._client is None:
             await self.start()
 
@@ -93,30 +90,119 @@ class SejmApiClient:
         url = f"{self.BASE_URL}/{path.lstrip('/')}"
 
         async with self._semaphore:
+            response = await self._client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+
+    async def _execute_with_resilience(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Run a request with retries, a time budget and breaker accounting.
+
+        The middle layer sees raw `httpx` exceptions only, so no `except` block
+        can change the type before the policy gets to judge it.
+
+        One user operation records at most one breaker failure, and the breaker
+        state is checked before every attempt — a circuit opened by concurrent
+        traffic aborts the sequence instead of hammering the API further.
+
+        Raises:
+            ApiUnavailableError: When the breaker refuses admission.
+            httpx.HTTPError: The last error once attempts or budget run out.
+        """
+        deadline = monotonic() + self._retry_budget
+        throttled = False
+        breaker_failure_seen = False
+
+        for attempt in range(1, self._max_attempts + 1):
+            if not self._circuit_breaker.try_acquire():
+                # A failure already confirmed earlier in this sequence must not
+                # vanish just because admission was refused before we could book
+                # it. In HALF_OPEN that loss would let a still-broken API be
+                # declared recovered by the probes that happened to succeed.
+                if breaker_failure_seen:
+                    self._circuit_breaker.release_failure()
+                raise ApiUnavailableError(
+                    "API Sejmu tymczasowo niedostępne (bezpiecznik otwarty)",
+                    status_code=503,
+                )
+
             try:
-                response = await self._client.request(method, url, **kwargs)
-                response.raise_for_status()
-                self._circuit_breaker.record_success()
-                return response
-            except httpx.TimeoutException:
-                self._circuit_breaker.record_failure()
+                response = await self._send(method, path, **kwargs)
+            except httpx.HTTPError as exc:
+                verdict = classify_failure(exc)
+                if verdict.breaker_failure:
+                    breaker_failure_seen = True
+                delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)
+
+                give_up = (
+                    not verdict.retryable
+                    or attempt == self._max_attempts
+                    or (verdict.rate_limited and throttled)
+                    or monotonic() + delay >= deadline
+                )
+
+                if give_up:
+                    if breaker_failure_seen:
+                        self._circuit_breaker.release_failure()
+                    else:
+                        self._circuit_breaker.release_probe()
+                    raise
+
+                self._circuit_breaker.release_probe()
+                if verdict.rate_limited:
+                    throttled = True
+                await _delay(delay)
+            except BaseException:
+                self._circuit_breaker.release_probe()
                 raise
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    raise ActNotFoundError(path) from e
-                elif e.response.status_code in (502, 503):
-                    self._circuit_breaker.record_failure()
-                    raise ApiUnavailableError(
-                        f"API temporarily unavailable: {e.response.status_code}",
-                        status_code=e.response.status_code,
-                        url=url,
-                    ) from e
-                else:
-                    raise SejmApiError(
-                        f"HTTP {e.response.status_code}: {e.response.text}",
-                        status_code=e.response.status_code,
-                        url=url,
-                    ) from e
+            else:
+                self._circuit_breaker.release_success()
+                return response
+
+        # Unreachable: the loop always exits through a return or a raise.
+        raise ApiUnavailableError("API Sejmu nie odpowiedziało w ramach dozwolonych prób", status_code=503)
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Run a request and translate `httpx` errors into domain exceptions.
+
+        Topmost layer. Translation happens outside the retry loop, so the policy
+        always judges the original exception type.
+
+        Args:
+            method: HTTP method.
+            path: Path relative to BASE_URL.
+            **kwargs: Additional httpx request parameters.
+
+        Returns:
+            HTTP response.
+
+        Raises:
+            ActNotFoundError: When the resource does not exist (404).
+            ApiUnavailableError: When the API returned 5xx, transport failed,
+                or the circuit breaker is open.
+            SejmApiError: For the remaining request-side errors.
+        """
+        try:
+            return await self._execute_with_resilience(method, path, **kwargs)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            url = str(exc.request.url)
+            if status == 404:
+                raise ActNotFoundError(path) from exc
+            if 500 <= status <= 599:
+                raise ApiUnavailableError(
+                    f"API Sejmu chwilowo niedostępne (HTTP {status})",
+                    status_code=status,
+                    url=url,
+                ) from exc
+            raise SejmApiError(
+                f"HTTP {status}: {exc.response.text}",
+                status_code=status,
+                url=url,
+            ) from exc
+        except httpx.TransportError as exc:
+            raise ApiUnavailableError(f"Błąd połączenia z API Sejmu: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise SejmApiError(f"Błędne żądanie do API Sejmu: {exc}") from exc
 
     async def get_json(self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None) -> Any:
         """Get JSON response from API with optional caching.

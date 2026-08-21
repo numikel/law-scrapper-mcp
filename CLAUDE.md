@@ -105,4 +105,8 @@ src/law_scrapper_mcp/
 - Configuration via environment variables with `LAW_MCP_` prefix
 - Logging to stderr, format configurable via `LAW_MCP_LOG_FORMAT` (text/json)
 - All exception messages in Polish
+- Docstrings and code comments in English — including tests. Polish is reserved for strings an
+  agent or end user actually reads: tool parameter descriptions, the "Kiedy użyć" trees inside
+  tool docstrings, and exception messages. A module in `client/` or `services/` with Polish
+  docstrings is a convention violation, not a style preference
 - asyncio.Lock for all in-memory stores (Cache, DocumentStore, ResultStore)

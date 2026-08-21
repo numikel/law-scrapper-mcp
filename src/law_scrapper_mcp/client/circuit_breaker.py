@@ -26,10 +26,10 @@ class CircuitBreaker:
         HALF_OPEN — limited test requests allowed to probe recovery
 
     Synchronization:
-        Sekcje krytyczne nie zawierają `await`, więc pętla zdarzeń nie może ich
-        przerwać w połowie — stan jest atomowy z konstrukcji i nie wymaga
-        `asyncio.Lock`. Warunek jest przypięty testem; dodanie `await` do
-        którejkolwiek z metod `try_acquire` / `release_*` unieważnia to założenie.
+        Critical sections contain no `await`, so the event loop cannot interrupt
+        them halfway — the state is atomic by construction and needs no
+        `asyncio.Lock`. The condition is pinned by a test; adding `await` to any
+        of `try_acquire` / `release_*` invalidates the assumption.
 
         Acquire/release pairing limitation (known, accepted):
         `release_success()`, `release_failure()`, and `release_probe()` determine
@@ -60,27 +60,27 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
-        """Bieżący stan wyłącznika.
+        """Current breaker state.
 
-        Odczyt jest wolny od efektów ubocznych — przejście OPEN → HALF_OPEN
-        wykonuje wyłącznie `try_acquire()`.
+        Reading is free of side effects — the OPEN → HALF_OPEN transition is
+        performed by `try_acquire()` alone.
         """
         return self._state
 
     @property
     def failure_count(self) -> int:
-        """Bieżąca liczba zarejestrowanych awarii."""
+        """Current number of recorded failures."""
         return self._failure_count
 
     def try_acquire(self) -> bool:
-        """Poproś o zgodę na wykonanie żądania.
+        """Ask for permission to perform a request.
 
-        W stanie HALF_OPEN licznik sond rośnie w chwili wpuszczenia, nie po
-        zakończeniu żądania — dzięki temu nie istnieje moment, w którym sonda
-        została dopuszczona, ale nie jest policzona.
+        In HALF_OPEN the probe counter grows on admission, not on completion —
+        so there is no moment in which a probe has been admitted but not yet
+        counted.
 
         Returns:
-            True, jeśli żądanie wolno wysłać.
+            True if the request may be sent.
         """
         if self._state == CircuitState.OPEN and monotonic() - self._last_failure_time >= self._recovery_timeout:
             self._state = CircuitState.HALF_OPEN
@@ -100,7 +100,7 @@ class CircuitBreaker:
         return False
 
     def release_success(self) -> None:
-        """Zwolnij sondę po udanym żądaniu."""
+        """Release a probe after a successful request."""
         if self._state == CircuitState.HALF_OPEN:
             self._release_slot()
             self._half_open_successes += 1
@@ -114,10 +114,11 @@ class CircuitBreaker:
             self._failure_count = 0
 
     def release_failure(self) -> None:
-        """Zwolnij sondę i zarejestruj awarię operacji.
+        """Release a probe and record an operation failure.
 
-        Wołane najwyżej raz na operację użytkownika, po wyczerpaniu prób —
-        próg awarii liczy nieudane żądania, nie nieudane próby sieciowe.
+        Called at most once per user operation — either once attempts run out, or
+        when the breaker refuses admission while a failure is already confirmed.
+        The failure threshold counts failed operations, not failed network attempts.
         """
         self._failure_count += 1
         self._last_failure_time = monotonic()
@@ -135,10 +136,10 @@ class CircuitBreaker:
             )
 
     def release_probe(self) -> None:
-        """Zwolnij sondę bez werdyktu.
+        """Release a probe without a verdict.
 
-        Używane tam, gdzie zdarzenie nie jest ani sukcesem, ani awarią serwera —
-        na przykład przy HTTP 429 albo po próbie, po której nastąpi ponowienie.
+        Used where the event is neither a success nor a server failure — for
+        example on HTTP 429, or after an attempt that will be retried.
         """
         self._release_slot()
 
@@ -147,7 +148,7 @@ class CircuitBreaker:
             self._half_open_in_flight = max(0, self._half_open_in_flight - 1)
 
     def reset(self) -> None:
-        """Przywróć wyłącznik do stanu zamkniętego."""
+        """Restore the breaker to the closed state."""
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._half_open_successes = 0

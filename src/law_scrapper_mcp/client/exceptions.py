@@ -27,12 +27,12 @@ class ActNotFoundError(SejmApiError):
 
 
 class ApiUnavailableError(SejmApiError):
-    """API jest chwilowo niedostępne.
+    """API is temporarily unavailable.
 
-    Obejmuje całe 5xx, błędy transportowe oraz odrzucenie przez otwarty
-    wyłącznik obwodu — dokładnie te zdarzenia, które wyłącznik liczy jako
-    awarię. Dziedziczy po `SejmApiError`, więc istniejące bloki
-    `except SejmApiError` łapią je tak samo jak dotąd.
+    Covers the whole 5xx range, transport errors and rejection by an open
+    circuit breaker — exactly the events the breaker counts as a failure.
+    Inherits from `SejmApiError`, so existing `except SejmApiError` blocks catch
+    them just as before.
     """
 
 

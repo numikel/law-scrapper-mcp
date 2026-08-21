@@ -1,4 +1,4 @@
-"""Testy tranzycji i wyścigu wyłącznika obwodu (F14, F21, D10; kryteria 5.4-5.6)."""
+"""Circuit breaker transition and race tests (F14, F21, D10; criteria 5.4-5.6)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_starts_closed_and_admits_requests() -> None:
 
 
 def test_closed_to_open_after_threshold_failures() -> None:
-    """F14: tranzycja CLOSED → OPEN."""
+    """F14: the CLOSED -> OPEN transition."""
     breaker = CircuitBreaker(failure_threshold=5)
     _open_the_breaker(breaker, failures=4)
     assert breaker.state is CircuitState.CLOSED
@@ -52,7 +52,7 @@ def test_success_in_closed_resets_failure_count() -> None:
 
 
 def test_open_to_half_open_after_recovery_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """F14: tranzycja OPEN → HALF_OPEN, sterowana wstrzykniętym zegarem (O6)."""
+    """F14: the OPEN -> HALF_OPEN transition, driven by an injected clock (O6)."""
     now = 1000.0
     monkeypatch.setattr(breaker_module, "monotonic", lambda: now)
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=30.0)
@@ -65,7 +65,7 @@ def test_open_to_half_open_after_recovery_timeout(monkeypatch: pytest.MonkeyPatc
 
 
 def test_reading_state_does_not_transition(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ustalenie 1.2: getter przestaje być mutatorem — sam odczyt nic nie zmienia."""
+    """Finding 1.2: the getter stops being a mutator — reading changes nothing."""
     now = 1000.0
     monkeypatch.setattr(breaker_module, "monotonic", lambda: now)
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=30.0)
@@ -79,7 +79,7 @@ def test_reading_state_does_not_transition(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_half_open_to_closed_after_enough_successes() -> None:
-    """F14: tranzycja HALF_OPEN → CLOSED."""
+    """F14: the HALF_OPEN -> CLOSED transition."""
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.0, half_open_max_calls=3)
     _open_the_breaker(breaker, failures=1)
     for _ in range(3):
@@ -90,7 +90,7 @@ def test_half_open_to_closed_after_enough_successes() -> None:
 
 
 def test_half_open_to_open_on_single_failure() -> None:
-    """F14: tranzycja HALF_OPEN → OPEN."""
+    """F14: the HALF_OPEN -> OPEN transition."""
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.0, half_open_max_calls=3)
     _open_the_breaker(breaker, failures=1)
     assert breaker.try_acquire() is True
@@ -111,11 +111,11 @@ def test_reset_returns_to_closed() -> None:
 
 
 def test_half_open_admits_exactly_max_calls() -> None:
-    """F21: licznik sond rośnie przy wpuszczeniu, nie przy zakończeniu żądania.
+    """F21: the probe counter grows on admission, not on request completion.
 
-    Pada na kodzie sprzed zmiany: `can_execute()` czyta `_half_open_successes`,
-    który rośnie dopiero w `record_success()`, więc dziesięć sprawdzeń z rzędu
-    zwraca dziesięć zgód.
+    Red against the pre-change code: `can_execute()` reads `_half_open_successes`,
+    which only grows inside `record_success()`, so ten checks in a row return ten
+    admissions.
     """
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.0, half_open_max_calls=3)
     _open_the_breaker(breaker, failures=1)
@@ -127,7 +127,7 @@ def test_half_open_admits_exactly_max_calls() -> None:
 
 @pytest.mark.asyncio
 async def test_half_open_admits_exactly_max_calls_under_concurrency() -> None:
-    """F21, kryterium 5.5: dziesięć współbieżnych operacji, dokładnie trzy sondy."""
+    """F21, criterion 5.5: ten concurrent operations, exactly three probes."""
     breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.0, half_open_max_calls=3)
     _open_the_breaker(breaker, failures=1)
 
@@ -140,7 +140,7 @@ async def test_half_open_admits_exactly_max_calls_under_concurrency() -> None:
 
 
 def test_release_probe_frees_a_slot_without_a_verdict() -> None:
-    """D6: 429 zwalnia sondę, ale nie zmienia ani stanu, ani licznika awarii."""
+    """D6: 429 frees a probe but changes neither state nor the failure count."""
     breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.0, half_open_max_calls=1)
     _open_the_breaker(breaker, failures=5)
     assert breaker.try_acquire() is True
@@ -162,10 +162,10 @@ def _has_await(func: Any) -> bool:
     ["try_acquire", "release_success", "release_failure", "release_probe", "reset"],
 )
 def test_critical_section_contains_no_await(name: str) -> None:
-    """D10, kryterium 5.4: atomowość bez asyncio.Lock stoi na braku await.
+    """D10, criterion 5.4: atomicity without asyncio.Lock rests on having no await.
 
-    Dodanie await do sekcji krytycznej otworzyłoby okno przeplotu, którego nie
-    strzeże żadna blokada — dlatego warunek jest przypięty testem, a nie komentarzem.
+    Adding await to a critical section would open an interleaving window guarded by
+    no lock — which is why the condition is pinned by a test, not by a comment.
     """
     method = getattr(CircuitBreaker, name)
     assert not inspect.iscoroutinefunction(method)

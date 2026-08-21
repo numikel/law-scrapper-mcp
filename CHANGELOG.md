@@ -8,32 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `list_loaded_documents` i `list_result_sets` przyjmują `limit`/`offset` i zwracają `page_info` (klaster 2, L3)
-- `search_legal_acts` i `browse_acts` zwracają `page_info`; `browse_acts` przyjmuje `offset` (klaster 2, rozszerzenie zakresu)
-- `MetadataOutput.failed_categories` — jawna lista kategorii metadanych, których nie udało się pobrać (klaster 2, L2)
-- `SearchInActOutput.context_chars_requested` / `context_chars_applied` oraz podpowiedź o przycięciu (klaster 2, L4)
-- `LAW_MCP_API_MAX_ATTEMPTS` (domyślnie 3) i `LAW_MCP_API_RETRY_BUDGET` (domyślnie 45.0 s) — nastawy pętli ponowień klienta API (klaster 4)
+- `list_loaded_documents` and `list_result_sets` accept `limit`/`offset` and return `page_info` (cluster 2, L3)
+- `search_legal_acts` and `browse_acts` return `page_info`; `browse_acts` accepts `offset` (cluster 2, scope extension)
+- `MetadataOutput.failed_categories` — an explicit list of metadata categories that could not be fetched (cluster 2, L2)
+- `SearchInActOutput.context_chars_requested` / `context_chars_applied`, plus a hint when the context was trimmed (cluster 2, L4)
+- `LAW_MCP_API_MAX_ATTEMPTS` (default 3) and `LAW_MCP_API_RETRY_BUDGET` (default 45.0 s) — settings for the API client retry loop (cluster 4)
 
 ### Changed
-- `SejmApiClient` rozdziela żądanie na trzy warstwy (`_send` / `_execute_with_resilience` / `_request`); translacja wyjątków dzieje się poza pętlą ponowień (klaster 4, F10)
-- Wyłącznik obwodu ma kontrakt `try_acquire` / `release_success` / `release_failure` / `release_probe`; licznik sond rośnie w chwili wpuszczenia, nie po zakończeniu żądania (klaster 4, F21)
-- HTTP 500 i 504 podnoszą `ApiUnavailableError` zamiast ogólnego `SejmApiError` — typ zgadza się teraz z klasyfikacją wyłącznika. `ApiUnavailableError` dziedziczy po `SejmApiError`, więc istniejące bloki `except` łapią tak samo jak dotąd (klaster 4, F19/D7)
-- `search_in_act` buduje kontekst i ustala sekcję wyłącznie dla trafień bieżącej strony; mapowanie sekcji korzysta z wyszukiwania binarnego (klaster 2, L1)
-- `get_system_metadata(category="all")` pobiera pięć kategorii współbieżnie zamiast sekwencyjnie, w granicach semafora klienta (klaster 2, L2)
-- Opis `context_chars` w `inputSchema` narzędzia `search_in_act` podaje granicę 2000 znaków i skutek jej przekroczenia (klaster 2, L4)
+- `SejmApiClient` splits a request into three layers (`_send` / `_execute_with_resilience` / `_request`); exception translation happens outside the retry loop (cluster 4, F10)
+- The circuit breaker gains a `try_acquire` / `release_success` / `release_failure` / `release_probe` contract; the probe counter grows on admission, not on request completion (cluster 4, F21)
+- HTTP 500 and 504 raise `ApiUnavailableError` instead of a generic `SejmApiError`, so the exception type matches the breaker's classification. `ApiUnavailableError` inherits from `SejmApiError`, so existing `except` blocks catch exactly as before (cluster 4, F19/D7)
+- `search_in_act` builds context and resolves sections only for hits on the current page; section mapping uses binary search (cluster 2, L1)
+- `get_system_metadata(category="all")` fetches the five categories concurrently instead of sequentially, within the client semaphore (cluster 2, L2)
+- The `context_chars` description in the `search_in_act` `inputSchema` states the 2000-character limit and the effect of exceeding it (cluster 2, L4)
 
 ### Fixed
-- Awaria pobrania pojedynczej kategorii metadanych nie zaniża już cicho `total_count` (klaster 2, L2)
-- `SearchOutput.total_count` jest podnoszony do liczby faktycznie zwróconych rekordów, gdy API Sejmu poda `count` mniejszy od własnej odpowiedzi (klaster 2, Task 8)
-- Błędy statusowe 5xx są ponawiane — dotąd przechwycenie wyjątku przed polityką ponawiania sprawiało, że ponawiany był wyłącznie timeout (klaster 4, F10)
-- Błędy transportowe inne niż timeout (`ConnectError`, `ReadError`, `RemoteProtocolError`) są obsługiwane i nie docierają do warstwy `services/` jako surowe wyjątki `httpx` (klaster 4, F11)
-- Jedna nieudana operacja zwiększa licznik wyłącznika o 1, nie o liczbę prób; sekwencja ponowień ma budżet czasu i przerywa się, gdy równoległy ruch otworzy obwód (klaster 4, F20)
-- Awaria potwierdzona wcześniej w sekwencji jest księgowana także wtedy, gdy wyłącznik odmówi wpuszczenia kolejnej próby — bez tego 5xx zaobserwowane w HALF_OPEN nie przeprowadzało obwodu z powrotem do OPEN (klaster 4, review)
-- `httpx.LocalProtocolError` (źle zbudowane żądanie po naszej stronie) nie jest już ponawiany ani liczony jako awaria wyłącznika — ponowienie odtwarzałoby to samo zepsute żądanie, a wyłącznik otwierałby się przeciwko zdrowemu API (klaster 4, review)
-- `LAW_MCP_API_MAX_ATTEMPTS` i `LAW_MCP_API_RETRY_BUDGET` są walidowane (`ge=1` / `gt=0`); wartość 0 dawała dotąd cichą pętlę zerową bez wysłania żądania (klaster 4, review)
+- A failure to fetch a single metadata category no longer silently understates `total_count` (cluster 2, L2)
+- `SearchOutput.total_count` is raised to the number of records actually returned when the Sejm API reports a `count` lower than its own response (cluster 2, Task 8)
+- 5xx status errors are retried — until now the exception was intercepted before the retry policy could see it, so only timeouts were ever retried (cluster 4, F10)
+- Transport errors other than timeouts (`ConnectError`, `ReadError`, `RemoteProtocolError`) are handled and no longer reach the `services/` layer as raw `httpx` exceptions (cluster 4, F11)
+- One failed operation increments the breaker counter by 1 rather than by the number of attempts; the retry sequence has a time budget and aborts when concurrent traffic opens the circuit (cluster 4, F20)
+- A failure confirmed earlier in a sequence is booked even when the breaker refuses admission for a later attempt — without this, a 5xx observed in HALF_OPEN never drove the circuit back to OPEN (cluster 4, review)
+- `httpx.LocalProtocolError` (a malformed request built on our own side) is no longer retried or counted as a breaker failure — a retry would rebuild the same broken request, and the breaker would open against a healthy API (cluster 4, review)
+- `LAW_MCP_API_MAX_ATTEMPTS` and `LAW_MCP_API_RETRY_BUDGET` are validated (`ge=1` / `gt=0`); a value of 0 previously produced a silent zero-iteration loop that sent no request at all (cluster 4, review)
+- The `User-Agent` header reports the real server version and a contact address instead of a hardcoded `law-scrapper-mcp/2.0`, so the Sejm API administrator can flag a problem by some route other than a ban (cluster 8, F52)
 
 ### Removed
-- Zależność `tenacity` — jawna pętla ponowień w `client/sejm_client.py` zastąpiła dekorator `@retry` (klaster 4, D9)
+- The `tenacity` dependency — an explicit retry loop in `client/sejm_client.py` replaced the `@retry` decorator (cluster 4, D9)
+- The `LAW_MCP_API_MAX_RETRIES` setting — it had no production consumer, because the attempt count was hardcoded in the `tenacity` decorator. Use `LAW_MCP_API_MAX_ATTEMPTS` instead; unknown `LAW_MCP_`-prefixed variables are ignored, so setting the old name raises no error (cluster 16, F38)
 
 ## [3.0.0] - 2026-08-14
 

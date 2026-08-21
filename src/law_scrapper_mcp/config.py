@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MAX_PATTERN_LENGTH_FLOOR = 64
@@ -40,8 +40,10 @@ class Settings(BaseSettings):
     api_timeout: float = 30.0
     api_max_concurrent: int = 10
     api_max_retries: int = 3
-    api_max_attempts: int = 3
-    api_retry_budget: float = 45.0
+    # Bounded so that a misconfigured value degrades loudly at startup instead of
+    # silently turning the retry loop into zero attempts.
+    api_max_attempts: int = Field(default=3, ge=1)
+    api_retry_budget: float = Field(default=45.0, gt=0)
 
     # Cache TTL (seconds)
     cache_metadata_ttl: int = 86400

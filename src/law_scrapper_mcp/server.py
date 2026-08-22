@@ -4,6 +4,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+# Imported at module level (unlike the SDK's own lazy in-method import) so
+# `server_module.uvicorn` is a patchable attribute for tests, at the cost of a
+# small startup-time hit even on the `stdio` path.
 import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings

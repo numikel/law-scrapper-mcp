@@ -39,6 +39,32 @@ def test_http_app_still_serves_the_health_route() -> None:
     assert "/mcp" in paths
 
 
+def test_http_app_pins_security_critical_kwargs(monkeypatch) -> None:
+    """`transport_security` and `stateless_http` must reach the SDK call.
+
+    This project runs with `LAW_MCP_HOST=0.0.0.0` in Docker, which defeats the
+    SDK's own auto-protection fallback (it only auto-enables DNS-rebinding
+    protection when host is `127.0.0.1`/`localhost`/`::1`). If
+    `transport_security` were silently dropped here, the allowlist would be
+    gone with nothing in the unit suite catching it.
+    """
+    calls: list[dict[str, object]] = []
+
+    def recording_streamable_http_app(**kwargs: object) -> object:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(server_module.app, "streamable_http_app", recording_streamable_http_app)
+
+    server_module.build_http_app()
+
+    assert len(calls) == 1
+    assert calls[0]["transport_security"] is server_module.LOOPBACK_TRANSPORT_SECURITY
+    assert calls[0]["stateless_http"] is True
+    assert calls[0]["host"] == server_module.settings.host
+    assert calls[0]["streamable_http_path"] == "/mcp"
+
+
 def test_main_http_branch_uses_our_own_server(monkeypatch) -> None:
     monkeypatch.setattr(server_module.settings, "transport", "streamable-http")
     served: list[uvicorn.Config] = []

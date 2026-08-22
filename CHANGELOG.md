@@ -7,36 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- `list_loaded_documents` and `list_result_sets` accept `limit`/`offset` and return `page_info` (cluster 2, L3)
-- `search_legal_acts` and `browse_acts` return `page_info`; `browse_acts` accepts `offset` (cluster 2, scope extension)
-- `MetadataOutput.failed_categories` — an explicit list of metadata categories that could not be fetched (cluster 2, L2)
-- `SearchInActOutput.context_chars_requested` / `context_chars_applied`, plus a hint when the context was trimmed (cluster 2, L4)
-- `LAW_MCP_API_MAX_ATTEMPTS` (default 3) and `LAW_MCP_API_RETRY_BUDGET` (default 45.0 s) — settings for the API client retry loop (cluster 4)
+## [3.1.0] - 2026-08-22
 
-### Changed
-- CI and release workflows bump their pinned GitHub Actions to the current Node 24 runtime: `actions/checkout` 4.2.2→7.0.1, `astral-sh/setup-uv` 5.3.1→10.0.1, `actions/upload-artifact` 4.4.3→7.0.1, `actions/download-artifact` 4.1.9→8.0.1, `softprops/action-gh-release` 2.2.1→3.0.2 (consolidates Dependabot #22-#26)
-- `SejmApiClient` splits a request into three layers (`_send` / `_execute_with_resilience` / `_request`); exception translation happens outside the retry loop (cluster 4, F10)
-- The circuit breaker gains a `try_acquire` / `release_success` / `release_failure` / `release_probe` contract; the probe counter grows on admission, not on request completion (cluster 4, F21)
-- HTTP 500 and 504 raise `ApiUnavailableError` instead of a generic `SejmApiError`, so the exception type matches the breaker's classification. `ApiUnavailableError` inherits from `SejmApiError`, so existing `except` blocks catch exactly as before (cluster 4, F19/D7)
-- `search_in_act` builds context and resolves sections only for hits on the current page; section mapping uses binary search (cluster 2, L1)
-- `get_system_metadata(category="all")` fetches the five categories concurrently instead of sequentially, within the client semaphore (cluster 2, L2)
-- The `context_chars` description in the `search_in_act` `inputSchema` states the 2000-character limit and the effect of exceeding it (cluster 2, L4)
+See [docs/changelogs/v3.1.0.md](docs/changelogs/v3.1.0.md) for details.
 
-### Fixed
-- A failure to fetch a single metadata category no longer silently understates `total_count` (cluster 2, L2)
-- `SearchOutput.total_count` is raised to the number of records actually returned when the Sejm API reports a `count` lower than its own response (cluster 2, Task 8)
-- 5xx status errors are retried — until now the exception was intercepted before the retry policy could see it, so only timeouts were ever retried (cluster 4, F10)
-- Transport errors other than timeouts (`ConnectError`, `ReadError`, `RemoteProtocolError`) are handled and no longer reach the `services/` layer as raw `httpx` exceptions (cluster 4, F11)
-- One failed operation increments the breaker counter by 1 rather than by the number of attempts; the retry sequence has a time budget and aborts when concurrent traffic opens the circuit (cluster 4, F20)
-- A failure confirmed earlier in a sequence is booked even when the breaker refuses admission for a later attempt — without this, a 5xx observed in HALF_OPEN never drove the circuit back to OPEN (cluster 4, review)
-- `httpx.LocalProtocolError` (a malformed request built on our own side) is no longer retried or counted as a breaker failure — a retry would rebuild the same broken request, and the breaker would open against a healthy API (cluster 4, review)
-- `LAW_MCP_API_MAX_ATTEMPTS` and `LAW_MCP_API_RETRY_BUDGET` are validated (`ge=1` / `gt=0`); a value of 0 previously produced a silent zero-iteration loop that sent no request at all (cluster 4, review)
-- The `User-Agent` header reports the real server version and a contact address instead of a hardcoded `law-scrapper-mcp/2.0`, so the Sejm API administrator can flag a problem by some route other than a ban (cluster 8, F52)
-
-### Removed
-- The `tenacity` dependency — an explicit retry loop in `client/sejm_client.py` replaced the `@retry` decorator (cluster 4, D9)
-- The `LAW_MCP_API_MAX_RETRIES` setting — it had no production consumer, because the attempt count was hardcoded in the `tenacity` decorator. Use `LAW_MCP_API_MAX_ATTEMPTS` instead; unknown `LAW_MCP_`-prefixed variables are ignored, so setting the old name raises no error (cluster 16, F38)
+- **Resilient API Client Architecture** — Replaced `tenacity` with a multi-layered resilience architecture, proper 5xx retry handling, time-budgeted retry loops, and hardened circuit breaker admission contracts.
+- **Structured Pagination Across Document & Result Sets** — Added `PageInfo` pagination to `list_loaded_documents`, `list_result_sets`, `search_legal_acts`, and `browse_acts`.
+- **Search & Metadata Performance Optimizations** — Implemented binary search section lookup, lazy hit hydration, and concurrent metadata category retrieval.
+- **Reliability & Transport Hardening** — Improved transport error translation, accurate User-Agent reporting, and robust `Retry-After` header validation.
 
 ## [3.0.0] - 2026-08-14
 

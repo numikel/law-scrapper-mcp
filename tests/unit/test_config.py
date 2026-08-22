@@ -294,3 +294,26 @@ class TestPatternLimitClampingLog:
             log_pattern_limit_clamping(settings, log)
 
         assert caplog.text == ""
+
+
+class TestShutdownGrace:
+    """Tests for graceful shutdown window configuration."""
+
+    def test_shutdown_grace_defaults_to_fifteen_seconds(self) -> None:
+        """The audit's recommended window, adopted verbatim as the default."""
+        assert Settings().shutdown_grace == 15.0
+
+    def test_shutdown_grace_reads_the_environment(self, monkeypatch) -> None:
+        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "25")
+
+        assert Settings().shutdown_grace == 25.0
+
+    def test_shutdown_grace_rejects_non_positive_values(self, monkeypatch) -> None:
+        """A zero window would mean 'kill in-flight requests immediately'.
+
+        Failing at startup beats discovering it during a deploy.
+        """
+        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "0")
+
+        with pytest.raises(ValidationError):
+            Settings()

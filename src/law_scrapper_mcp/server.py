@@ -4,8 +4,10 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -195,18 +197,49 @@ async def health(_request: Request) -> JSONResponse:
     )
 
 
+def build_http_app() -> Starlette:
+    """Build the Starlette app served over Streamable HTTP.
+
+    Mirrors `MCPServer.run_streamable_http_async`
+    (mcp/server/mcpserver/server.py:1070-1089) minus the uvicorn wiring, which
+    this project owns so that `timeout_graceful_shutdown` can be set at all —
+    the SDK builds its `uvicorn.Config` internally from host, port and log level
+    and exposes no channel for the remaining options.
+
+    Re-check this function against that SDK method on every `mcp` upgrade:
+    a changed `streamable_http_app()` signature would surface here first.
+    """
+    return app.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        transport_security=LOOPBACK_TRANSPORT_SECURITY,
+        host=settings.host,
+    )
+
+
+def build_uvicorn_config() -> uvicorn.Config:
+    """Assemble the uvicorn configuration for the HTTP transport."""
+    return uvicorn.Config(
+        build_http_app(),
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+        # uvicorn's knob is whole seconds; the setting is a float so that it
+        # reads like the other timeouts in `Settings`.
+        timeout_graceful_shutdown=int(settings.shutdown_grace),
+    )
+
+
+def run_streamable_http() -> None:
+    """Serve the MCP app over Streamable HTTP with a controlled shutdown window."""
+    uvicorn.Server(build_uvicorn_config()).run()
+
+
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
     if settings.transport == "streamable-http":
-        app.run(
-            transport="streamable-http",
-            host=settings.host,
-            port=settings.port,
-            streamable_http_path="/mcp",
-            stateless_http=True,
-            transport_security=LOOPBACK_TRANSPORT_SECURITY,
-        )
+        run_streamable_http()
     else:
         app.run(transport="stdio")
 

@@ -44,9 +44,10 @@ class Settings(BaseSettings):
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed
     # and the share of requests allowed to finish is settled in favour of a fast
     # restart. Deployments that want it the other way round raise the value.
-    # Nothing in the code enforces it, but the deployment contract is
+    # Constrained to ≥1 so the downstream `int()` cast in the bootstrap layer
+    # never collapses the value to zero. The deployment contract is
     # `stop_grace_period >= 2 * shutdown_grace` — see docker-compose.yml.
-    shutdown_grace: float = Field(default=15.0, gt=0)
+    shutdown_grace: float = Field(default=15.0, ge=1)
 
     # API client
     api_timeout: float = 30.0

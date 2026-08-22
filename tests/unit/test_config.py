@@ -308,12 +308,13 @@ class TestShutdownGrace:
 
         assert Settings().shutdown_grace == 25.0
 
-    def test_shutdown_grace_rejects_non_positive_values(self, monkeypatch) -> None:
-        """A zero window would mean 'kill in-flight requests immediately'.
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_shutdown_grace_rejects_non_positive_values(self, monkeypatch, value) -> None:
+        """A zero or negative window would mean 'kill in-flight requests immediately'.
 
         Failing at startup beats discovering it during a deploy.
         """
-        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "0")
+        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", value)
 
         with pytest.raises(ValidationError):
             Settings()

@@ -1,5 +1,6 @@
 """Act details service with content loading."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -94,7 +95,12 @@ class ActService:
             if has_html:
                 html = await self._client.get_act_html(publisher, year, pos)
                 _reject_if_too_large(eli, len(html.encode("utf-8")), limit, pdf_url)
-                markdown = self._content_processor.html_to_markdown(html)
+                # markdownify, pdfplumber and the section regex are synchronous
+                # CPU-bound work. Left in the coroutine they hold the event loop
+                # for seconds, `/health` included. The offload stops at
+                # `ContentProcessor`: `DocumentStore` relies on the absence of
+                # `await` in its critical sections (see its class docstring).
+                markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
             else:
                 # try/except/else, not a single try block: the fallback below is
                 # for an unreachable PDF, and it must not swallow a size refusal
@@ -105,11 +111,11 @@ class ActService:
                     markdown = f"*No readable content available for {eli}. PDF URL: {pdf_url}*"
                 else:
                     _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
-                    markdown = self._content_processor.pdf_to_text(pdf_bytes)
+                    markdown = await asyncio.to_thread(self._content_processor.pdf_to_text, pdf_bytes)
                     if not markdown:
                         markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
 
-            sections = self._content_processor.index_sections(markdown)
+            sections = await asyncio.to_thread(self._content_processor.index_sections, markdown)
             await self._doc_store.load(eli, markdown, sections)
             logger.info(f"Loaded content for {eli}: {len(sections)} sections")
         except ContentTooLargeError:

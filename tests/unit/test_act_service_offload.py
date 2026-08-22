@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 import respx
 from httpx import Response
@@ -130,3 +133,49 @@ async def test_oversized_pdf_is_refused_before_conversion(
     message = str(excinfo.value)
     assert "przekracza limit" in message
     assert PDF_URL in message
+
+
+class SlowProcessor(ContentProcessor):
+    """Burns wall-clock time synchronously, the way markdownify does."""
+
+    def html_to_markdown(self, html: str) -> str:
+        time.sleep(0.3)
+        return "# Art. 1. Treść testowa"
+
+
+@respx.mock
+async def test_conversion_leaves_the_event_loop_free(
+    mock_client: SejmApiClient,
+    document_store: DocumentStore,
+    act_detail: dict,
+) -> None:
+    """Behavioural proof, not an implementation check.
+
+    A concurrent coroutine must keep making progress while a document is being
+    converted. Before the offload it could not: the conversion held the loop
+    for its whole duration, `/health` included.
+    """
+    service = ActService(
+        client=mock_client,
+        document_store=document_store,
+        content_processor=SlowProcessor(),
+    )
+    _mock_act_endpoints("<html><body><h1>Ustawa</h1></body></html>", act_detail)
+
+    ticks = 0
+
+    async def ticker() -> None:
+        nonlocal ticks
+        while True:
+            ticks += 1
+            await asyncio.sleep(0.01)
+
+    background = asyncio.create_task(ticker())
+    await asyncio.sleep(0)
+    try:
+        await service.get_details("DU/2024/1", load_content=True)
+    finally:
+        background.cancel()
+
+    # ~30 ticks fit into a 0.3 s conversion; without the offload it is 1.
+    assert ticks > 5

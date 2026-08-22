@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LAW_MCP_API_MAX_ATTEMPTS` (default 3) and `LAW_MCP_API_RETRY_BUDGET` (default 45.0 s) — settings for the API client retry loop (cluster 4)
 
 ### Changed
+- CI and release workflows bump their pinned GitHub Actions to the current Node 24 runtime: `actions/checkout` 4.2.2→7.0.1, `astral-sh/setup-uv` 5.3.1→10.0.1, `actions/upload-artifact` 4.4.3→7.0.1, `actions/download-artifact` 4.1.9→8.0.1, `softprops/action-gh-release` 2.2.1→3.0.2 (consolidates Dependabot #22-#26)
 - `SejmApiClient` splits a request into three layers (`_send` / `_execute_with_resilience` / `_request`); exception translation happens outside the retry loop (cluster 4, F10)
 - The circuit breaker gains a `try_acquire` / `release_success` / `release_failure` / `release_probe` contract; the probe counter grows on admission, not on request completion (cluster 4, F21)
 - HTTP 500 and 504 raise `ApiUnavailableError` instead of a generic `SejmApiError`, so the exception type matches the breaker's classification. `ApiUnavailableError` inherits from `SejmApiError`, so existing `except` blocks catch exactly as before (cluster 4, F19/D7)

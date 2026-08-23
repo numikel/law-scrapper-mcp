@@ -116,8 +116,10 @@ class ActService:
                         markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
 
             # Second gate, on the conversion *output*. The gates above bound the
-            # input, which is enough for HTML — markdownify strips markup, so the
-            # result is smaller than the source. PDF runs the other way: text
+            # input, which is enough for HTML — markdownify strips markup, so in
+            # practice the result is smaller than the source (it can expand on
+            # text dense in `_` and `*`, which it escapes, but a legal act in
+            # HTML is the opposite of that). PDF runs the other way: text
             # streams are Flate-compressed, so a payload under the limit can
             # extract past it. Such a document would reach `DocumentStore.load`,
             # which truncates with nothing but a log line — the silent mid-clause

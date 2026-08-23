@@ -71,7 +71,7 @@ def _rpc(client: TestClient, method: str, params: dict[str, object], request_id:
 
 
 def test_health_endpoint(asgi_app) -> None:
-    """GET /health returns status, version, and server name."""
+    """GET /health returns status, version, server name and upstream state."""
     with TestClient(asgi_app) as client:
         response = client.get("/health")
 
@@ -80,6 +80,9 @@ def test_health_endpoint(asgi_app) -> None:
     assert data["status"] == "ok"
     assert data["version"] == settings.server_version
     assert data["server"] == settings.server_name
+    # The lifespan ran inside the context manager, so the handle is populated.
+    assert data["upstream"]["circuit_state"] == "closed"
+    assert data["upstream"]["failure_count"] == 0
 
 
 def test_stateless_http_protocol_matrix(asgi_app) -> None:

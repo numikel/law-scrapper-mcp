@@ -163,6 +163,7 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable-http` |
 | `LAW_MCP_HOST` | `0.0.0.0` | HTTP server host (when using streamable-http) |
 | `LAW_MCP_PORT` | `7683` | HTTP server port (when using streamable-http) |
+| `LAW_MCP_SHUTDOWN_GRACE` | `15` | Graceful shutdown window in seconds for the HTTP server. Keep `stop_grace_period` in `docker-compose.yml` at or above twice this value — nothing in the code enforces the relation. |
 | `LAW_MCP_API_TIMEOUT` | `30.0` | HTTP request timeout in seconds |
 | `LAW_MCP_API_MAX_CONCURRENT` | `10` | Maximum concurrent API requests |
 | `LAW_MCP_API_MAX_ATTEMPTS` | `3` | Attempts per operation, retries included |
@@ -174,7 +175,7 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_CACHE_CHANGES_TTL` | `300` | Changes tracking cache TTL (5 minutes) |
 | `LAW_MCP_CACHE_MAX_ENTRIES` | `1000` | Maximum cache entries |
 | `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` | `10` | Maximum documents in Document Store |
-| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB) |
+| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB). Also the conversion threshold: content above it is refused before HTML/PDF conversion, with an error naming the source PDF URL. |
 | `LAW_MCP_DOC_STORE_TTL` | `7200` | Document Store TTL (2 hours) |
 | `LAW_MCP_CIRCUIT_BREAKER_THRESHOLD` | `5` | Failures before circuit breaker opens |
 | `LAW_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `60.0` | Seconds before trying recovery |
@@ -523,7 +524,7 @@ When exposing the HTTP transport (`streamable-http`) to a network, place the ser
 
 **Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). This project defaults `LAW_MCP_HOST` to `0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`LOOPBACK_TRANSPORT_SECURITY`) so requests are still validated against a loopback-only allowlist — `Host` outside `127.0.0.1:*` / `localhost:*` / `[::1]:*` gets `421`, `Origin` outside the matching `http://` variants gets `403` — independent of the bind address. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It does not add authentication or make the HTTP transport safe to expose beyond loopback; that remains a separate, not-yet-scoped project.
 
-One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
+One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version — and, since it now also reports the circuit breaker's `circuit_state` and `failure_count`, the health of the Sejm API integration — to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
 
 ### Dockerfile
 
@@ -636,7 +637,7 @@ If upgrading from v1.0.2, note these breaking changes:
 - **Centralized error handling** — `@handle_tool_errors` decorator with error classification and full tracebacks
 - **asyncio.Lock migration** — All stores use `asyncio.Lock` for proper async compatibility
 - **Default search limit** — Search/browse return max 20 results by default to limit token usage
-- **Health endpoint** — `/health` for Docker deployments with streamable-http transport
+- **Health endpoint** — `/health` for Docker deployments with streamable-http transport. Answers `200` whenever the process is alive and reports dependency state in the body: `upstream.circuit_state` is `closed`, `open`, `half_open`, or `unknown` before the lifespan has started, with `upstream.failure_count` alongside it. It stays `200` while the breaker is open on purpose — restarting the container cannot repair an outage of api.sejm.gov.pl, and under `restart: unless-stopped` a `503` would turn someone else's outage into a restart loop.
 - **Polish error messages** — All exception messages in Polish for consistent user experience
 - **Decision tree docstrings** — "When to use" / "When NOT to use" for all tools
 

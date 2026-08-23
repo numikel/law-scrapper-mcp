@@ -10,6 +10,11 @@ services:
       - LAW_MCP_LOG_LEVEL=INFO
       - LAW_MCP_LOG_FORMAT=json
     restart: unless-stopped
+    # Must stay >= 2 x LAW_MCP_SHUTDOWN_GRACE (default 15s). Nothing in the code
+    # enforces the relation. The process needs its full graceful window before
+    # Docker sends SIGKILL; equal values would race, and the lifespan `finally`
+    # could be cut off halfway through closing the HTTP client.
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7683/health', timeout=5)"]
       interval: 30s

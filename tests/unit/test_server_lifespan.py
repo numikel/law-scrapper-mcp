@@ -13,6 +13,14 @@ from law_scrapper_mcp.server import lifespan
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def clean_health_state():
+    """Module-level state must not leak between tests."""
+    server_module._health_state.clear()
+    yield
+    server_module._health_state.clear()
+
+
 async def test_lifespan_populates_the_health_handle() -> None:
     """The bridge from D4 must actually be built."""
     async with lifespan(server_module.app):
@@ -25,9 +33,8 @@ async def test_lifespan_populates_the_health_handle() -> None:
 async def test_cleanup_survives_cancellation(monkeypatch) -> None:
     """`CancelledError` is the default SIGTERM path inside a container.
 
-    The fix landed as a side effect of the SDK migration (commit f7cba0c) and
-    was never covered. This test owns the contract of the whole `finally`
-    block, not one line of it.
+    The `Exception` path has been covered since `392864e`
+    (`test_server.py:130`); the `BaseException`/`CancelledError` path was not.
     """
     cleared: list[str] = []
     original_clear = cache_module.TTLCache.clear

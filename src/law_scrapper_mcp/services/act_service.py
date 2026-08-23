@@ -115,6 +115,14 @@ class ActService:
                     if not markdown:
                         markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
 
+            # Second gate, on the conversion *output*. The gates above bound the
+            # input, which is enough for HTML — markdownify strips markup, so the
+            # result is smaller than the source. PDF runs the other way: text
+            # streams are Flate-compressed, so a payload under the limit can
+            # extract past it. Such a document would reach `DocumentStore.load`,
+            # which truncates with nothing but a log line — the silent mid-clause
+            # loss D6 rejected. One limit governs the whole path (D7).
+            _reject_if_too_large(eli, len(markdown.encode("utf-8")), limit, pdf_url)
             sections = await asyncio.to_thread(self._content_processor.index_sections, markdown)
             await self._doc_store.load(eli, markdown, sections)
             logger.info(f"Loaded content for {eli}: {len(sections)} sections")

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Configurable graceful shutdown window** — `LAW_MCP_SHUTDOWN_GRACE` (default 15s) reaches uvicorn as `timeout_graceful_shutdown`. The HTTP branch now builds its own `uvicorn.Server` on the SDK's public `streamable_http_app()`, because `MCPServer.run()` builds its uvicorn configuration internally and exposes no channel for the option.
-- **Upstream state in `/health`** — the response carries an `upstream` object with `circuit_state` and `failure_count`. The endpoint still answers `200` whenever the process is alive: a restart cannot repair an outage of api.sejm.gov.pl.
+- **Upstream state in `/health`** — the response carries an `upstream` object with `circuit_state`, plus `failure_count` alongside it once the lifespan has started (`circuit_state` is `unknown` and `failure_count` is omitted before that, or after teardown). The endpoint still answers `200` whenever the process is alive: a restart cannot repair an outage of api.sejm.gov.pl.
 
 ### Changed
 

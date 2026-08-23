@@ -175,7 +175,7 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_CACHE_CHANGES_TTL` | `300` | Changes tracking cache TTL (5 minutes) |
 | `LAW_MCP_CACHE_MAX_ENTRIES` | `1000` | Maximum cache entries |
 | `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` | `10` | Maximum documents in Document Store |
-| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB). Also the conversion threshold: content above it is refused before HTML/PDF conversion, with an error naming the source PDF URL. |
+| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB). Also the conversion threshold: content whose fetched HTML or PDF payload exceeds it is refused before conversion, with an error naming the source PDF URL. |
 | `LAW_MCP_DOC_STORE_TTL` | `7200` | Document Store TTL (2 hours) |
 | `LAW_MCP_CIRCUIT_BREAKER_THRESHOLD` | `5` | Failures before circuit breaker opens |
 | `LAW_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `60.0` | Seconds before trying recovery |
@@ -526,6 +526,8 @@ When exposing the HTTP transport (`streamable-http`) to a network, place the ser
 
 One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version — and, since it now also reports the circuit breaker's `circuit_state` and `failure_count`, the health of the Sejm API integration — to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
 
+**Health contract:** the response body carries an `upstream` object. `upstream.circuit_state` is `closed`, `open`, `half_open`, or `unknown` before the lifespan has started (or after it has been torn down) — in that `unknown` case `upstream.failure_count` is omitted entirely; otherwise it sits alongside `circuit_state`. `/health` still answers `200` while the breaker is `open`: restarting the container cannot repair an outage of api.sejm.gov.pl, and under `restart: unless-stopped` a `503` would turn someone else's outage into a restart loop.
+
 ### Dockerfile
 
 The included `Dockerfile` builds a containerized Law Scrapper MCP server:
@@ -637,7 +639,7 @@ If upgrading from v1.0.2, note these breaking changes:
 - **Centralized error handling** — `@handle_tool_errors` decorator with error classification and full tracebacks
 - **asyncio.Lock migration** — All stores use `asyncio.Lock` for proper async compatibility
 - **Default search limit** — Search/browse return max 20 results by default to limit token usage
-- **Health endpoint** — `/health` for Docker deployments with streamable-http transport. Answers `200` whenever the process is alive and reports dependency state in the body: `upstream.circuit_state` is `closed`, `open`, `half_open`, or `unknown` before the lifespan has started, with `upstream.failure_count` alongside it. It stays `200` while the breaker is open on purpose — restarting the container cannot repair an outage of api.sejm.gov.pl, and under `restart: unless-stopped` a `503` would turn someone else's outage into a restart loop.
+- **Health endpoint** — `/health` for Docker deployments with streamable-http transport
 - **Polish error messages** — All exception messages in Polish for consistent user experience
 - **Decision tree docstrings** — "When to use" / "When NOT to use" for all tools
 

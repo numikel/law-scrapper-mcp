@@ -80,13 +80,27 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
             return await func(*args, **kwargs)
         except Exception as exc:
             category = _classify_error(exc)
-            logger.error(
-                "Tool %s failed [%s]: %s",
-                func.__name__,
-                category,
-                exc,
-                exc_info=category == "internal",
-            )
+            if category == "validation":
+                # Most validation-category exceptions carry caller-supplied
+                # text (a regex pattern, an act title) that can be sensitive
+                # on its own. `TypeError` is also bucketed into "validation"
+                # by `_classify_error` even though it is typically an
+                # internal bug rather than caller input — narrowing that
+                # classification is out of this task's scope, so its detail
+                # is redacted from ERROR the same as the rest of the
+                # category and stays recoverable at DEBUG. Other categories
+                # draw on constants defined in this project, so they keep
+                # their detail on ERROR.
+                logger.error("Tool %s failed [%s]", func.__name__, category)
+                logger.debug("Tool %s validation detail: %s", func.__name__, exc)
+            else:
+                logger.error(
+                    "Tool %s failed [%s]: %s",
+                    func.__name__,
+                    category,
+                    exc,
+                    exc_info=category == "internal",
+                )
             raise ToolExecutionError(_public_message(exc, category)) from exc
 
     return wrapper

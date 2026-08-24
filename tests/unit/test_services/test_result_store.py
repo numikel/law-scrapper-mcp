@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from unittest.mock import patch
 
@@ -470,3 +471,31 @@ class TestResultStoreFilterAndStore:
         assert output.filtered_count == 0
         assert output.result_set_id is None
         assert output.filters_applied["pattern"] == "nonexistent-pattern-xyz"
+
+
+@pytest.mark.asyncio
+async def test_store_keeps_query_text_off_info(caplog: pytest.LogCaptureFixture) -> None:
+    """In the legal domain the query itself can be sensitive, even when every
+    act it matches is public. INFO keeps identifiers and counts; the text
+    stays recoverable at DEBUG."""
+    store = ResultStore(max_sets=5, ttl=60)
+    query = "keywords=zdrowie psychiczne, przymusowe leczenie"
+
+    # `test_server_bootstrap.py` exercises `server.main()`, which calls
+    # `setup_logging()` and pins the `law_scrapper_mcp` logger's level at
+    # INFO for the rest of the process (no restore fixture there, unlike
+    # `test_logging_config.py`). Passing `logger="law_scrapper_mcp"` here —
+    # the ancestor `setup_logging()` actually mutates, not a path to this
+    # specific module — makes `caplog.at_level` save and restore that
+    # logger's level too, so this test does not depend on which other test
+    # modules ran first.
+    with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp"):
+        result_set_id = await store.store(results=[], query_summary=query, total_count=7)
+
+    info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+    debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+    assert info_records, "store() must still report the result set on INFO"
+    assert all(query not in r.getMessage() for r in info_records)
+    assert any(result_set_id in r.getMessage() for r in info_records)
+    assert any(query in r.getMessage() for r in debug_records)

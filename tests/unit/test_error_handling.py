@@ -69,6 +69,28 @@ class TestHandleToolErrorsPublicSurface:
         assert caplog.records
         assert not caplog.records[-1].exc_info
 
+    async def test_validation_failure_keeps_detail_off_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A validation message is written by the caller and can carry a regex
+        pattern or an act title. The public exception still returns it — F13
+        is about the durable stderr record, not about the tool response."""
+        detail = "wzorzec 'zdrowie|przymusowe' jest nieprawidłowy"
+
+        @handle_tool_errors
+        async def failing_tool() -> str:
+            raise ValueError(detail)
+
+        with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp.tools.error_handling"):
+            with pytest.raises(ToolExecutionError, match="nieprawidłowy"):
+                await failing_tool()
+
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+        assert error_records
+        assert all(detail not in r.getMessage() for r in error_records)
+        assert any("failing_tool" in r.getMessage() for r in error_records)
+        assert any(detail in r.getMessage() for r in debug_records)
+
 
 @pytest.mark.asyncio
 async def test_content_too_large_message_survives_sanitization() -> None:

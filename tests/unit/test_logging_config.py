@@ -7,14 +7,18 @@ be imported. Every assertion here goes through a replaced `sys.stderr`, which
 
 from __future__ import annotations
 
+import asyncio
 import io
+import json
 import logging
+import re
 import sys
 from collections.abc import Iterator
 
 import pytest
 
-from law_scrapper_mcp.logging_config import setup_logging
+from law_scrapper_mcp.logging_config import request_id_var, setup_logging
+from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 
 class RecordingStream(io.StringIO):
@@ -77,3 +81,68 @@ def test_setup_logging_never_touches_stdout(monkeypatch: pytest.MonkeyPatch) -> 
     setup_logging(level="INFO", format="text")
 
     assert stdout_stream.reconfigured is None
+
+
+def test_json_record_carries_request_id_outside_a_tool_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stream)
+    setup_logging(level="INFO", format="json")
+
+    logging.getLogger("law_scrapper_mcp.test").info("lifespan started")
+
+    payload = json.loads(stream.getvalue().strip())
+    assert payload["request_id"] == "lifespan"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_tool_calls_log_distinct_request_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two asyncio tasks must not see each other's correlation id.
+
+    Each task runs in a copy of the context, so `.set()` inside one is
+    invisible to the other and to the caller.
+    """
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stream)
+    setup_logging(level="INFO", format="json")
+    log = logging.getLogger("law_scrapper_mcp.test")
+
+    @handle_tool_errors
+    async def fake_tool(name: str) -> str:
+        await asyncio.sleep(0)  # force interleaving
+        log.info("inside %s", name)
+        return name
+
+    await asyncio.gather(fake_tool("a"), fake_tool("b"))
+
+    ids = [json.loads(line)["request_id"] for line in stream.getvalue().splitlines() if line.strip()]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]
+    assert all(re.fullmatch(r"[0-9a-f]{8}", value) for value in ids)
+    assert request_id_var.get() == "lifespan"
+
+
+def test_polish_diacritics_are_not_escaped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Escaped diacritics would make `grep` useless on Polish error messages."""
+    message = "Nie znaleziono aktu — żółć, ląd, ważne"
+
+    json_stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", json_stream)
+    setup_logging(level="INFO", format="json")
+    logging.getLogger("law_scrapper_mcp.test").info(message)
+    rendered = json_stream.getvalue()
+    assert message in rendered
+    assert "\\u017c" not in rendered
+
+    text_stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", text_stream)
+    setup_logging(level="INFO", format="text")
+    logging.getLogger("law_scrapper_mcp.test").info(message)
+    rendered_text = text_stream.getvalue()
+    # A missing `request_id` filter/formatter mismatch raises `KeyError` inside
+    # `Formatter.format()`; `logging.Handler.handleError()` swallows it and
+    # echoes the record's message back into this same stream as part of its
+    # own crash dump, which would make a bare `message in rendered_text`
+    # assertion pass even though text-format rendering is broken end to end.
+    assert "--- Logging error ---" not in rendered_text
+    assert "law_scrapper_mcp.test - [lifespan] - INFO" in rendered_text
+    assert message in rendered_text

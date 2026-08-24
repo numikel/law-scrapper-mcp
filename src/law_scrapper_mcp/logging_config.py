@@ -2,9 +2,31 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import sys
 from typing import Literal
+
+request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="lifespan")
+"""Correlation id of the tool call in flight.
+
+The default is a value, not a sentinel: records emitted from `lifespan`,
+background eviction, or process startup carry `"lifespan"` without any code
+setting it, which keeps the JSON key set stable for log aggregation.
+"""
+
+
+class RequestIdFilter(logging.Filter):
+    """Stamp every record with the current correlation id.
+
+    Attached to the handler rather than to the `law_scrapper_mcp` logger on
+    purpose: records from uvicorn and httpx know nothing about this mechanism,
+    and the text format references `%(request_id)s` on every record it renders.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get()
+        return True
 
 
 def _force_utf8_stderr() -> None:
@@ -55,16 +77,17 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
                     "timestamp": datetime.utcnow().isoformat(),
                     "level": record.levelname,
                     "logger": record.name,
+                    "request_id": getattr(record, "request_id", "lifespan"),
                     "message": record.getMessage(),
                 }
                 if record.exc_info:
                     log_data["exception"] = self.formatException(record.exc_info)
-                return json.dumps(log_data)
+                return json.dumps(log_data, ensure_ascii=False)
 
         formatter: logging.Formatter = JsonFormatter()
     else:
         # Text format for development
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter("%(asctime)s - %(name)s - [%(request_id)s] - %(levelname)s - %(message)s")
 
     # Configure root logger
     root_logger = logging.getLogger()
@@ -77,6 +100,7 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
     # Add stderr handler
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(log_level)
+    handler.addFilter(RequestIdFilter())
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
 

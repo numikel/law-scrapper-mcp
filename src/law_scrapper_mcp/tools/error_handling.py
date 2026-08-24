@@ -6,6 +6,7 @@ import functools
 import logging
 from collections.abc import Awaitable, Callable
 from typing import ParamSpec, TypeVar
+from uuid import uuid4
 
 import httpx
 
@@ -18,6 +19,7 @@ from law_scrapper_mcp.client.exceptions import (
     InvalidEliError,
     SejmApiError,
 )
+from law_scrapper_mcp.logging_config import request_id_var
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,10 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
 
     @functools.wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        # One id per tool call. The decorator wraps all 13 tools and behaves
+        # identically on STDIO and Streamable HTTP, so this is the single
+        # place both transports need.
+        request_id_var.set(uuid4().hex[:8])
         try:
             return await func(*args, **kwargs)
         except Exception as exc:

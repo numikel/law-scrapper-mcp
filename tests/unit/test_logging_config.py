@@ -146,3 +146,30 @@ def test_polish_diacritics_are_not_escaped(monkeypatch: pytest.MonkeyPatch) -> N
     assert "--- Logging error ---" not in rendered_text
     assert "law_scrapper_mcp.test - [lifespan] - INFO" in rendered_text
     assert message in rendered_text
+
+
+def test_json_timestamp_is_explicit_utc(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The timestamp field must be timezone-aware and explicitly marked as UTC.
+
+    A naive timestamp (without +00:00 or Z) is ambiguous: log aggregators
+    default to local time, which in Europe/Warsaw would show events two hours
+    earlier than correlated upstream events. The suffix +00:00 is the ISO 8601
+    way to explicitly mark UTC.
+    """
+    from datetime import datetime
+
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stream)
+    setup_logging(level="INFO", format="json")
+
+    logging.getLogger("law_scrapper_mcp.test").info("test message")
+
+    payload = json.loads(stream.getvalue().strip())
+    timestamp_str = payload["timestamp"]
+
+    # Must end with +00:00 (ISO 8601 explicit UTC marker)
+    assert timestamp_str.endswith("+00:00"), f"Expected timestamp to end with +00:00, got {timestamp_str}"
+
+    # Must parse as timezone-aware datetime
+    parsed = datetime.fromisoformat(timestamp_str)
+    assert parsed.tzinfo is not None, f"Timestamp must be timezone-aware, got {parsed}"

@@ -69,11 +69,15 @@ def sync_version_across_files(target_version: str) -> bool:
             continue
 
         if key == "README.md":
-            new_content = re.sub(replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE)
+            new_content = re.sub(
+                replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE
+            )
         elif key == "CLAUDE.md":
             new_content = re.sub(replace_pattern, r"\g<1>" + clean_version, content, count=1, flags=re.MULTILINE)
         else:
-            new_content = re.sub(replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE)
+            new_content = re.sub(
+                replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE
+            )
 
         file_path.write_text(new_content, encoding="utf-8")
         print(f"  [OK] {key}: Updated to {clean_version}")

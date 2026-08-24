@@ -1,8 +1,10 @@
 """Act details service with content loading."""
 
+import asyncio
 import logging
 from typing import Any
 
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_inputs import parse_eli
@@ -11,6 +13,17 @@ from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
 
 logger = logging.getLogger(__name__)
+
+
+def _reject_if_too_large(eli: str, size_bytes: int, limit_bytes: int, pdf_url: str) -> None:
+    """Refuse conversion before it starts.
+
+    The limit lands *before* the converter, not after. `index_sections` used to
+    run on uncapped markdown, so `doc_store_max_size_bytes` bounded what was
+    stored but never what was processed.
+    """
+    if size_bytes > limit_bytes:
+        raise ContentTooLargeError(eli, size_bytes, limit_bytes, pdf_url)
 
 
 class ActService:
@@ -76,23 +89,49 @@ class ActService:
 
     async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool) -> None:
         """Load act content into document store."""
+        pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
+        limit = settings.doc_store_max_size_bytes
         try:
             if has_html:
                 html = await self._client.get_act_html(publisher, year, pos)
-                markdown = self._content_processor.html_to_markdown(html)
+                _reject_if_too_large(eli, len(html.encode("utf-8")), limit, pdf_url)
+                # markdownify, pdfplumber and the section regex are synchronous
+                # CPU-bound work. Left in the coroutine they hold the event loop
+                # for seconds, `/health` included. The offload stops at
+                # `ContentProcessor`: `DocumentStore` relies on the absence of
+                # `await` in its critical sections (see its class docstring).
+                markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
             else:
-                # Try PDF
+                # try/except/else, not a single try block: the fallback below is
+                # for an unreachable PDF, and it must not swallow a size refusal
+                # raised after the download succeeded.
                 try:
                     pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf")
-                    markdown = self._content_processor.pdf_to_text(pdf_bytes)
-                    if not markdown:
-                        markdown = f"*Content extraction failed. PDF available at: {self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf*"
                 except Exception:
-                    markdown = f"*No readable content available for {eli}. PDF URL: {self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf*"
+                    markdown = f"*No readable content available for {eli}. PDF URL: {pdf_url}*"
+                else:
+                    _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
+                    markdown = await asyncio.to_thread(self._content_processor.pdf_to_text, pdf_bytes)
+                    if not markdown:
+                        markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
 
-            sections = self._content_processor.index_sections(markdown)
+            # Second gate, on the conversion *output*. The gates above bound the
+            # input, which is enough for HTML — markdownify strips markup, so in
+            # practice the result is smaller than the source (it can expand on
+            # text dense in `_` and `*`, which it escapes, but a legal act in
+            # HTML is the opposite of that). PDF runs the other way: text
+            # streams are Flate-compressed, so a payload under the limit can
+            # extract past it. Such a document would reach `DocumentStore.load`,
+            # which truncates with nothing but a log line — the silent mid-clause
+            # loss D6 rejected. One limit governs the whole path (D7).
+            _reject_if_too_large(eli, len(markdown.encode("utf-8")), limit, pdf_url)
+            sections = await asyncio.to_thread(self._content_processor.index_sections, markdown)
             await self._doc_store.load(eli, markdown, sections)
             logger.info(f"Loaded content for {eli}: {len(sections)} sections")
+        except ContentTooLargeError:
+            # The only failure the agent can act on, so it is the only one that
+            # reaches the tool layer instead of being logged and hidden.
+            raise
         except Exception as e:
             logger.error(f"Failed to load content for {eli}: {e}")
 

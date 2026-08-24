@@ -4,8 +4,13 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+# Imported at module level (unlike the SDK's own lazy in-method import) so
+# `server_module.uvicorn` is a patchable attribute for tests, at the cost of a
+# small startup-time hit even on the `stdio` path.
+import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -40,6 +45,42 @@ LOOPBACK_TRANSPORT_SECURITY = TransportSecuritySettings(
     allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
     allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
 )
+
+
+class _HealthState:
+    """Bridges `lifespan` resources to the operational `/health` route.
+
+    `custom_route` hands its handler a `Request` and nothing else
+    (mcp/server/mcpserver/server.py:975-1013), and the MCP `lifespan` serves the
+    protocol session, not endpoints living beside it — so no channel connects
+    the two. The bridge is built deliberately and kept narrow: it holds the
+    breaker alone rather than the whole `AppContext`, it is written in exactly
+    one place, and it is cleared by the same `finally` that closes the client.
+
+    An empty handle is not an edge case to hide: it means the process accepts
+    connections but has not finished initialising, which is worth reporting.
+    """
+
+    def __init__(self) -> None:
+        self._circuit_breaker: CircuitBreaker | None = None
+
+    def set(self, circuit_breaker: CircuitBreaker) -> None:
+        self._circuit_breaker = circuit_breaker
+
+    def clear(self) -> None:
+        self._circuit_breaker = None
+
+    def snapshot(self) -> dict[str, object]:
+        if self._circuit_breaker is None:
+            return {"circuit_state": "unknown"}
+        return {
+            "circuit_state": str(self._circuit_breaker.state),
+            "failure_count": self._circuit_breaker.failure_count,
+        }
+
+
+_health_state = _HealthState()
+
 
 SERVER_INSTRUCTIONS = """Jesteś specjalistycznym asystentem do analizy polskiego prawa.
 Odpowiadaj użytkownikowi w jego języku. Dane z narzędzi (tytuły aktów, statusy, typy) są po polsku.
@@ -116,6 +157,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         recovery_timeout=settings.circuit_breaker_recovery_timeout,
         half_open_max_calls=settings.circuit_breaker_half_open_max_calls,
     )
+    _health_state.set(circuit_breaker)
     cache = TTLCache(max_entries=settings.cache_max_entries)
     client = SejmApiClient(
         cache=cache,
@@ -168,6 +210,9 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     try:
         yield context
     finally:
+        # Cleared first: if `client.close()` raised, a populated handle would
+        # let `/health` claim a live breaker after the lifespan had ended.
+        _health_state.clear()
         await client.close()
         await cache.clear()
         logger.info("Law Scrapper MCP Server stopped")
@@ -185,28 +230,66 @@ register_all_tools(app)
 
 @app.custom_route("/health", methods=["GET"])
 async def health(_request: Request) -> JSONResponse:
-    """Health check endpoint for Docker and monitoring."""
+    """Liveness probe for Docker and monitoring.
+
+    Always 200 while the process answers. A restart cannot repair an outage of
+    api.sejm.gov.pl, so reporting one as process ill-health would be a lie to
+    the orchestrator and — under `restart: unless-stopped` — active harm.
+    Degradation is reported in the body, for humans and monitoring to read.
+    """
     return JSONResponse(
         {
             "status": "ok",
             "version": settings.server_version,
             "server": settings.server_name,
+            "upstream": _health_state.snapshot(),
         }
     )
+
+
+def build_http_app() -> Starlette:
+    """Build the Starlette app served over Streamable HTTP.
+
+    Mirrors `MCPServer.run_streamable_http_async`
+    (mcp/server/mcpserver/server.py:1070-1089) minus the uvicorn wiring, which
+    this project owns so that `timeout_graceful_shutdown` can be set at all —
+    the SDK builds its `uvicorn.Config` internally from host, port and log level
+    and exposes no channel for the remaining options.
+
+    Re-check this function against that SDK method on every `mcp` upgrade:
+    a changed `streamable_http_app()` signature would surface here first.
+    """
+    return app.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        transport_security=LOOPBACK_TRANSPORT_SECURITY,
+        host=settings.host,
+    )
+
+
+def build_uvicorn_config() -> uvicorn.Config:
+    """Assemble the uvicorn configuration for the HTTP transport."""
+    return uvicorn.Config(
+        build_http_app(),
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+        # uvicorn's knob is whole seconds; the setting is a float so that it
+        # reads like the other timeouts in `Settings`.
+        timeout_graceful_shutdown=int(settings.shutdown_grace),
+    )
+
+
+def run_streamable_http() -> None:
+    """Serve the MCP app over Streamable HTTP with a controlled shutdown window."""
+    uvicorn.Server(build_uvicorn_config()).run()
 
 
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
     if settings.transport == "streamable-http":
-        app.run(
-            transport="streamable-http",
-            host=settings.host,
-            port=settings.port,
-            streamable_http_path="/mcp",
-            stateless_http=True,
-            transport_security=LOOPBACK_TRANSPORT_SECURITY,
-        )
+        run_streamable_http()
     else:
         app.run(transport="stdio")
 

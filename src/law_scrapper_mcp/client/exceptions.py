@@ -45,6 +45,25 @@ class ContentNotAvailableError(LawScrapperError):
         self.format = format
 
 
+class ContentTooLargeError(LawScrapperError):
+    """Fetched content exceeds the conversion size limit.
+
+    Refusal, not truncation: a legal act cut mid-clause is a silent loss the
+    model cannot detect, while a refusal naming the source URL is one it can
+    act on. The message is Polish because the agent reads it.
+    """
+
+    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str):
+        super().__init__(
+            f"Treść aktu {eli} ma {size_bytes} B i przekracza limit {limit_bytes} B, "
+            f"więc nie została przetworzona. Pobierz plik źródłowy: {pdf_url}"
+        )
+        self.eli = eli
+        self.size_bytes = size_bytes
+        self.limit_bytes = limit_bytes
+        self.pdf_url = pdf_url
+
+
 class DocumentNotLoadedError(LawScrapperError):
     """Document must be loaded before accessing content."""
 

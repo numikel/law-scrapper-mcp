@@ -40,6 +40,15 @@ class Settings(BaseSettings):
             )
         raise ValueError(f"Nieobsługiwany transport '{value}'. Dozwolone wartości: 'stdio', 'streamable-http'.")
 
+    # Graceful shutdown window handed to uvicorn as `timeout_graceful_shutdown`.
+    # Shorter than `api_timeout` on purpose: the trade-off between restart speed
+    # and the share of requests allowed to finish is settled in favour of a fast
+    # restart. Deployments that want it the other way round raise the value.
+    # Constrained to ≥1 so the downstream `int()` cast in the bootstrap layer
+    # never collapses the value to zero. The deployment contract is
+    # `stop_grace_period >= 2 * shutdown_grace` — see docker-compose.yml.
+    shutdown_grace: float = Field(default=15.0, ge=1)
+
     # API client
     api_timeout: float = 30.0
     api_max_concurrent: int = 10

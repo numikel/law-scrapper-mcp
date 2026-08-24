@@ -104,6 +104,10 @@ class DocumentStore:
         """Load a document into the store."""
         async with self._lock:
             doc_size = len(markdown.encode("utf-8"))
+            # Unreachable from production since cluster 5: `ActService` refuses an
+            # oversized act against this same limit before it ever gets here, so
+            # silence in this log is not evidence that the limit is off. Kept as
+            # defence in depth for any future caller that skips that guard.
             if doc_size > self._max_size_bytes:
                 logger.warning(f"Document {eli} exceeds max size ({doc_size} > {self._max_size_bytes}), truncating")
                 # Truncate to max size

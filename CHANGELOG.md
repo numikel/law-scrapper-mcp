@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable graceful shutdown window** — `LAW_MCP_SHUTDOWN_GRACE` (default 15s) reaches uvicorn as `timeout_graceful_shutdown`. The HTTP branch now builds its own `uvicorn.Server` on the SDK's public `streamable_http_app()`, because `MCPServer.run()` builds its uvicorn configuration internally and exposes no channel for the option.
+- **Upstream state in `/health`** — the response carries an `upstream` object with `circuit_state`, plus `failure_count` alongside it once the lifespan has started (`circuit_state` is `unknown` and `failure_count` is omitted before that, or after teardown). The endpoint still answers `200` whenever the process is alive: a restart cannot repair an outage of api.sejm.gov.pl.
+
+### Changed
+
+- **Document conversion moved off the event loop** — `html_to_markdown`, `pdf_to_text`, and `index_sections` run through `asyncio.to_thread`, so `/health` stays responsive while a large act is being processed.
+- **Size limit applied before conversion** — content above `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` is refused before conversion with an error naming the source PDF URL, rather than being converted in full. The limit is checked on the fetched payload and again on the converted text, because extracted PDF text can outgrow the compressed payload it came from. Refusing beats truncating for legal acts: a document cut mid-clause is a silent loss the reader cannot detect.
+- **`get_act_details(load_content=True)` now fails on an oversized act** — the call returns `is_error=true` carrying the refusal and the source URL, where it previously reported `is_loaded=true` for a document the Document Store had silently truncated mid-clause. The refusal is the actionable half, so it reaches the caller; metadata for such an act remains available through `get_act_details` without `load_content`.
+
 ## [3.1.0] - 2026-08-22
 
 See [docs/changelogs/v3.1.0.md](docs/changelogs/v3.1.0.md) for details.

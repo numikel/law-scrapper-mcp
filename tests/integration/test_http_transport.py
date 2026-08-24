@@ -71,7 +71,7 @@ def _rpc(client: TestClient, method: str, params: dict[str, object], request_id:
 
 
 def test_health_endpoint(asgi_app) -> None:
-    """GET /health returns status, version, and server name."""
+    """GET /health returns status, version, server name and upstream state."""
     with TestClient(asgi_app) as client:
         response = client.get("/health")
 
@@ -80,6 +80,9 @@ def test_health_endpoint(asgi_app) -> None:
     assert data["status"] == "ok"
     assert data["version"] == settings.server_version
     assert data["server"] == settings.server_name
+    # The lifespan ran inside the context manager, so the handle is populated.
+    assert data["upstream"]["circuit_state"] == "closed"
+    assert data["upstream"]["failure_count"] == 0
 
 
 def test_stateless_http_protocol_matrix(asgi_app) -> None:
@@ -354,3 +357,65 @@ async def test_live_server_enforces_allowlist_and_statelessness(live_http_server
     assert forged_origin.status_code == 403
     assert legitimate.status_code == 200
     assert "Mcp-Session-Id" not in legitimate.headers
+
+
+@pytest.mark.asyncio
+async def test_health_answers_while_a_document_is_converting(
+    mock_client,
+    document_store,
+    act_detail,
+    monkeypatch,
+) -> None:
+    """Spec 5.1, second bullet: `/health` answers in under 1 s mid-conversion.
+
+    The unit-level ticker test proves the event loop stays free, but it drives a
+    bare `ActService`. Only this test proves the composition the cluster
+    actually rebuilt: a conversion burning a worker thread while a request
+    travels the Starlette app from `build_http_app()`, through the
+    `custom_route` registration, into the handler that reads the health handle.
+    """
+    import asyncio
+
+    from law_scrapper_mcp import server as server_module
+    from law_scrapper_mcp.services.act_service import ActService
+    from law_scrapper_mcp.services.content_processor import ContentProcessor
+
+    class SlowProcessor(ContentProcessor):
+        """Burns wall-clock time synchronously, the way markdownify does."""
+
+        def html_to_markdown(self, html: str) -> str:
+            time.sleep(1.5)
+            return "# Art. 1. Test section"
+
+    async def fake_get_json(path: str, **kwargs: object) -> object:
+        if path.endswith("/struct"):
+            raise RuntimeError("no structure for this act")
+        return act_detail
+
+    async def fake_get_act_html(publisher: str, year: int, pos: int) -> str:
+        return "<html><body><h1>Ustawa</h1></body></html>"
+
+    monkeypatch.setattr(mock_client, "get_json", fake_get_json)
+    monkeypatch.setattr(mock_client, "get_act_html", fake_get_act_html)
+
+    service = ActService(
+        client=mock_client,
+        document_store=document_store,
+        content_processor=SlowProcessor(),
+    )
+
+    load_task = asyncio.create_task(service.get_details("DU/2024/1", load_content=True))
+    await asyncio.sleep(0.1)
+    assert not load_task.done(), "conversion already finished: it ran on the event loop, not a worker thread"
+
+    transport = httpx.ASGITransport(app=server_module.build_http_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        started = time.perf_counter()
+        response = await client.get("/health")
+        elapsed = time.perf_counter() - started
+
+    assert response.status_code == 200
+    assert elapsed < 1.0
+    assert not load_task.done(), "the probe must have overtaken the conversion, not waited it out"
+
+    await load_task

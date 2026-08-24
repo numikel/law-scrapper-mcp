@@ -68,3 +68,47 @@ class TestHandleToolErrorsPublicSurface:
 
         assert caplog.records
         assert not caplog.records[-1].exc_info
+
+
+@pytest.mark.asyncio
+async def test_content_too_large_message_survives_sanitization() -> None:
+    """The agent must learn that the act exists and where to fetch it.
+
+    Unregistered exceptions fall into the `internal` category, whose public
+    message is a fixed generic string — that would swallow both the Polish
+    wording and the source URL.
+    """
+    from law_scrapper_mcp.client.exceptions import ContentTooLargeError
+    from law_scrapper_mcp.tools.error_handling import ToolExecutionError, handle_tool_errors
+
+    @handle_tool_errors
+    async def failing_tool() -> None:
+        raise ContentTooLargeError(
+            eli="DU/2024/1",
+            size_bytes=9_000_000,
+            limit_bytes=5_242_880,
+            pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
+        )
+
+    with pytest.raises(ToolExecutionError) as excinfo:
+        await failing_tool()
+
+    message = str(excinfo.value)
+    assert "DU/2024/1" in message
+    assert "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf" in message
+    assert "przekracza limit" in message
+    assert "wewnętrzny błąd" not in message
+
+
+def test_content_too_large_is_classified_as_precondition() -> None:
+    from law_scrapper_mcp.client.exceptions import ContentTooLargeError
+    from law_scrapper_mcp.tools.error_handling import _classify_error
+
+    error = ContentTooLargeError(
+        eli="DU/2024/1",
+        size_bytes=9_000_000,
+        limit_bytes=5_242_880,
+        pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
+    )
+
+    assert _classify_error(error) == "precondition"

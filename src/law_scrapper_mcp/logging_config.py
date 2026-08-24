@@ -7,6 +7,31 @@ import sys
 from typing import Literal
 
 
+def _force_utf8_stderr() -> None:
+    """Make stderr accept non-ASCII records regardless of platform default.
+
+    Windows consoles default to cp1252, which mangles Polish diacritics. The
+    call is guarded twice: `reconfigure` is absent on replaced streams (tests,
+    embedded runtimes), and `errors="backslashreplace"` keeps a stubborn
+    stream from turning a log line into a `UnicodeEncodeError`. Logging must
+    never be the reason the server fails to start.
+
+    Only stderr is touched: the STDIO transport carries the MCP protocol over
+    stdout, which must keep its own configuration.
+    """
+    reconfigure = getattr(sys.stderr, "reconfigure", None)
+    if reconfigure is None:
+        return
+    try:
+        reconfigure(encoding="utf-8", errors="backslashreplace")
+    except Exception:
+        # Any exception (TypeError from incompatible stream, ValueError from
+        # detached/closed stream, etc.): logging still works, only the encoding
+        # guarantee is lost. The absolute invariant "logging must never break
+        # startup" takes precedence over encoding safety.
+        return
+
+
 def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text") -> None:
     """Setup structured logging for the application.
 
@@ -14,6 +39,8 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format: Output format ("text" or "json")
     """
+    _force_utf8_stderr()
+
     # Convert level string to logging constant
     log_level = getattr(logging, level.upper(), logging.INFO)
 

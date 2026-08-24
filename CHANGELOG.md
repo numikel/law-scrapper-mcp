@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Log output contract** — Every log record now carries a `request_id` field: `lifespan` for records emitted outside a tool call, an eight-character hexadecimal id for records emitted inside one. JSON logs keep Polish diacritics literal instead of escaping them to `\uXXXX`, and the JSON `timestamp` field now ends in an explicit `+00:00` instead of being a naive UTC value. Log aggregation pipelines parsing this output absorb one field-shape change, not three.
+
+### Fixed
+
+- **Query text no longer reaches INFO through the result store or the tool error path** — `ResultStore.store()` logs the result set id and counts at INFO and moves the query summary to DEBUG; the tool error decorator logs validation failures at ERROR without the caller-supplied message, which moves to DEBUG. In the legal domain a query can be sensitive even when every act it matches is public. Tool responses are unchanged.
+
 ## [3.1.1] - 2026-08-24
 
 See [docs/changelogs/v3.1.1.md](docs/changelogs/v3.1.1.md) for details.

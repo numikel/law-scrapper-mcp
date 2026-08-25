@@ -481,14 +481,11 @@ async def test_store_keeps_query_text_off_info(caplog: pytest.LogCaptureFixture)
     store = ResultStore(max_sets=5, ttl=60)
     query = "keywords=zdrowie psychiczne, przymusowe leczenie"
 
-    # `test_server_bootstrap.py` exercises `server.main()`, which calls
-    # `setup_logging()` and pins the `law_scrapper_mcp` logger's level at
-    # INFO for the rest of the process (no restore fixture there, unlike
-    # `test_logging_config.py`). Passing `logger="law_scrapper_mcp"` here —
-    # the ancestor `setup_logging()` actually mutates, not a path to this
-    # specific module — makes `caplog.at_level` save and restore that
-    # logger's level too, so this test does not depend on which other test
-    # modules ran first.
+    # Scoped to `law_scrapper_mcp` rather than to this module's own path: that
+    # ancestor is the logger `setup_logging()` pins to INFO, so naming it here
+    # makes `caplog.at_level` save and restore that level too. Without it, any
+    # test that runs `setup_logging()` earlier in the session would leave the
+    # DEBUG record below filtered out before `caplog` ever sees it.
     with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp"):
         result_set_id = await store.store(results=[], query_summary=query, total_count=7)
 

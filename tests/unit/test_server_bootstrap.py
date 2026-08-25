@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 import uvicorn
 
 from law_scrapper_mcp import server as server_module
+
+
+@pytest.fixture(autouse=True)
+def isolate_logging_setup(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Keep `main()` from reconfiguring the process on the way past.
+
+    `main()` calls `setup_logging()`, which strips every root handler (the one
+    `caplog` needs included) and reconfigures `sys.stderr` — under pytest that
+    is the capture stream, and nothing here restores it. Neither effect is what
+    these tests are about, so the call is stubbed rather than undone.
+    """
+    monkeypatch.setattr(server_module, "setup_logging", lambda *args, **kwargs: None)
+    yield
 
 
 def test_uvicorn_config_carries_the_graceful_shutdown_window() -> None:

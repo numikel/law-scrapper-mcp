@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import logging
 import sys
 from typing import Literal
 
-request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="lifespan")
+DEFAULT_REQUEST_ID = "lifespan"
+"""Correlation id carried by records emitted outside a tool call.
+
+Shared by the ContextVar default and both formatter fallbacks so the two output
+formats cannot drift apart.
+"""
+
+request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default=DEFAULT_REQUEST_ID)
 """Correlation id of the tool call in flight.
 
 The default is a value, not a sentinel: records emitted from `lifespan`,
@@ -20,8 +28,9 @@ class RequestIdFilter(logging.Filter):
     """Stamp every record with the current correlation id.
 
     Attached to the handler rather than to the `law_scrapper_mcp` logger on
-    purpose: records from uvicorn and httpx know nothing about this mechanism,
-    and the text format references `%(request_id)s` on every record it renders.
+    purpose: uvicorn and httpx know nothing about this mechanism, yet a record
+    they emit during a tool call belongs to that call. Attaching here is what
+    gives such records the live id instead of the formatter fallback.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -44,14 +53,10 @@ def _force_utf8_stderr() -> None:
     reconfigure = getattr(sys.stderr, "reconfigure", None)
     if reconfigure is None:
         return
-    try:
+    # A detached, closed or otherwise incompatible stream costs the encoding
+    # guarantee, never startup.
+    with contextlib.suppress(Exception):
         reconfigure(encoding="utf-8", errors="backslashreplace")
-    except Exception:
-        # Any exception (TypeError from incompatible stream, ValueError from
-        # detached/closed stream, etc.): logging still works, only the encoding
-        # guarantee is lost. The absolute invariant "logging must never break
-        # startup" takes precedence over encoding safety.
-        return
 
 
 def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text") -> None:
@@ -77,7 +82,7 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
                     "timestamp": datetime.now(UTC).isoformat(),
                     "level": record.levelname,
                     "logger": record.name,
-                    "request_id": getattr(record, "request_id", "lifespan"),
+                    "request_id": getattr(record, "request_id", DEFAULT_REQUEST_ID),
                     "message": record.getMessage(),
                 }
                 if record.exc_info:
@@ -86,8 +91,14 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
 
         formatter: logging.Formatter = JsonFormatter()
     else:
-        # Text format for development
-        formatter = logging.Formatter("%(asctime)s - %(name)s - [%(request_id)s] - %(levelname)s - %(message)s")
+        # Text format for development. `defaults` mirrors the JSON fallback:
+        # without it a record reaching this formatter unfiltered raises
+        # `KeyError` inside `format()`, which `Handler.handleError()` swallows
+        # into a crash dump instead of a log line.
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - [%(request_id)s] - %(levelname)s - %(message)s",
+            defaults={"request_id": DEFAULT_REQUEST_ID},
+        )
 
     # Configure root logger
     root_logger = logging.getLogger()

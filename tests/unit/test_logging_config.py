@@ -17,7 +17,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from law_scrapper_mcp.logging_config import request_id_var, setup_logging
+from law_scrapper_mcp.logging_config import DEFAULT_REQUEST_ID, request_id_var, setup_logging
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 
@@ -121,6 +121,22 @@ async def test_concurrent_tool_calls_log_distinct_request_ids(monkeypatch: pytes
     assert request_id_var.get() == "lifespan"
 
 
+def test_text_format_survives_a_record_without_the_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The filter supplies `request_id`; `defaults` covers whatever escapes it.
+
+    A record formatted by a handler this project did not configure would
+    otherwise raise `KeyError` and be swallowed into a crash dump.
+    """
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+    setup_logging(level="INFO", format="text")
+    formatter = logging.getLogger().handlers[0].formatter
+    assert formatter is not None
+
+    record = logging.LogRecord("uvicorn.error", logging.INFO, __file__, 1, "started", None, None)
+
+    assert f"[{DEFAULT_REQUEST_ID}]" in formatter.format(record)
+
+
 def test_polish_diacritics_are_not_escaped(monkeypatch: pytest.MonkeyPatch) -> None:
     """Escaped diacritics would make `grep` useless on Polish error messages."""
     message = "Nie znaleziono aktu — żółć, ląd, ważne"
@@ -138,11 +154,11 @@ def test_polish_diacritics_are_not_escaped(monkeypatch: pytest.MonkeyPatch) -> N
     setup_logging(level="INFO", format="text")
     logging.getLogger("law_scrapper_mcp.test").info(message)
     rendered_text = text_stream.getvalue()
-    # A missing `request_id` filter/formatter mismatch raises `KeyError` inside
-    # `Formatter.format()`; `logging.Handler.handleError()` swallows it and
-    # echoes the record's message back into this same stream as part of its
-    # own crash dump, which would make a bare `message in rendered_text`
-    # assertion pass even though text-format rendering is broken end to end.
+    # Any formatter failure — a `request_id` the record lacks, a broken format
+    # string — is swallowed by `logging.Handler.handleError()`, which echoes
+    # the record's message back into this same stream as part of its crash
+    # dump. A bare `message in rendered_text` assertion would pass on output
+    # that is broken end to end, so rule the crash dump out first.
     assert "--- Logging error ---" not in rendered_text
     assert "law_scrapper_mcp.test - [lifespan] - INFO" in rendered_text
     assert message in rendered_text

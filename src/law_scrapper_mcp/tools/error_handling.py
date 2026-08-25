@@ -47,6 +47,16 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 # fall through to `str(exc)`.
 _UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbuj ponownie za chwilę."
 
+# Categories whose exception text this project did not author, and which can
+# therefore echo back what the caller submitted. `validation` messages quote
+# caller input directly (a regex pattern, an act title); `upstream` messages
+# carry the Sejm API response body, which a 4xx can fill with the parameters of
+# the rejected request. Both are redacted from ERROR and stay recoverable at
+# DEBUG. `TypeError` also lands in `validation` even though it usually signals
+# an internal bug rather than caller input — narrowing that classification is
+# out of scope here, and redacting it costs only log detail.
+_REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
+
 
 class ToolExecutionError(Exception):
     """Public, sanitized tool execution failure."""
@@ -57,6 +67,16 @@ def _classify_error(exc: Exception) -> str:
         if isinstance(exc, exc_type):
             return category
     return "internal"
+
+
+def _status_suffix(exc: Exception) -> str:
+    """Render the HTTP status of an upstream failure, if it carries one.
+
+    The status is the one part of an upstream failure that cannot echo back
+    submitted parameters, so it stays on ERROR while the body drops to DEBUG.
+    """
+    status = getattr(exc, "status_code", None)
+    return "" if status is None else f" (HTTP {status})"
 
 
 def _public_message(exc: Exception, category: str) -> str:
@@ -80,19 +100,9 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
             return await func(*args, **kwargs)
         except Exception as exc:
             category = _classify_error(exc)
-            if category == "validation":
-                # Most validation-category exceptions carry caller-supplied
-                # text (a regex pattern, an act title) that can be sensitive
-                # on its own. `TypeError` is also bucketed into "validation"
-                # by `_classify_error` even though it is typically an
-                # internal bug rather than caller input — narrowing that
-                # classification is out of this task's scope, so its detail
-                # is redacted from ERROR the same as the rest of the
-                # category and stays recoverable at DEBUG. Other categories
-                # draw on constants defined in this project, so they keep
-                # their detail on ERROR.
-                logger.error("Tool %s failed [%s]", func.__name__, category)
-                logger.debug("Tool %s validation detail: %s", func.__name__, exc)
+            if category in _REDACTED_DETAIL_CATEGORIES:
+                logger.error("Tool %s failed [%s]%s", func.__name__, category, _status_suffix(exc))
+                logger.debug("Tool %s failure detail [%s]: %s", func.__name__, category, exc)
             else:
                 logger.error(
                     "Tool %s failed [%s]: %s",

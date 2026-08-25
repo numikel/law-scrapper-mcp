@@ -185,6 +185,18 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 
+Logs go to stderr (stdout carries the MCP protocol on the STDIO transport). Every record carries a `request_id` correlating it with a single tool call — `lifespan` for records emitted outside one:
+
+```text
+2026-08-24 12:00:00,123 - law_scrapper_mcp.tools.search - [a1b2c3d4] - INFO - Stored result set rs_1: 20 results (total 137)
+```
+
+```json
+{"timestamp": "2026-08-24T10:00:00.123456+00:00", "level": "INFO", "logger": "law_scrapper_mcp.tools.search", "request_id": "a1b2c3d4", "message": "Stored result set rs_1: 20 results (total 137)"}
+```
+
+Set `LAW_MCP_LOG_LEVEL=DEBUG` to recover the detail deliberately kept off INFO: search query text and the exception messages behind `validation` and `upstream` failures.
+
 Example environment configuration:
 
 ```bash

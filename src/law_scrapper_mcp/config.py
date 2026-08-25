@@ -108,7 +108,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "3.1.1"
+    server_version: str = "3.1.2"
 
     @property
     def user_agent(self) -> str:

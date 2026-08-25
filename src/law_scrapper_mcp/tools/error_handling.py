@@ -6,6 +6,7 @@ import functools
 import logging
 from collections.abc import Awaitable, Callable
 from typing import ParamSpec, TypeVar
+from uuid import uuid4
 
 import httpx
 
@@ -18,6 +19,7 @@ from law_scrapper_mcp.client.exceptions import (
     InvalidEliError,
     SejmApiError,
 )
+from law_scrapper_mcp.logging_config import request_id_var
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,16 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 # fall through to `str(exc)`.
 _UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbuj ponownie za chwilę."
 
+# Categories whose exception text this project did not author, and which can
+# therefore echo back what the caller submitted. `validation` messages quote
+# caller input directly (a regex pattern, an act title); `upstream` messages
+# carry the Sejm API response body, which a 4xx can fill with the parameters of
+# the rejected request. Both are redacted from ERROR and stay recoverable at
+# DEBUG. `TypeError` also lands in `validation` even though it usually signals
+# an internal bug rather than caller input — narrowing that classification is
+# out of scope here, and redacting it costs only log detail.
+_REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
+
 
 class ToolExecutionError(Exception):
     """Public, sanitized tool execution failure."""
@@ -55,6 +67,16 @@ def _classify_error(exc: Exception) -> str:
         if isinstance(exc, exc_type):
             return category
     return "internal"
+
+
+def _status_suffix(exc: Exception) -> str:
+    """Render the HTTP status of an upstream failure, if it carries one.
+
+    The status is the one part of an upstream failure that cannot echo back
+    submitted parameters, so it stays on ERROR while the body drops to DEBUG.
+    """
+    status = getattr(exc, "status_code", None)
+    return "" if status is None else f" (HTTP {status})"
 
 
 def _public_message(exc: Exception, category: str) -> str:
@@ -70,17 +92,25 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
 
     @functools.wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        # One id per tool call. The decorator wraps all 13 tools and behaves
+        # identically on STDIO and Streamable HTTP, so this is the single
+        # place both transports need.
+        request_id_var.set(uuid4().hex[:8])
         try:
             return await func(*args, **kwargs)
         except Exception as exc:
             category = _classify_error(exc)
-            logger.error(
-                "Tool %s failed [%s]: %s",
-                func.__name__,
-                category,
-                exc,
-                exc_info=category == "internal",
-            )
+            if category in _REDACTED_DETAIL_CATEGORIES:
+                logger.error("Tool %s failed [%s]%s", func.__name__, category, _status_suffix(exc))
+                logger.debug("Tool %s failure detail [%s]: %s", func.__name__, category, exc)
+            else:
+                logger.error(
+                    "Tool %s failed [%s]: %s",
+                    func.__name__,
+                    category,
+                    exc,
+                    exc_info=category == "internal",
+                )
             raise ToolExecutionError(_public_message(exc, category)) from exc
 
     return wrapper

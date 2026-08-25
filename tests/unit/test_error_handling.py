@@ -39,21 +39,49 @@ class TestHandleToolErrorsPublicSurface:
     """Exercise the public `handle_tool_errors` surface, not `_classify_error`."""
 
     async def test_upstream_failure_hides_the_response_body(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The upstream body must stay out of both the response and the log.
+
+        A 4xx body can echo back the parameters of the rejected request, so
+        keeping it off the tool response while still writing it to stderr
+        would leave the same exposure open on the durable side. The status
+        survives on ERROR — it cannot carry caller input.
+        """
         secret_body = "<html>internal upstream trace</html>"
 
         @handle_tool_errors
         async def failing_tool() -> str:
             raise SejmApiError(f"HTTP 500: {secret_body}", status_code=500, url="https://api.sejm.gov.pl/eli/acts")
 
-        with caplog.at_level(logging.ERROR, logger="law_scrapper_mcp.tools.error_handling"):
+        with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp.tools.error_handling"):
             with pytest.raises(ToolExecutionError) as exc_info:
                 await failing_tool()
 
         message = str(exc_info.value)
         assert "api.sejm.gov.pl nie odpowiedział poprawnie" in message
         assert secret_body not in message
+
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+        assert error_records
+        assert all(secret_body not in r.getMessage() for r in error_records)
+        assert any("HTTP 500" in r.getMessage() for r in error_records)
+        assert not any(r.exc_info for r in error_records)
+        assert any(secret_body in r.getMessage() for r in debug_records)
+
+    async def test_upstream_timeout_without_status_logs_no_http_suffix(self, caplog: pytest.LogCaptureFixture) -> None:
+        """`httpx.TimeoutException` is `upstream` but carries no status code."""
+
+        @handle_tool_errors
+        async def failing_tool() -> str:
+            raise httpx.TimeoutException("read timed out")
+
+        with caplog.at_level(logging.ERROR, logger="law_scrapper_mcp.tools.error_handling"):
+            with pytest.raises(ToolExecutionError):
+                await failing_tool()
+
         assert caplog.records
-        assert not caplog.records[-1].exc_info
+        assert caplog.records[-1].getMessage() == "Tool failing_tool failed [upstream]"
 
     async def test_result_set_too_large_is_precondition_without_traceback(
         self, caplog: pytest.LogCaptureFixture
@@ -68,6 +96,28 @@ class TestHandleToolErrorsPublicSurface:
 
         assert caplog.records
         assert not caplog.records[-1].exc_info
+
+    async def test_validation_failure_keeps_detail_off_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A validation message is written by the caller and can carry a regex
+        pattern or an act title. The public exception still returns it — F13
+        is about the durable stderr record, not about the tool response."""
+        detail = "wzorzec 'zdrowie|przymusowe' jest nieprawidłowy"
+
+        @handle_tool_errors
+        async def failing_tool() -> str:
+            raise ValueError(detail)
+
+        with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp.tools.error_handling"):
+            with pytest.raises(ToolExecutionError, match="nieprawidłowy"):
+                await failing_tool()
+
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+        assert error_records
+        assert all(detail not in r.getMessage() for r in error_records)
+        assert any("failing_tool" in r.getMessage() for r in error_records)
+        assert any(detail in r.getMessage() for r in debug_records)
 
 
 @pytest.mark.asyncio

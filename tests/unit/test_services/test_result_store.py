@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from unittest.mock import patch
 
@@ -470,3 +471,28 @@ class TestResultStoreFilterAndStore:
         assert output.filtered_count == 0
         assert output.result_set_id is None
         assert output.filters_applied["pattern"] == "nonexistent-pattern-xyz"
+
+
+@pytest.mark.asyncio
+async def test_store_keeps_query_text_off_info(caplog: pytest.LogCaptureFixture) -> None:
+    """In the legal domain the query itself can be sensitive, even when every
+    act it matches is public. INFO keeps identifiers and counts; the text
+    stays recoverable at DEBUG."""
+    store = ResultStore(max_sets=5, ttl=60)
+    query = "keywords=zdrowie psychiczne, przymusowe leczenie"
+
+    # Scoped to `law_scrapper_mcp` rather than to this module's own path: that
+    # ancestor is the logger `setup_logging()` pins to INFO, so naming it here
+    # makes `caplog.at_level` save and restore that level too. Without it, any
+    # test that runs `setup_logging()` earlier in the session would leave the
+    # DEBUG record below filtered out before `caplog` ever sees it.
+    with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp"):
+        result_set_id = await store.store(results=[], query_summary=query, total_count=7)
+
+    info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+    debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+    assert info_records, "store() must still report the result set on INFO"
+    assert all(query not in r.getMessage() for r in info_records)
+    assert any(result_set_id in r.getMessage() for r in info_records)
+    assert any(query in r.getMessage() for r in debug_records)

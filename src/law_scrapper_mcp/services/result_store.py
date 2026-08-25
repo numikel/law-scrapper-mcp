@@ -80,7 +80,10 @@ class ResultStore:
                 query_summary=query_summary,
                 total_count=total_count,
             )
-            logger.info(f"Stored result set {result_set_id}: {len(results)} results (query: {query_summary})")
+            logger.info("Stored result set %s: %d results (total %d)", result_set_id, len(results), total_count)
+            # The query text can be sensitive on its own; keep it recoverable
+            # but off the default production level.
+            logger.debug("Result set %s query: %s", result_set_id, query_summary)
             return result_set_id
 
     async def get(self, result_set_id: str) -> StoredResultSet | None:

@@ -48,7 +48,7 @@ def is_loopback_entry(entry: str) -> bool:
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
-    model_config = SettingsConfigDict(env_prefix="LAW_MCP_")
+    model_config = SettingsConfigDict(env_prefix="LAW_MCP_", hide_input_in_errors=True)
 
     # Transport
     transport: Literal["stdio", "streamable-http"] = "stdio"

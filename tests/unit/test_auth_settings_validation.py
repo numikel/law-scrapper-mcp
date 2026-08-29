@@ -120,6 +120,15 @@ def test_secret_is_not_in_the_repr() -> None:
     assert VALID_TOKEN not in repr(current)
 
 
+def test_token_does_not_leak_into_validation_errors(tmp_path: Path) -> None:
+    """Pydantic must not expose the raw token in ValidationError messages."""
+    token_file = tmp_path / "token"
+    token_file.write_text(VALID_TOKEN, encoding="utf-8")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(auth_mode="bearer", auth_token=VALID_TOKEN, auth_token_file=token_file)
+    assert VALID_TOKEN not in str(exc_info.value)
+
+
 def test_rate_limit_defaults_follow_d17() -> None:
     current = Settings()
     assert (current.rate_limit_enabled, current.rate_limit_requests) == (True, 60)

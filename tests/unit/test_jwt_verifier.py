@@ -137,12 +137,13 @@ async def test_scp_claim_is_accepted_as_a_list(keypair, fetch_calls) -> None:
 async def test_algorithm_confusion_is_rejected(keypair, jwks, fetch_calls) -> None:
     """Criterion 17: HS256 signed with the public key the attacker can read.
 
-    PyJWT 2.13's `encode()` refuses to treat an RSA PEM as an HMAC secret
-    (`InvalidKeyError`) — a safety net added since the brief's reference
-    version, not present in the SDK contract the brief assumed. A real
-    attacker forging this token by hand would not go through that guard, so
-    the JWS is built manually here to still exercise the actual attack our
-    verifier's algorithm allowlist has to stop.
+    PyJWT's `encode()` refuses to sign with an asymmetric key as an HMAC
+    secret (`InvalidKeyError`) — long-standing `HMACAlgorithm.prepare_key`
+    behavior, not a version-specific change, and itself an algorithm-confusion
+    defense. A real attacker forging this token by hand would never go
+    through PyJWT's encoder anyway, so the JWS is built manually here to
+    still exercise the actual attack our verifier's algorithm allowlist has
+    to stop.
     """
     public_pem = keypair.public_key().public_bytes(
         encoding=serialization.Encoding.PEM,
@@ -189,3 +190,23 @@ async def test_unreachable_discovery_rejects_instead_of_degrading(keypair) -> No
     """Authentication degrades into a refusal, never into a bypass."""
     respx.get(f"{ISSUER}/.well-known/openid-configuration").mock(side_effect=httpx.ConnectError("down"))
     assert await make_verifier(jwks_uri=None).verify_token(make_token(keypair)) is None
+
+
+@respx.mock
+async def test_malformed_discovery_document_is_rejected(keypair) -> None:
+    """A discovery document that is valid JSON but lacks `jwks_uri` raises
+    `KeyError` inside `_discover_jwks_uri` — must reject, not propagate."""
+    respx.get(f"{ISSUER}/.well-known/openid-configuration").mock(return_value=httpx.Response(200, json={}))
+    assert await make_verifier(jwks_uri=None).verify_token(make_token(keypair)) is None
+
+
+async def test_non_json_jwks_response_is_rejected(keypair, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`PyJWKClient.fetch_data` only wraps URLError/TimeoutError; a JWKS
+    endpoint returning a non-JSON body leaks a raw `json.JSONDecodeError`
+    (a `ValueError` subclass) that must be turned into a rejection."""
+
+    def broken_fetch(self: jwt.PyJWKClient) -> Any:
+        raise json.JSONDecodeError("Expecting value", "<html>not json</html>", 0)
+
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", broken_fetch)
+    assert await make_verifier().verify_token(make_token(keypair)) is None

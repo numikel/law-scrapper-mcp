@@ -64,7 +64,11 @@ class JwtTokenVerifier:
                 issuer=self._issuer,
                 options={"require": ["exp", "iss", "aud"]},
             )
-        except (PyJWKClientError, jwt.PyJWTError, httpx.HTTPError) as error:
+        except (PyJWKClientError, jwt.PyJWTError, httpx.HTTPError, KeyError, ValueError) as error:
+            # KeyError/ValueError: a malformed discovery document (missing
+            # `jwks_uri`) or a non-JSON JWKS/discovery body — `json.JSONDecodeError`
+            # is a ValueError subclass, and neither escapes as PyJWTError or
+            # httpx.HTTPError.
             logger.info("Odrzucono token: %s", type(error).__name__)
             return None
 

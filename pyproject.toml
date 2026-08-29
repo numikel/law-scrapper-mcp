@@ -13,6 +13,7 @@ dependencies = [
     "python-dateutil>=2.9",
     "markdownify>=0.14",
     "pdfplumber>=0.11.10",
+    "pyjwt[crypto]>=2.10.1",
 ]
 
 [project.optional-dependencies]

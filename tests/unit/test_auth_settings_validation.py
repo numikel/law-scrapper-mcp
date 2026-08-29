@@ -120,12 +120,16 @@ def test_secret_is_not_in_the_repr() -> None:
     assert VALID_TOKEN not in repr(current)
 
 
-def test_token_does_not_leak_into_validation_errors(tmp_path: Path) -> None:
-    """Pydantic must not expose the raw token in ValidationError messages."""
-    token_file = tmp_path / "token"
-    token_file.write_text(VALID_TOKEN, encoding="utf-8")
+def test_token_does_not_leak_into_validation_errors() -> None:
+    """Pydantic must not expose the raw token in ValidationError messages.
+
+    This uses oauth mode (requires issuer/audience/resource_server_url) with a
+    bearer token present, so pydantic's input_value dict is small (≤2 kwargs)
+    and doesn't get truncated. Without hide_input_in_errors=True, the plaintext
+    token would be visible in the error output.
+    """
     with pytest.raises(ValidationError) as exc_info:
-        Settings(auth_mode="bearer", auth_token=VALID_TOKEN, auth_token_file=token_file)
+        Settings(auth_mode="oauth", auth_token=VALID_TOKEN)
     assert VALID_TOKEN not in str(exc_info.value)
 
 

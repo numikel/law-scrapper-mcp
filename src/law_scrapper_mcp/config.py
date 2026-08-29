@@ -31,6 +31,9 @@ def _host_of(entry: str) -> str:
         value = value.split("://", 1)[1]
     if value.startswith("["):
         return value[1 : value.index("]")] if "]" in value else value[1:]
+    # Bare IPv6 (contains multiple colons but no brackets): return unchanged
+    if value.count(":") > 1:
+        return value
     return value.split(":")[0]
 
 

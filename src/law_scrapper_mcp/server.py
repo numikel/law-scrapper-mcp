@@ -10,10 +10,11 @@ from contextlib import asynccontextmanager
 import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
+from law_scrapper_mcp.auth import build_auth
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
@@ -35,16 +36,20 @@ from law_scrapper_mcp.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
-# The SDK only auto-enables DNS-rebinding protection when `host` is literally
-# "127.0.0.1"/"localhost"/"::1" (mcp.server.lowlevel.server.streamable_http_app).
-# This project binds "0.0.0.0" for Docker port publishing, which would silently
-# disable Host/Origin validation. Pass this explicitly to keep the loopback-only
-# posture regardless of the configured bind address.
-LOOPBACK_TRANSPORT_SECURITY = TransportSecuritySettings(
-    enable_dns_rebinding_protection=True,
-    allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
-    allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
-)
+
+def build_transport_security() -> TransportSecuritySettings:
+    """Host/Origin allowlist assembled from configuration (F18).
+
+    The SDK only auto-enables DNS-rebinding protection for a literal loopback
+    `host`, so this is passed explicitly and stays on regardless of the bind
+    address. The defaults reproduce the constant this replaced; widening them
+    is refused at startup unless authentication is configured (D6).
+    """
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=list(settings.allowed_hosts),
+        allowed_origins=list(settings.allowed_origins),
+    )
 
 
 class _HealthState:
@@ -218,11 +223,15 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         logger.info("Law Scrapper MCP Server stopped")
 
 
+_auth_settings, _token_verifier = build_auth(settings)
+
 app = MCPServer[AppContext](
     settings.server_name,
     version=settings.server_version,
     instructions=SERVER_INSTRUCTIONS,
     lifespan=lifespan,
+    auth=_auth_settings,
+    token_verifier=_token_verifier,
 )
 
 register_all_tools(app)
@@ -247,22 +256,22 @@ async def health(_request: Request) -> JSONResponse:
     )
 
 
-def build_http_app() -> Starlette:
-    """Build the Starlette app served over Streamable HTTP.
+def build_http_app() -> ASGIApp:
+    """Build the ASGI app served over Streamable HTTP.
 
     Mirrors `MCPServer.run_streamable_http_async`
     (mcp/server/mcpserver/server.py:1070-1089) minus the uvicorn wiring, which
-    this project owns so that `timeout_graceful_shutdown` can be set at all —
-    the SDK builds its `uvicorn.Config` internally from host, port and log level
-    and exposes no channel for the remaining options.
+    this project owns so that `timeout_graceful_shutdown` can be set at all.
 
-    Re-check this function against that SDK method on every `mcp` upgrade:
-    a changed `streamable_http_app()` signature would surface here first.
+    Re-check this function against that SDK method on every `mcp` upgrade: a
+    changed `streamable_http_app()` signature would surface here first. Since
+    v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
+    off the server instance (server.py:1241), not passed here.
     """
     return app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
-        transport_security=LOOPBACK_TRANSPORT_SECURITY,
+        transport_security=build_transport_security(),
         host=settings.host,
     )
 

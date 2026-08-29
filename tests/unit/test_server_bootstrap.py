@@ -74,7 +74,9 @@ def test_http_app_pins_security_critical_kwargs(monkeypatch) -> None:
     server_module.build_http_app()
 
     assert len(calls) == 1
-    assert calls[0]["transport_security"] is server_module.LOOPBACK_TRANSPORT_SECURITY
+    # `build_transport_security()` reads `Settings` fresh on every call rather
+    # than returning a shared singleton, so this compares by value.
+    assert calls[0]["transport_security"] == server_module.build_transport_security()
     assert calls[0]["stateless_http"] is True
     assert calls[0]["host"] == server_module.settings.host
     assert calls[0]["streamable_http_path"] == "/mcp"

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING CHANGE:** the default HTTP bind moved from `0.0.0.0` to `127.0.0.1`.
+  A deployment relying on the implicit wildcard bind becomes unreachable until it
+  sets `LAW_MCP_HOST` explicitly — which now also requires an authentication mode.
+
 ## [3.1.2] - 2026-08-25
 
 See [docs/changelogs/v3.1.2.md](docs/changelogs/v3.1.2.md) for details.

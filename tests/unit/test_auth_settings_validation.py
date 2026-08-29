@@ -134,3 +134,41 @@ def test_rate_limit_defaults_follow_d17() -> None:
     assert (current.rate_limit_enabled, current.rate_limit_requests) == (True, 60)
     assert (current.rate_limit_window, current.rate_limit_burst) == (60.0, 10)
     assert current.trusted_proxies == []
+
+
+class TestRemoteBindWarning:
+    """Criterion 6 (D7): a visible signal instead of silent exposure."""
+
+    def test_loopback_bind_logs_nothing(self, caplog: pytest.LogCaptureFixture) -> None:
+        from law_scrapper_mcp.config import log_remote_bind_warning
+
+        current = Settings(transport="streamable-http")
+        with caplog.at_level("WARNING"):
+            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
+        assert caplog.records == []
+
+    def test_remote_bind_logs_one_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        from law_scrapper_mcp.config import log_remote_bind_warning
+
+        current = Settings(transport="streamable-http", host="0.0.0.0", auth_mode="bearer", auth_token=VALID_TOKEN)
+        with caplog.at_level("WARNING"):
+            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
+        assert len(caplog.records) == 1
+        assert "0.0.0.0" in caplog.records[0].getMessage()
+
+    def test_stdio_transport_never_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The bind address is meaningless without an HTTP listener."""
+        from law_scrapper_mcp.config import log_remote_bind_warning
+
+        current = Settings(transport="stdio", host="0.0.0.0", auth_mode="bearer", auth_token=VALID_TOKEN)
+        with caplog.at_level("WARNING"):
+            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
+        assert caplog.records == []
+
+
+def test_config_contains_no_wildcard_bind() -> None:
+    """Criterion 13: the wildcard bind must not survive anywhere in config.py."""
+    from pathlib import Path as _Path
+
+    source = (_Path(__file__).parents[2] / "src/law_scrapper_mcp/config.py").read_text(encoding="utf-8")
+    assert "0.0.0.0" not in source

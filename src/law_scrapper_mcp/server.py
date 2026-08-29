@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
-from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
+from law_scrapper_mcp.config import log_pattern_limit_clamping, log_remote_bind_warning, settings
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
@@ -288,6 +288,7 @@ def run_streamable_http() -> None:
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
+    log_remote_bind_warning(settings, logger)
     if settings.transport == "streamable-http":
         run_streamable_http()
     else:

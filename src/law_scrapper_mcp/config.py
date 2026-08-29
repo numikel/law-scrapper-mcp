@@ -52,6 +52,8 @@ class Settings(BaseSettings):
 
     # Transport
     transport: Literal["stdio", "streamable-http"] = "stdio"
+    # Loopback by default (D7). This is a safe bind, not an access-control
+    # mechanism — exposure is a deliberate act requiring an authentication mode.
     host: str = "127.0.0.1"
     port: int = 7683
 
@@ -254,6 +256,23 @@ def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:
         MAX_PATTERN_LENGTH_FLOOR,
         MAX_PATTERN_LENGTH_CEILING,
         current.effective_max_pattern_length,
+    )
+
+
+def log_remote_bind_warning(current: Settings, log: logging.Logger) -> None:
+    """Warn when the HTTP listener reaches beyond the loopback.
+
+    Reaching this point means the configuration already passed validation, so
+    authentication is configured. The warning is not an error — it is the line
+    an operator greps for when asking what a container actually exposes.
+    """
+    if current.transport != "streamable-http" or is_loopback_entry(current.host):
+        return
+    log.warning(
+        "Serwer HTTP nasłuchuje na %s:%d — poza pętlą zwrotną. Tryb uwierzytelniania: %s.",
+        current.host,
+        current.port,
+        current.auth_mode,
     )
 
 

@@ -72,7 +72,7 @@ def test_authenticated_tools_list_has_13_tools(bearer_app) -> None:
             headers=_mcp_headers(TOKEN),
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
         )
-    assert response.status_code != 401
+    assert response.status_code == 200
     body = response.text
     assert "search_legal_acts" in body
     assert body.count('"name"') >= 13
@@ -95,6 +95,18 @@ def test_bearer_mode_advertises_no_resource_metadata() -> None:
 def test_none_mode_builds_no_auth() -> None:
     """`auth=None` with no verifier is an explicit state, not an empty token."""
     assert build_auth(Settings()) == (None, None)
+
+
+def test_bearer_mode_brackets_an_ipv6_host_in_the_issuer_url() -> None:
+    """An unbracketed IPv6 literal is not a valid URL authority.
+
+    `LAW_MCP_HOST=::` (dual-stack Docker bind) with `auth_mode=bearer` passes
+    `Settings`' own validator — the non-loopback rejection only fires for
+    `auth_mode=none` — so this must not crash `build_auth()` at import time.
+    """
+    auth_settings, verifier = build_auth(Settings(auth_mode="bearer", auth_token=TOKEN, host="::1"))
+    assert auth_settings is not None and verifier is not None
+    assert str(auth_settings.issuer_url).startswith("http://[::1]")
 
 
 def test_oauth_mode_builds_the_jwt_verifier() -> None:

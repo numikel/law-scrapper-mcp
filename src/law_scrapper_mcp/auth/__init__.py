@@ -35,7 +35,10 @@ def build_auth(current: Settings) -> tuple[AuthSettings | None, TokenVerifier | 
     if current.auth_mode == "bearer":
         # The SDK requires an issuer even for a static secret, so the server
         # names itself as one (D16) instead of borrowing a stranger's URL.
-        issuer = current.auth_resource_server_url or AnyHttpUrl(f"http://{current.host}:{current.port}")
+        # An IPv6 literal must be bracketed to be a valid URL authority
+        # (`http://::1:port` is not parseable; `http://[::1]:port` is).
+        literal_host = current.host if ":" not in current.host or current.host.startswith("[") else f"[{current.host}]"
+        issuer = current.auth_resource_server_url or AnyHttpUrl(f"http://{literal_host}:{current.port}")
         return (
             AuthSettings(issuer_url=issuer, resource_server_url=None, required_scopes=scopes),
             StaticTokenVerifier(token=current.resolve_auth_token(), scopes=current.auth_required_scopes),

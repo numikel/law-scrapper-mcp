@@ -82,6 +82,10 @@ def test_http_app_pins_security_critical_kwargs(monkeypatch) -> None:
     # `build_transport_security()` reads `Settings` fresh on every call rather
     # than returning a shared singleton, so this compares by value.
     assert calls[0]["transport_security"] == server_module.build_transport_security()
+    # The value itself, not just its presence: nothing else in the unit suite
+    # asserts DNS-rebinding protection is actually on (the only other proof is
+    # an integration-marked live-subprocess test).
+    assert calls[0]["transport_security"].enable_dns_rebinding_protection is True
     assert calls[0]["stateless_http"] is True
     assert calls[0]["host"] == server_module.settings.host
     assert calls[0]["streamable_http_path"] == "/mcp"

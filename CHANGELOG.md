@@ -20,6 +20,8 @@ See [docs/changelogs/v4.0.0.md](docs/changelogs/v4.0.0.md) for details.
   or `oauth`. A container configured with `0.0.0.0` and no token refuses to
   start instead of exposing an unauthenticated MCP endpoint.
 
+### Added
+
 - **Bearer and OAuth authentication** — Streamable HTTP now supports static bearer tokens and OAuth resource-server token verification.
 - **Per-client HTTP rate limiting** — Bounds request throughput per client on the HTTP transport.
 

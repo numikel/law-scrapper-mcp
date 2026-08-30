@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import importlib
-
 import pytest
 from starlette.testclient import TestClient
 
+from law_scrapper_mcp import server as server_module
 from law_scrapper_mcp.auth import build_auth
 from law_scrapper_mcp.config import Settings
 
@@ -18,26 +17,43 @@ LOOPBACK_HOST_HEADER = "127.0.0.1:7683"
 
 @pytest.fixture
 def bearer_app(monkeypatch: pytest.MonkeyPatch):
-    """Rebuild the server module against a bearer-mode configuration.
+    """Reconfigure the live server module for bearer auth without reloading it.
 
-    `MCPServer` reads `auth` and `token_verifier` in its constructor, so the
-    module must be re-imported after the settings change — patching afterwards
-    would leave the SDK's middleware stack unbuilt.
+    `importlib.reload(config)` would rebuild the `settings` singleton that five
+    service modules already captured by value at their own import time,
+    leaving them out of sync with `server.settings` until a second reload — a
+    global side effect that survives a setup failure (a reload raising
+    partway through skips this generator's post-`yield` teardown entirely).
+
+    Instead, this patches only what `server.py`'s call graph actually reads at
+    request time: the module-level `settings` name (read fresh by
+    `build_http_app`/`build_transport_security`/`health`, since Python looks up
+    module globals by name on every call) and the already-constructed `app`
+    instance's `settings.auth` / `_token_verifier` (read fresh by
+    `MCPServer.streamable_http_app` on every call — confirmed in the SDK
+    source, not assumed). Nothing under `sys.modules` is touched, so the five
+    service modules' own `settings` references are untouched by construction,
+    not by convention.
+
+    Every mutation goes through `monkeypatch.setattr`, whose own fixture
+    (`yield mpatch; mpatch.undo()`) records each change immediately and undoes
+    it in its own guaranteed teardown — independent of whether this fixture's
+    body raises before reaching `yield`. There is nothing left for a manual
+    `try/finally` to protect that `monkeypatch` doesn't already protect.
     """
-    monkeypatch.setenv("LAW_MCP_TRANSPORT", "streamable-http")
-    monkeypatch.setenv("LAW_MCP_AUTH_MODE", "bearer")
-    monkeypatch.setenv("LAW_MCP_AUTH_TOKEN", TOKEN)
-    monkeypatch.setenv("LAW_MCP_RATE_LIMIT_ENABLED", "false")
-    # `server.py` binds `settings` by value at import time (`from ...config import
-    # settings`); reloading only `server` would leave it pointing at the module-level
-    # singleton built under the pre-monkeypatch environment. Reload `config` first so
-    # a fresh `Settings()` picks up the patched env vars, then `server` picks up that.
-    importlib.reload(importlib.import_module("law_scrapper_mcp.config"))
-    server_module = importlib.reload(importlib.import_module("law_scrapper_mcp.server"))
+    bearer_settings = Settings(
+        transport="streamable-http",
+        auth_mode="bearer",
+        auth_token=TOKEN,
+        rate_limit_enabled=False,
+    )
+    auth_settings, token_verifier = build_auth(bearer_settings)
+
+    monkeypatch.setattr(server_module, "settings", bearer_settings)
+    monkeypatch.setattr(server_module.app.settings, "auth", auth_settings)
+    monkeypatch.setattr(server_module.app, "_token_verifier", token_verifier)
+
     yield server_module.build_http_app()
-    monkeypatch.undo()
-    importlib.reload(importlib.import_module("law_scrapper_mcp.config"))
-    importlib.reload(importlib.import_module("law_scrapper_mcp.server"))
 
 
 def _mcp_headers(token: str | None) -> dict[str, str]:

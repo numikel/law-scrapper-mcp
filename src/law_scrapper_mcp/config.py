@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -61,6 +61,22 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 7683
 
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _validate_trusted_proxies(cls, value: list[str]) -> list[str]:
+        """Reject malformed CIDR entries at startup instead of on the first request.
+
+        `RateLimitMiddleware.__init__` also calls `ip_network()` on this list —
+        without this validator, a bad entry there raises a raw `ValueError`
+        instead of a clean, Polish-language `ValidationError`.
+        """
+        for entry in value:
+            try:
+                ip_network(entry, strict=False)
+            except ValueError as error:
+                raise ValueError(f"LAW_MCP_TRUSTED_PROXIES zawiera nieprawidłowy wpis '{entry}': {error}") from error
+        return value
+
     @field_validator("transport", mode="before")
     @classmethod
     def _reject_unsupported_transport(cls, value: object) -> object:
@@ -98,7 +114,7 @@ class Settings(BaseSettings):
                 raise ValueError("Tryb 'bearer' wymaga tokenu. Ustaw LAW_MCP_AUTH_TOKEN albo LAW_MCP_AUTH_TOKEN_FILE.")
             try:
                 token = self.resolve_auth_token()
-            except OSError as error:
+            except (OSError, UnicodeDecodeError) as error:
                 raise ValueError(
                     f"Nie udało się odczytać LAW_MCP_AUTH_TOKEN_FILE ({self.auth_token_file}): {error}"
                 ) from error

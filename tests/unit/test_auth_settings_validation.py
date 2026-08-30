@@ -90,6 +90,29 @@ def test_missing_token_file_is_rejected(tmp_path: Path) -> None:
     assert "LAW_MCP_AUTH_TOKEN_FILE" in str(exc_info.value)
 
 
+def test_binary_token_file_is_rejected(tmp_path: Path) -> None:
+    """A non-UTF-8 token file must raise ValidationError, not a raw UnicodeDecodeError."""
+    token_file = tmp_path / "token"
+    token_file.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(auth_mode="bearer", auth_token_file=token_file)
+    assert "LAW_MCP_AUTH_TOKEN_FILE" in str(exc_info.value)
+
+
+def test_invalid_trusted_proxy_cidr_is_rejected() -> None:
+    """Malformed CIDR entries must fail at Settings construction, not on first request."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(trusted_proxies=["nie-cidr"])
+    message = str(exc_info.value)
+    assert "LAW_MCP_TRUSTED_PROXIES" in message
+    assert "nie-cidr" in message
+
+
+def test_valid_trusted_proxy_cidr_is_accepted() -> None:
+    current = Settings(trusted_proxies=["10.0.0.0/8", "192.168.1.1"])
+    assert current.trusted_proxies == ["10.0.0.0/8", "192.168.1.1"]
+
+
 def test_oauth_without_issuer_is_rejected() -> None:
     """Criterion 5 (D2, A5): no silent downgrade to the shared-secret mode."""
     with pytest.raises(ValidationError) as exc_info:

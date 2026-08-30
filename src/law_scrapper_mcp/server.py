@@ -278,8 +278,11 @@ def build_http_app() -> ASGIApp:
     if not settings.rate_limit_enabled:
         return http_app
     # Wrapping from the outside means the cheapest check runs first: the actual
-    # order becomes rate limiting → Host/Origin validation → authentication
-    # (D13). The SDK offers no injection point between its own two layers.
+    # order is rate limiting → authentication → Host/Origin validation (D13).
+    # `RequireAuthMiddleware` wraps the `/mcp` route directly and is reached
+    # before Host/Origin validation, which sits deeper inside the streamable
+    # transport — a consequence of the SDK's own layering, not a choice this
+    # project makes. The SDK offers no injection point to reorder it.
     return RateLimitMiddleware(
         http_app,
         requests=settings.rate_limit_requests,

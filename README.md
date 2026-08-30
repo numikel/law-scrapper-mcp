@@ -183,6 +183,16 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | `3` | Test calls in half-open state |
 | `LAW_MCP_MAX_PATTERN_LENGTH` | `512` | Max `filter_results` pattern length, clamped to 64-4096 |
 | `LAW_MCP_FILTER_MAX_RECORDS` | `100` | Max records `filter_results` processes per call; floor 1, no ceiling (very high values lengthen the synchronous but linear scan) |
+| `LAW_MCP_ALLOWED_HOSTS` | `127.0.0.1:*, localhost:*, [::1]:*` | `Host` header allowlist for streamable-http (DNS-rebinding protection). Widening beyond loopback requires an auth mode — see "Authenticated remote deployment" |
+| `LAW_MCP_ALLOWED_ORIGINS` | `http://127.0.0.1:*, http://localhost:*, http://[::1]:*` | `Origin` header allowlist for streamable-http. Same auth-mode requirement as `LAW_MCP_ALLOWED_HOSTS` |
+| `LAW_MCP_AUTH_JWKS_URI` | unset | Override the JWKS URI discovered from `LAW_MCP_AUTH_ISSUER`'s OIDC discovery document; needed only when a provider's discovery document omits or misreports it |
+| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. OAuth mode only — see finding 7 note below |
+| `LAW_MCP_AUTH_ALGORITHMS` | `RS256, ES256` | JWT signature algorithm allowlist passed to the decoder; never read from the token header |
+| `LAW_MCP_AUTH_JWKS_CACHE_TTL` | `3600` | Seconds a fetched JWKS key set is cached before re-fetching |
+| `LAW_MCP_RATE_LIMIT_ENABLED` | `true` | Whether the per-client rate limiter wraps the HTTP app |
+| `LAW_MCP_RATE_LIMIT_REQUESTS` | `60` | Requests allowed per `LAW_MCP_RATE_LIMIT_WINDOW` before throttling |
+| `LAW_MCP_RATE_LIMIT_WINDOW` | `60.0` | Rate limit window in seconds |
+| `LAW_MCP_RATE_LIMIT_BURST` | `10` | Token bucket capacity — how many requests can arrive back-to-back before `429` |
 | `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 
@@ -243,6 +253,21 @@ LAW_MCP_AUTH_MODE=oauth \
 LAW_MCP_AUTH_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0 \
 LAW_MCP_AUTH_AUDIENCE=api://law-scrapper \
 LAW_MCP_AUTH_RESOURCE_SERVER_URL=https://mcp.example.com/mcp \
+  law-scrapper
+```
+
+**Reachable through a reverse proxy** — `LAW_MCP_ALLOWED_HOSTS` and
+`LAW_MCP_ALLOWED_ORIGINS` default to loopback-only (F18): a request whose
+`Host` or `Origin` header doesn't match gets `421`/`403` from the SDK's
+DNS-rebinding protection, even with a valid token. This default is
+deliberate — widening the allowlist is only permitted once an auth mode is
+configured (enforced at startup, D6). A reverse proxy that preserves the
+original `Host` (nginx's `proxy_set_header Host $host`, Caddy's default)
+needs both variables set to the public name, for either auth mode above:
+
+```bash
+LAW_MCP_ALLOWED_HOSTS='mcp.example.com:*' \
+LAW_MCP_ALLOWED_ORIGINS='https://mcp.example.com' \
   law-scrapper
 ```
 

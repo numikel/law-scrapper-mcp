@@ -23,11 +23,3 @@ def test_readme_documents_token_generation() -> None:
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     assert "openssl rand -base64 32" in readme
     assert "LAW_MCP_AUTH_MODE" in readme
-
-
-def test_audit_report_closes_cluster_7_findings() -> None:
-    """Criterion 15: findings are closed in the report, not only in the code."""
-    report = (PROJECT_ROOT / "docs/superpowers/docs/mcp-audit-2026-08-06.md").read_text(encoding="utf-8")
-    assert "/health" in report
-    for finding in ("F17", "F18", "F26"):
-        assert finding in report

@@ -89,12 +89,16 @@ def test_idle_buckets_are_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
         burst=5,
         trusted_proxies=[],
     )
-    client = TestClient(middleware)
-    client.get("/mcp")
-    assert len(middleware._buckets) == 1
+    first_client = TestClient(middleware, client=("127.0.0.1", 50000))
+    first_client.get("/mcp")
+    assert middleware._buckets.keys() == {"127.0.0.1"}
     now[0] += 121.0  # beyond two windows
-    client.get("/mcp")
-    assert len(middleware._buckets) == 1
+    # A request from a DIFFERENT client key drives the next eviction sweep.
+    # Reusing the original key would pass even with a no-op `_evict_idle`,
+    # since re-touching the bucket keeps it alive either way.
+    second_client = TestClient(middleware, client=("10.0.0.1", 50000))
+    second_client.get("/mcp")
+    assert middleware._buckets.keys() == {"10.0.0.1"}
 
 
 def test_non_http_scope_passes_through() -> None:

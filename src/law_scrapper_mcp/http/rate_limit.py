@@ -76,8 +76,8 @@ class RateLimitMiddleware:
         await response(scope, receive, send)
 
     async def _consume(self, key: str) -> tuple[bool, int]:
-        now = monotonic()
         async with self._lock:
+            now = monotonic()
             self._evict_idle(now)
             bucket = self._buckets.get(key)
             if bucket is None:

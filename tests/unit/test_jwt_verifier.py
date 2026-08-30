@@ -22,6 +22,7 @@ import respx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
+from jwt.exceptions import PyJWKClientConnectionError
 
 from law_scrapper_mcp.auth.jwt_verifier import JwtTokenVerifier
 
@@ -261,6 +262,26 @@ async def test_jwks_communication_failure_logs_at_warning(
         result = await make_verifier().verify_token(make_token(keypair))
     assert result is None
     assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert not any(record.levelno == logging.INFO for record in caplog.records)
+
+
+async def test_jwks_connection_failure_logs_at_warning(
+    keypair, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`PyJWKClientConnectionError` is a `PyJWTError` subclass (DNS failure,
+    timeout, TLS handshake failure fetching the key set) — it must not be
+    swallowed by the `except jwt.PyJWTError` clause meant for ordinary
+    token-validation failures, or it silently logs at INFO instead of WARNING."""
+
+    def broken_fetch(self: jwt.PyJWKClient) -> Any:
+        raise PyJWKClientConnectionError("boom")
+
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", broken_fetch)
+    with caplog.at_level(logging.INFO, logger="law_scrapper_mcp.auth.jwt_verifier"):
+        result = await make_verifier().verify_token(make_token(keypair))
+    assert result is None
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert not any(record.levelno == logging.INFO for record in caplog.records)
 
 
 def _jwk_for(key: rsa.RSAPrivateKey, kid: str) -> dict[str, Any]:

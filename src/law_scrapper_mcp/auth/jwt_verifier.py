@@ -64,20 +64,26 @@ class JwtTokenVerifier:
                 issuer=self._issuer,
                 options={"require": ["exp", "iss", "aud"]},
             )
-        except jwt.PyJWTError as error:
-            # A plain token-validation failure (bad signature, expired,
-            # wrong audience/issuer, ...) is routine traffic, not an
-            # operational problem — stays at INFO.
-            logger.info("Odrzucono token: %s", type(error).__name__)
-            return None
         except (PyJWKClientError, httpx.HTTPError, KeyError, ValueError) as error:
+            # PyJWKClientError is a jwt.PyJWTError subclass, so this clause
+            # MUST come before `except jwt.PyJWTError` below — Python matches
+            # top-down, and the base-class clause would otherwise silently
+            # swallow it, routing real IdP outages through the INFO path.
             # KeyError/ValueError: a malformed discovery document (missing or
             # non-https `jwks_uri`) or a non-JSON JWKS/discovery body —
             # `json.JSONDecodeError` is a ValueError subclass, and neither
             # escapes as PyJWTError or httpx.HTTPError. These signal that the
             # identity provider is unreachable or misbehaving, worth a human
             # noticing — WARNING, not INFO.
-            logger.warning("Odrzucono token: %s", type(error).__name__)
+            logger.warning("Odrzucono token: %s: %s", type(error).__name__, error)
+            return None
+        except jwt.PyJWTError as error:
+            # A plain token-validation failure (bad signature, expired,
+            # wrong audience/issuer, ...) is routine traffic, not an
+            # operational problem — stays at INFO. Kept as type-name-only,
+            # unlike the WARNING branch: `error` here can echo attacker-
+            # controlled token content.
+            logger.info("Odrzucono token: %s", type(error).__name__)
             return None
 
         scopes = _scopes_of(claims)

@@ -89,7 +89,7 @@ def test_bearer_mode_advertises_no_resource_metadata() -> None:
     auth_settings, verifier = build_auth(Settings(transport="streamable-http", auth_mode="bearer", auth_token=TOKEN))
     assert auth_settings is not None and verifier is not None
     assert auth_settings.resource_server_url is None
-    assert str(auth_settings.issuer_url).startswith("http://127.0.0.1")
+    assert str(auth_settings.issuer_url) == "http://127.0.0.1:7683/"
 
 
 def test_none_mode_builds_no_auth() -> None:
@@ -106,7 +106,7 @@ def test_bearer_mode_brackets_an_ipv6_host_in_the_issuer_url() -> None:
     """
     auth_settings, verifier = build_auth(Settings(auth_mode="bearer", auth_token=TOKEN, host="::1"))
     assert auth_settings is not None and verifier is not None
-    assert str(auth_settings.issuer_url).startswith("http://[::1]")
+    assert str(auth_settings.issuer_url) == "http://[::1]:7683/"
 
 
 def test_oauth_mode_builds_the_jwt_verifier() -> None:
@@ -122,4 +122,4 @@ def test_oauth_mode_builds_the_jwt_verifier() -> None:
     )
     assert isinstance(verifier, JwtTokenVerifier)
     assert auth_settings is not None
-    assert str(auth_settings.resource_server_url).startswith("https://mcp.example.com")
+    assert str(auth_settings.resource_server_url) == "https://mcp.example.com/mcp"

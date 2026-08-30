@@ -11,6 +11,7 @@ import base64
 import hashlib
 import hmac as hmac_module
 import json
+import logging
 import time
 from typing import Any
 
@@ -217,6 +218,49 @@ async def test_non_json_jwks_response_is_rejected(keypair, monkeypatch: pytest.M
 
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", broken_fetch)
     assert await make_verifier().verify_token(make_token(keypair)) is None
+
+
+@respx.mock
+async def test_discovered_http_jwks_uri_is_rejected(keypair, fetch_calls) -> None:
+    """A discovery document must not be trusted to point key fetching at
+    plaintext HTTP, even though the document itself arrived over HTTPS.
+
+    `fetch_calls` fakes `PyJWKClient.fetch_data` to succeed with a valid key
+    set — without the scheme check, verification would go on to succeed,
+    so this genuinely fails red before the fix rather than passing by
+    accident because of a network error to a fake host.
+    """
+    respx.get(f"{ISSUER}/.well-known/openid-configuration").mock(
+        return_value=httpx.Response(200, json={"jwks_uri": "http://login.example.com/tenant/discovery/keys"})
+    )
+    assert await make_verifier(jwks_uri=None).verify_token(make_token(keypair)) is None
+    assert fetch_calls == []
+
+
+async def test_token_validation_failure_logs_at_info(keypair, fetch_calls, caplog: pytest.LogCaptureFixture) -> None:
+    """A routine rejection (expired token) is everyday traffic, not an
+    operational problem — it must stay at INFO."""
+    with caplog.at_level(logging.INFO, logger="law_scrapper_mcp.auth.jwt_verifier"):
+        result = await make_verifier().verify_token(make_token(keypair, exp=int(time.time()) - 10))
+    assert result is None
+    assert any(record.levelno == logging.INFO for record in caplog.records)
+    assert not any(record.levelno >= logging.WARNING for record in caplog.records)
+
+
+async def test_jwks_communication_failure_logs_at_warning(
+    keypair, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A malformed/unreachable JWKS response is an infrastructure problem
+    worth a human noticing, so it must log at WARNING, not INFO."""
+
+    def broken_fetch(self: jwt.PyJWKClient) -> Any:
+        raise json.JSONDecodeError("Expecting value", "<html>not json</html>", 0)
+
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", broken_fetch)
+    with caplog.at_level(logging.INFO, logger="law_scrapper_mcp.auth.jwt_verifier"):
+        result = await make_verifier().verify_token(make_token(keypair))
+    assert result is None
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
 
 
 def _jwk_for(key: rsa.RSAPrivateKey, kid: str) -> dict[str, Any]:

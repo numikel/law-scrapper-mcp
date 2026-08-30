@@ -43,11 +43,16 @@ def test_uvicorn_config_follows_the_configured_window(monkeypatch) -> None:
     assert config.timeout_graceful_shutdown == 25.0
 
 
-def test_http_app_still_serves_the_health_route() -> None:
+def test_http_app_still_serves_the_health_route(monkeypatch: pytest.MonkeyPatch) -> None:
     """`streamable_http_app()` must carry `custom_route` registrations over.
 
     If it did not, moving off `app.run()` would silently drop `/health`.
+    Rate limiting is disabled here because it wraps the returned ASGI app,
+    which would otherwise hide `.routes` behind `RateLimitMiddleware` — a
+    concern this test does not cover (see `tests/unit/test_rate_limit.py`).
     """
+    monkeypatch.setattr(server_module.settings, "rate_limit_enabled", False)
+
     paths = {getattr(route, "path", None) for route in server_module.build_http_app().routes}
 
     assert "/health" in paths

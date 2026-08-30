@@ -20,6 +20,7 @@ from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, log_remote_bind_warning, settings
 from law_scrapper_mcp.context import AppContext
+from law_scrapper_mcp.http.rate_limit import RateLimitMiddleware
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -268,11 +269,23 @@ def build_http_app() -> ASGIApp:
     v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
     off the server instance (server.py:1241), not passed here.
     """
-    return app.streamable_http_app(
+    http_app: ASGIApp = app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
         transport_security=build_transport_security(),
         host=settings.host,
+    )
+    if not settings.rate_limit_enabled:
+        return http_app
+    # Wrapping from the outside means the cheapest check runs first: the actual
+    # order becomes rate limiting → Host/Origin validation → authentication
+    # (D13). The SDK offers no injection point between its own two layers.
+    return RateLimitMiddleware(
+        http_app,
+        requests=settings.rate_limit_requests,
+        window=settings.rate_limit_window,
+        burst=settings.rate_limit_burst,
+        trusted_proxies=settings.trusted_proxies,
     )
 
 

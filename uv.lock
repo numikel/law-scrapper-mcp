@@ -475,6 +475,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "httpx2" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -488,6 +489,7 @@ dev = [
 requires-dist = [
     { name = "google-re2", specifier = ">=1.1.20251105" },
     { name = "httpx", specifier = ">=0.28" },
+    { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.5.0" },
     { name = "markdownify", specifier = ">=0.14" },
     { name = "mcp", extras = ["cli"], specifier = "==2.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14" },

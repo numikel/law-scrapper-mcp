@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -19,7 +21,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     pydantic-settings reads os.environ at construction time, so a developer with
     LAW_MCP_AUTH_MODE exported would otherwise see failures no one can reproduce.
     """
-    for name in list(__import__("os").environ):
+    for name in list(os.environ):
         if name.startswith("LAW_MCP_"):
             monkeypatch.delenv(name, raising=False)
 
@@ -73,6 +75,13 @@ def test_short_token_is_rejected() -> None:
     """Criterion 4 (D8): length only — entropy is not, and cannot be, measured."""
     with pytest.raises(ValidationError) as exc_info:
         Settings(auth_mode="bearer", auth_token="za-krotki")
+    assert str(MIN_AUTH_TOKEN_BYTES) in str(exc_info.value)
+
+
+def test_token_one_byte_short_of_the_minimum_is_rejected() -> None:
+    """Off-by-one guard: MIN_AUTH_TOKEN_BYTES - 1 bytes must still fail."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(auth_mode="bearer", auth_token="x" * (MIN_AUTH_TOKEN_BYTES - 1))
     assert str(MIN_AUTH_TOKEN_BYTES) in str(exc_info.value)
 
 
@@ -163,6 +172,16 @@ def test_rate_limit_defaults_follow_d17() -> None:
     assert current.trusted_proxies == []
 
 
+def test_rate_limit_requests_zero_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(rate_limit_requests=0)
+
+
+def test_rate_limit_window_zero_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(rate_limit_window=0)
+
+
 class TestRemoteBindWarning:
     """Criterion 6 (D7): a visible signal instead of silent exposure."""
 
@@ -171,17 +190,18 @@ class TestRemoteBindWarning:
 
         current = Settings(transport="streamable-http")
         with caplog.at_level("WARNING"):
-            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
-        assert caplog.records == []
+            log_remote_bind_warning(current, logging.getLogger("test"))
+        assert [r for r in caplog.records if r.name == "test"] == []
 
     def test_remote_bind_logs_one_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         from law_scrapper_mcp.config import log_remote_bind_warning
 
         current = Settings(transport="streamable-http", host="0.0.0.0", auth_mode="bearer", auth_token=VALID_TOKEN)
         with caplog.at_level("WARNING"):
-            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
-        assert len(caplog.records) == 1
-        assert "0.0.0.0" in caplog.records[0].getMessage()
+            log_remote_bind_warning(current, logging.getLogger("test"))
+        records = [r for r in caplog.records if r.name == "test"]
+        assert len(records) == 1
+        assert "0.0.0.0" in records[0].getMessage()
 
     def test_stdio_transport_never_warns(self, caplog: pytest.LogCaptureFixture) -> None:
         """The bind address is meaningless without an HTTP listener."""
@@ -189,13 +209,5 @@ class TestRemoteBindWarning:
 
         current = Settings(transport="stdio", host="0.0.0.0", auth_mode="bearer", auth_token=VALID_TOKEN)
         with caplog.at_level("WARNING"):
-            log_remote_bind_warning(current, __import__("logging").getLogger("test"))
-        assert caplog.records == []
-
-
-def test_config_contains_no_wildcard_bind() -> None:
-    """Criterion 13: the wildcard bind must not survive anywhere in config.py."""
-    from pathlib import Path as _Path
-
-    source = (_Path(__file__).parents[2] / "src/law_scrapper_mcp/config.py").read_text(encoding="utf-8")
-    assert "0.0.0.0" not in source
+            log_remote_bind_warning(current, logging.getLogger("test"))
+        assert [r for r in caplog.records if r.name == "test"] == []

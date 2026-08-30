@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 from pathlib import Path
 
 import pytest
@@ -42,6 +43,21 @@ async def test_configured_scopes_are_returned() -> None:
     access = await verifier.verify_token(TOKEN)
     assert access is not None
     assert access.scopes == ["mcp:read"]
+
+
+async def test_verify_token_uses_hmac_compare_digest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guards against a regression to a non-constant-time `==` comparison."""
+    calls = []
+    real_compare_digest = hmac.compare_digest
+
+    def spy(a: bytes, b: bytes) -> bool:
+        calls.append((a, b))
+        return real_compare_digest(a, b)
+
+    monkeypatch.setattr(hmac, "compare_digest", spy)
+    verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
+    assert await verifier.verify_token(TOKEN) is not None
+    assert len(calls) == 1
 
 
 async def test_token_from_file_loses_its_trailing_newline(tmp_path: Path) -> None:

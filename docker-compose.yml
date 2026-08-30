@@ -5,8 +5,13 @@ services:
       - "7683:7683"
     environment:
       - LAW_MCP_TRANSPORT=streamable-http
+      # 0.0.0.0 inside the container is mandatory: a process binding 127.0.0.1
+      # inside the network namespace is unreachable through Docker port
+      # publishing. Under D5 that makes this path authenticated by definition.
       - LAW_MCP_HOST=0.0.0.0
       - LAW_MCP_PORT=7683
+      - LAW_MCP_AUTH_MODE=bearer
+      - LAW_MCP_AUTH_TOKEN=${LAW_MCP_AUTH_TOKEN:?ustaw LAW_MCP_AUTH_TOKEN, np. openssl rand -base64 32}
       - LAW_MCP_LOG_LEVEL=INFO
       - LAW_MCP_LOG_FORMAT=json
     restart: unless-stopped

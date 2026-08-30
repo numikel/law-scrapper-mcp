@@ -26,7 +26,10 @@ COPY --from=builder /app/src /app/src
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
 ENV LAW_MCP_TRANSPORT=streamable-http
-ENV LAW_MCP_HOST=0.0.0.0
+# No network-host override here (D19): the image inherits the loopback bind
+# from the code, and exposing it requires an explicit `-e` override of that
+# setting together with an authentication mode. One place to configure
+# exposure, not two.
 ENV LAW_MCP_PORT=7683
 
 # Switch to non-root user

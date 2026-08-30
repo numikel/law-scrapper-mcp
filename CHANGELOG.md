@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [4.0.0] - 2026-08-30
 
-- **BREAKING CHANGE:** the default HTTP bind moved from `0.0.0.0` to `127.0.0.1`.
-  A deployment relying on the implicit wildcard bind becomes unreachable until it
-  sets `LAW_MCP_HOST` explicitly — which now also requires an authentication mode.
+See [docs/changelogs/v4.0.0.md](docs/changelogs/v4.0.0.md) for details.
+
+### BREAKING CHANGES
+
+- The default HTTP bind moved from `0.0.0.0` to `127.0.0.1`. A deployment that
+  relied on the implicit wildcard bind becomes unreachable until `LAW_MCP_HOST`
+  is set explicitly.
+- Binding beyond the loopback now requires `LAW_MCP_AUTH_MODE` set to `bearer`
+  or `oauth`. A container configured with `0.0.0.0` and no token refuses to
+  start instead of exposing an unauthenticated MCP endpoint.
+
+- **Bearer and OAuth authentication** — Streamable HTTP now supports static bearer tokens and OAuth resource-server token verification.
+- **Per-client HTTP rate limiting** — Bounds request throughput per client on the HTTP transport.
 
 ## [3.1.2] - 2026-08-25
 

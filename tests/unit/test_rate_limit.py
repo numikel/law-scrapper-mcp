@@ -171,6 +171,32 @@ def test_non_address_forwarded_for_falls_back_to_the_peer() -> None:
     assert middleware._buckets.keys() == {"127.0.0.1"}
 
 
+def test_duplicate_forwarded_for_headers_use_the_last_one() -> None:
+    """A caller's own header must not outrank the one the proxy appended.
+
+    A proxy that appends rather than edits produces a second `X-Forwarded-For`
+    header, so reading the first match would hand the bucket key straight to
+    the caller — an address it chose, which parses fine and so survives the
+    address check.
+    """
+    middleware = RateLimitMiddleware(
+        Starlette(routes=[Route("/mcp", _ok, methods=["GET"])]),
+        requests=5,
+        window=60.0,
+        burst=5,
+        trusted_proxies=["127.0.0.0/8"],
+    )
+    client = TestClient(middleware, client=("127.0.0.1", 50000))
+
+    # httpx sends one header per tuple, preserving order.
+    client.get(
+        "/mcp",
+        headers=[("X-Forwarded-For", "9.9.9.9"), ("X-Forwarded-For", "203.0.113.5")],
+    )
+
+    assert middleware._buckets.keys() == {"203.0.113.5"}
+
+
 def test_address_forwarded_for_still_becomes_the_key() -> None:
     """The counter-test: a real address from a trusted peer is still honoured."""
     middleware = RateLimitMiddleware(

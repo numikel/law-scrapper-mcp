@@ -106,19 +106,23 @@ class RateLimitMiddleware:
         peer = client[0] if client else "unknown"
         if not self._is_trusted(peer):
             return peer
-        for name, value in scope.get("headers", []):
-            if name == b"x-forwarded-for":
-                # Last entry, per spec §4.5. With a single trusted proxy — the
-                # deployment this exists for — that entry is the client.
-                forwarded = value.decode("latin-1").split(",")[-1].strip()
-                # Only an address may become a bucket key. A proxy that forwards
-                # the client's own header instead of appending to it would
-                # otherwise let a caller mint an unbounded number of buckets,
-                # each keyed by a string it chooses and sized up to the header
-                # limit. Falling back to the peer shares the proxy's bucket,
-                # which throttles harder than intended rather than less.
-                if _is_ip_address(forwarded):
-                    return forwarded
+        # Every occurrence, not the first match. A caller may send its own
+        # `X-Forwarded-For`, and a proxy appending to it produces a second
+        # header rather than editing the first; reading the first would then
+        # hand the caller the key. The proxy's own contribution is last.
+        values = [value for name, value in scope.get("headers", []) if name == b"x-forwarded-for"]
+        if values:
+            # Last entry, per spec §4.5. With a single trusted proxy — the
+            # deployment this exists for — that entry is the client.
+            forwarded = values[-1].decode("latin-1").split(",")[-1].strip()
+            # Only an address may become a bucket key. A proxy that forwards
+            # the client's own header instead of appending to it would
+            # otherwise let a caller mint an unbounded number of buckets,
+            # each keyed by a string it chooses and sized up to the header
+            # limit. Falling back to the peer shares the proxy's bucket,
+            # which throttles harder than intended rather than less.
+            if _is_ip_address(forwarded):
+                return forwarded
         return peer
 
     def _is_trusted(self, peer: str) -> bool:

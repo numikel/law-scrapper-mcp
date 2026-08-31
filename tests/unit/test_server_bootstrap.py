@@ -130,3 +130,19 @@ def test_main_stdio_branch_is_untouched(monkeypatch) -> None:
     server_module.main()
 
     assert calls == [{"transport": "stdio"}]
+
+
+def test_uvicorn_does_not_rewrite_the_client_from_forwarded_headers() -> None:
+    """`LAW_MCP_TRUSTED_PROXIES` must be the only gate on `X-Forwarded-For`.
+
+    uvicorn defaults `proxy_headers` to True and wraps the application in
+    `ProxyHeadersMiddleware` from the outside, so for any peer matching its own
+    `forwarded_allow_ips` (default `127.0.0.1` — a local reverse proxy, which is
+    the documented deployment) it rewrites `scope["client"]` from the header
+    before our rate limiter reads it. The limiter would then key off a header no
+    operator authorised, which is precisely what criterion 11 forbids, and the
+    unit tests would not notice because they drive the ASGI app directly.
+    """
+    config = server_module.build_uvicorn_config()
+
+    assert config.proxy_headers is False

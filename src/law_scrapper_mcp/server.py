@@ -302,6 +302,16 @@ def build_uvicorn_config() -> uvicorn.Config:
         # uvicorn's knob is whole seconds; the setting is a float so that it
         # reads like the other timeouts in `Settings`.
         timeout_graceful_shutdown=int(settings.shutdown_grace),
+        # Off on purpose, against uvicorn's default of True. Its
+        # ProxyHeadersMiddleware wraps the application from the outside, so it
+        # rewrites `scope["client"]` from `X-Forwarded-For` before any of our
+        # middleware runs — for every peer matching its own `forwarded_allow_ips`
+        # (default "127.0.0.1"), which is exactly the local reverse proxy this
+        # project is deployed behind. That would silently overrule
+        # LAW_MCP_TRUSTED_PROXIES: the rate limiter would key off a header the
+        # operator never authorised, which is what criterion 11 forbids. One
+        # gate decides whether the header may be believed, and it is ours.
+        proxy_headers=False,
     )
 
 

@@ -347,3 +347,25 @@ async def test_per_key_cache_tier_stays_disabled(monkeypatch: pytest.MonkeyPatch
     client = await make_verifier()._jwk_client()
 
     assert not hasattr(client.get_signing_key, "cache_info")
+
+
+async def test_unknown_kid_does_not_leak_into_the_warning_log(
+    keypair, fetch_calls, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`PyJWKClientError`'s message embeds the token's own unverified `kid`
+    header (PyJWT reads it before any signature check), so it must never be
+    logged verbatim — the WARNING branch has to stay type-name-only for this
+    exception class specifically, unlike JWKS/discovery transport failures."""
+    sentinel_kid = "attacker-controlled-marker-xyz123"
+    forged = jwt.encode(
+        {"iss": ISSUER, "aud": AUDIENCE, "sub": "user-42", "exp": int(time.time()) + 600},
+        keypair,
+        algorithm="RS256",
+        headers={"kid": sentinel_kid},
+    )
+    with caplog.at_level(logging.INFO, logger="law_scrapper_mcp.auth.jwt_verifier"):
+        result = await make_verifier().verify_token(forged)
+    assert result is None
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    for record in caplog.records:
+        assert sentinel_kid not in record.getMessage()

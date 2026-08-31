@@ -17,7 +17,7 @@ from mcp.types import CLIENT_CAPABILITIES_META_KEY, LATEST_PROTOCOL_VERSION, PRO
 from starlette.testclient import TestClient
 
 from law_scrapper_mcp.config import settings
-from law_scrapper_mcp.server import LOOPBACK_TRANSPORT_SECURITY, app
+from law_scrapper_mcp.server import app, build_transport_security
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -25,6 +25,10 @@ PROTOCOL_FLOOR = date(2026, 7, 28)
 PROTOCOL_FLOOR_VERSION = "2026-07-28"
 MAX_PORT_BIND_ATTEMPTS = 10
 LOOPBACK_HOST_HEADER = "127.0.0.1:7683"
+# Since Task 1, `Settings` refuses `host="0.0.0.0"` under `auth_mode="none"` — the
+# live-server fixture below binds "0.0.0.0" to mirror the Docker default, so it
+# must configure a real auth mode too.
+LIVE_SERVER_TOKEN = "k" * 32
 
 
 @pytest.fixture
@@ -33,12 +37,13 @@ def asgi_app():
     # The SDK only auto-enables Host/Origin validation for a literal loopback
     # `host`, so this fixture must pass `transport_security` explicitly, exactly
     # like `server.main()` does, or it would silently test a less-protected app
-    # than what actually runs.
+    # than what actually runs. The allowlist itself now comes from `Settings`,
+    # not a hardcoded constant — `build_transport_security()` reads it live.
     return app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
         host="0.0.0.0",
-        transport_security=LOOPBACK_TRANSPORT_SECURITY,
+        transport_security=build_transport_security(),
     )
 
 
@@ -274,6 +279,9 @@ def live_http_server(tmp_path: Path):
             # any test noticing.
             "LAW_MCP_HOST": "0.0.0.0",
             "LAW_MCP_PORT": str(port),
+            # Required since Task 1: a non-loopback bind is refused under auth_mode="none".
+            "LAW_MCP_AUTH_MODE": "bearer",
+            "LAW_MCP_AUTH_TOKEN": LIVE_SERVER_TOKEN,
         }
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(
@@ -300,7 +308,14 @@ def live_http_server(tmp_path: Path):
 
 @pytest.mark.anyio
 async def test_live_http_discovery_tools_success_and_error(live_http_server: str) -> None:
-    async with Client(live_http_server) as client:
+    import httpx2
+    from mcp.client.streamable_http import streamable_http_client
+
+    transport = streamable_http_client(
+        live_http_server,
+        http_client=httpx2.AsyncClient(headers={"Authorization": f"Bearer {LIVE_SERVER_TOKEN}"}),
+    )
+    async with Client(transport) as client:
         assert date.fromisoformat(client.protocol_version) >= PROTOCOL_FLOOR
         tools = (await client.list_tools()).tools
         success = await client.call_tool(
@@ -339,6 +354,7 @@ async def test_live_server_enforces_allowlist_and_statelessness(live_http_server
         "Content-Type": "application/json",
         "Mcp-Method": "tools/list",
         "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+        "Authorization": f"Bearer {LIVE_SERVER_TOKEN}",
     }
     async with httpx.AsyncClient(timeout=10) as client:
         forged_host = await client.post(

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Literal
+from ipaddress import ip_address
+from pathlib import Path
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
@@ -16,15 +19,46 @@ FILTER_MAX_RECORDS_FLOOR = 1
 # institution, so its administrator needs a way to reach us that is not a ban.
 USER_AGENT_CONTACT = "https://github.com/numikel/law-scrapper-mcp"
 
+MIN_AUTH_TOKEN_BYTES = 32
+
+LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
+
+
+def _host_of(entry: str) -> str:
+    """Strip scheme, port and brackets from an allowlist entry."""
+    value = entry.strip()
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    if value.startswith("["):
+        return value[1 : value.index("]")] if "]" in value else value[1:]
+    # Bare IPv6 (contains multiple colons but no brackets): return unchanged
+    if value.count(":") > 1:
+        return value
+    return value.split(":")[0]
+
+
+def is_loopback_entry(entry: str) -> bool:
+    """Whether an allowlist entry or bind address stays inside the loopback."""
+    host = _host_of(entry).lower()
+    if host in {"localhost", "::1"}:
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
+
 
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
-    model_config = SettingsConfigDict(env_prefix="LAW_MCP_")
+    model_config = SettingsConfigDict(env_prefix="LAW_MCP_", hide_input_in_errors=True)
 
     # Transport
     transport: Literal["stdio", "streamable-http"] = "stdio"
-    host: str = "0.0.0.0"
+    # Loopback by default (D7). This is a safe bind, not an access-control
+    # mechanism — exposure is a deliberate act requiring an authentication mode.
+    host: str = "127.0.0.1"
     port: int = 7683
 
     @field_validator("transport", mode="before")
@@ -40,6 +74,72 @@ class Settings(BaseSettings):
             )
         raise ValueError(f"Nieobsługiwany transport '{value}'. Dozwolone wartości: 'stdio', 'streamable-http'.")
 
+    def resolve_auth_token(self) -> str:
+        """Return the bearer secret from whichever source is configured.
+
+        Read on demand rather than cached on the model: the validator needs it
+        before the model exists, and `build_auth()` needs it exactly once more.
+        """
+        if self.auth_token is not None:
+            return self.auth_token.get_secret_value().strip()
+        if self.auth_token_file is not None:
+            return self.auth_token_file.read_text(encoding="utf-8").strip()
+        return ""
+
+    @model_validator(mode="after")
+    def _enforce_security_boundary(self) -> Settings:
+        if self.auth_mode == "bearer":
+            if self.auth_token is not None and self.auth_token_file is not None:
+                raise ValueError(
+                    "LAW_MCP_AUTH_TOKEN i LAW_MCP_AUTH_TOKEN_FILE ustawione jednocześnie. "
+                    "Wybierz jedno źródło tokenu — milcząca precedencja ukryłaby podmianę sekretu."
+                )
+            if self.auth_token is None and self.auth_token_file is None:
+                raise ValueError("Tryb 'bearer' wymaga tokenu. Ustaw LAW_MCP_AUTH_TOKEN albo LAW_MCP_AUTH_TOKEN_FILE.")
+            try:
+                token = self.resolve_auth_token()
+            except OSError as error:
+                raise ValueError(
+                    f"Nie udało się odczytać LAW_MCP_AUTH_TOKEN_FILE ({self.auth_token_file}): {error}"
+                ) from error
+            if len(token.encode("utf-8")) < MIN_AUTH_TOKEN_BYTES:
+                raise ValueError(
+                    f"Token uwierzytelniający musi mieć co najmniej {MIN_AUTH_TOKEN_BYTES} bajtów UTF-8. "
+                    "Wygeneruj go poleceniem: openssl rand -base64 32"
+                )
+
+        if self.auth_mode == "oauth":
+            required = (
+                ("LAW_MCP_AUTH_ISSUER", self.auth_issuer),
+                ("LAW_MCP_AUTH_AUDIENCE", self.auth_audience),
+                ("LAW_MCP_AUTH_RESOURCE_SERVER_URL", self.auth_resource_server_url),
+            )
+            missing = [name for name, value in required if value is None]
+            if missing:
+                raise ValueError(
+                    f"Tryb 'oauth' wymaga zmiennych: {', '.join(missing)}. "
+                    "Serwer nie uruchomi się z niepełną konfiguracją OAuth."
+                )
+
+        if self.auth_mode == "none":
+            if self.transport == "streamable-http" and not is_loopback_entry(self.host):
+                raise ValueError(
+                    f"Bind '{self.host}' wykracza poza pętlę zwrotną przy wyłączonym uwierzytelnianiu. "
+                    "Ustaw LAW_MCP_AUTH_MODE na 'bearer' albo 'oauth', albo binduj na 127.0.0.1."
+                )
+            for name, entries in (
+                ("LAW_MCP_ALLOWED_HOSTS", self.allowed_hosts),
+                ("LAW_MCP_ALLOWED_ORIGINS", self.allowed_origins),
+            ):
+                remote = [entry for entry in entries if not is_loopback_entry(entry)]
+                if remote:
+                    raise ValueError(
+                        f"{name} zawiera wpisy spoza pętli zwrotnej ({', '.join(remote)}) "
+                        "przy wyłączonym uwierzytelnianiu. Ustaw LAW_MCP_AUTH_MODE."
+                    )
+
+        return self
+
     # Graceful shutdown window handed to uvicorn as `timeout_graceful_shutdown`.
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed
     # and the share of requests allowed to finish is settled in favour of a fast
@@ -48,6 +148,71 @@ class Settings(BaseSettings):
     # never collapses the value to zero. The deployment contract is
     # `stop_grace_period >= 2 * shutdown_grace` — see docker-compose.yml.
     shutdown_grace: float = Field(default=15.0, ge=1)
+
+    # Network boundary (F18). The defaults reproduce, value for value, the
+    # constant that used to be hardcoded in server.py:43-47 — introducing the
+    # fields changes nothing but the ability to override them.
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_HOSTS))
+    allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_ORIGINS))
+
+    # Authentication (F17)
+    auth_mode: Literal["none", "bearer", "oauth"] = "none"
+    auth_token: SecretStr | None = None
+    auth_token_file: Path | None = None
+    auth_issuer: AnyHttpUrl | None = None
+    auth_audience: str | None = None
+    auth_jwks_uri: AnyHttpUrl | None = None
+    auth_resource_server_url: AnyHttpUrl | None = None
+    auth_required_scopes: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # An allowlist handed to the decoder, never read from the token header:
+    # a decoder honouring `alg` accepts `none`, or HS256 verified with the
+    # public JWKS key the attacker already has.
+    auth_algorithms: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["RS256", "ES256"])
+    auth_jwks_cache_ttl: int = 3600
+
+    # Inbound rate limiting (F26). Outbound throttling towards api.sejm.gov.pl
+    # is a different budget in a different layer — see cluster 8.
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = Field(default=60, ge=1)
+    rate_limit_window: float = Field(default=60.0, gt=0)
+    rate_limit_burst: int = Field(default=10, ge=1)
+    trusted_proxies: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator(
+        "allowed_hosts",
+        "allowed_origins",
+        "auth_required_scopes",
+        "auth_algorithms",
+        "trusted_proxies",
+        mode="before",
+    )
+    @classmethod
+    def _accept_comma_separated_list(cls, value: object) -> object:
+        """Read a list setting from the environment as comma-separated text.
+
+        Without this, pydantic-settings decodes every complex field from the
+        environment as JSON, and does it inside the settings source — before any
+        validator on this model runs. `LAW_MCP_ALLOWED_HOSTS=mcp.example.com:*`
+        therefore died with a bare `SettingsError` naming `EnvSettingsSource`,
+        never reaching the Polish diagnostics below, and the reverse-proxy recipe
+        in README.md could not work as written. `NoDecode` on the fields hands us
+        the raw string instead, so both spellings are accepted here: JSON stays
+        valid for anyone already using it, comma-separated is what the docs show.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Not JSON after all. A bracketed IPv6 literal opens and closes
+                # with the same characters as a JSON array — `[::1]:*` is this
+                # project's own default allowlist entry, and a lone `[::1]` in
+                # LAW_MCP_TRUSTED_PROXIES is indistinguishable by shape. Falling
+                # through to the comma reading keeps those working.
+                pass
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     # API client
     api_timeout: float = 30.0
@@ -108,7 +273,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "3.1.2"
+    server_version: str = "4.0.0"
 
     @property
     def user_agent(self) -> str:
@@ -131,6 +296,23 @@ def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:
         MAX_PATTERN_LENGTH_FLOOR,
         MAX_PATTERN_LENGTH_CEILING,
         current.effective_max_pattern_length,
+    )
+
+
+def log_remote_bind_warning(current: Settings, log: logging.Logger) -> None:
+    """Warn when the HTTP listener reaches beyond the loopback.
+
+    Reaching this point means the configuration already passed validation, so
+    authentication is configured. The warning is not an error — it is the line
+    an operator greps for when asking what a container actually exposes.
+    """
+    if current.transport != "streamable-http" or is_loopback_entry(current.host):
+        return
+    log.warning(
+        "Serwer HTTP nasłuchuje na %s:%d — poza pętlą zwrotną. Tryb uwierzytelniania: %s.",
+        current.host,
+        current.port,
+        current.auth_mode,
     )
 
 

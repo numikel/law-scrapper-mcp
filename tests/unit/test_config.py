@@ -44,7 +44,7 @@ class TestSettingsDefaults:
     def test_host_and_port_defaults(self):
         """Test default host and port."""
         settings = Settings()
-        assert settings.host == "0.0.0.0"
+        assert settings.host == "127.0.0.1"
         assert settings.port == 7683
 
     def test_api_timeout_default(self):
@@ -118,7 +118,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "3.1.2"
+        assert settings.server_version == "4.0.0"
 
 
 class TestSettingsFromEnvironment:

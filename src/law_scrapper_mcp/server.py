@@ -10,15 +10,17 @@ from contextlib import asynccontextmanager
 import uvicorn
 from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
+from law_scrapper_mcp.auth import build_auth
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
-from law_scrapper_mcp.config import log_pattern_limit_clamping, settings
+from law_scrapper_mcp.config import log_pattern_limit_clamping, log_remote_bind_warning, settings
 from law_scrapper_mcp.context import AppContext
+from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -35,16 +37,20 @@ from law_scrapper_mcp.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
-# The SDK only auto-enables DNS-rebinding protection when `host` is literally
-# "127.0.0.1"/"localhost"/"::1" (mcp.server.lowlevel.server.streamable_http_app).
-# This project binds "0.0.0.0" for Docker port publishing, which would silently
-# disable Host/Origin validation. Pass this explicitly to keep the loopback-only
-# posture regardless of the configured bind address.
-LOOPBACK_TRANSPORT_SECURITY = TransportSecuritySettings(
-    enable_dns_rebinding_protection=True,
-    allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
-    allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
-)
+
+def build_transport_security() -> TransportSecuritySettings:
+    """Host/Origin allowlist assembled from configuration (F18).
+
+    The SDK only auto-enables DNS-rebinding protection for a literal loopback
+    `host`, so this is passed explicitly and stays on regardless of the bind
+    address. The defaults reproduce the constant this replaced; widening them
+    is refused at startup unless authentication is configured (D6).
+    """
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=list(settings.allowed_hosts),
+        allowed_origins=list(settings.allowed_origins),
+    )
 
 
 class _HealthState:
@@ -218,11 +224,15 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         logger.info("Law Scrapper MCP Server stopped")
 
 
+_auth_settings, _token_verifier = build_auth(settings)
+
 app = MCPServer[AppContext](
     settings.server_name,
     version=settings.server_version,
     instructions=SERVER_INSTRUCTIONS,
     lifespan=lifespan,
+    auth=_auth_settings,
+    token_verifier=_token_verifier,
 )
 
 register_all_tools(app)
@@ -247,23 +257,42 @@ async def health(_request: Request) -> JSONResponse:
     )
 
 
-def build_http_app() -> Starlette:
-    """Build the Starlette app served over Streamable HTTP.
+def build_http_app() -> ASGIApp:
+    """Build the ASGI app served over Streamable HTTP.
 
     Mirrors `MCPServer.run_streamable_http_async`
     (mcp/server/mcpserver/server.py:1070-1089) minus the uvicorn wiring, which
-    this project owns so that `timeout_graceful_shutdown` can be set at all —
-    the SDK builds its `uvicorn.Config` internally from host, port and log level
-    and exposes no channel for the remaining options.
+    this project owns so that `timeout_graceful_shutdown` can be set at all.
 
-    Re-check this function against that SDK method on every `mcp` upgrade:
-    a changed `streamable_http_app()` signature would surface here first.
+    Re-check this function against that SDK method on every `mcp` upgrade: a
+    changed `streamable_http_app()` signature would surface here first. Since
+    v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
+    off the server instance (server.py:1241), not passed here.
     """
-    return app.streamable_http_app(
+    http_app: ASGIApp = app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
-        transport_security=LOOPBACK_TRANSPORT_SECURITY,
+        transport_security=build_transport_security(),
         host=settings.host,
+    )
+    if not settings.rate_limit_enabled:
+        # Still stripped: the credential must not reach the verifier on an
+        # unmetered path regardless of whether request budgets are switched on.
+        return ExemptPathCredentialStripper(http_app)
+    # Wrapping from the outside means the cheapest check runs first: the actual
+    # order is rate limiting → authentication → Host/Origin validation (D13).
+    # `RequireAuthMiddleware` wraps the `/mcp` route directly and is reached
+    # before Host/Origin validation, which sits deeper inside the streamable
+    # transport — a consequence of the SDK's own layering, not a choice this
+    # project makes. The SDK offers no injection point to reorder it.
+    return ExemptPathCredentialStripper(
+        RateLimitMiddleware(
+            http_app,
+            requests=settings.rate_limit_requests,
+            window=settings.rate_limit_window,
+            burst=settings.rate_limit_burst,
+            trusted_proxies=settings.trusted_proxies,
+        )
     )
 
 
@@ -277,6 +306,38 @@ def build_uvicorn_config() -> uvicorn.Config:
         # uvicorn's knob is whole seconds; the setting is a float so that it
         # reads like the other timeouts in `Settings`.
         timeout_graceful_shutdown=int(settings.shutdown_grace),
+        # Off unconditionally, against uvicorn's default of True.
+        # ProxyHeadersMiddleware wraps the app from the outside and writes the
+        # `X-Forwarded-For` value into `scope["client"]` *without validating it
+        # as an address*, so `_client_key` would take it as the peer and never
+        # reach its own address check. One host inside a trusted range could
+        # then mint a bucket per request with forged keys and never be
+        # throttled — the criterion 11 bypass, reintroduced above the layer
+        # meant to prevent it.
+        #
+        # Tying this to `trusted_proxies` was tried and rejected for exactly
+        # that reason: it switched uvicorn's unvalidated rewrite on together
+        # with our validated one, and uvicorn's runs first. `_client_key` owns
+        # `X-Forwarded-For` end to end instead. Nothing else needs the rewrite —
+        # the SDK builds its auth URLs from configured settings, never from the
+        # request — so the only cost is that uvicorn's access log records the
+        # proxy's address rather than the client's.
+        #
+        # `forwarded_allow_ips` is passed explicitly even though the middleware
+        # is off, so the bare FORWARDED_ALLOW_IPS environment variable, which
+        # uvicorn reads outside this project's namespace
+        # (uvicorn/config.py:336-337), cannot widen anything unseen.
+        proxy_headers=False,
+        forwarded_allow_ips=[],
+        # No route here speaks WebSocket, and leaving uvicorn's "auto" in place
+        # makes that depend on whether an optional package happens to be
+        # installed. It matters because the two middlewares below only handle
+        # `http` scopes, while starlette's AuthenticationMiddleware also handles
+        # `websocket` and calls the verifier on it: an upgrade request would
+        # reach `verify_token` past both the budget and the credential strip.
+        # Today `websockets` is absent so uvicorn degrades the upgrade to plain
+        # http, but that is an accident of the dependency tree, not a decision.
+        ws="none",
     )
 
 
@@ -288,6 +349,7 @@ def run_streamable_http() -> None:
 def main():
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
+    log_remote_bind_warning(settings, logger)
     if settings.transport == "streamable-http":
         run_streamable_http()
     else:

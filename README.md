@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-3.1.2-orange.svg)
+![Version](https://img.shields.io/badge/version-4.0.0-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -110,8 +110,9 @@ Run the server on HTTP with streamable-http transport:
 # Run with HTTP transport on port 7683
 LAW_MCP_TRANSPORT=streamable-http uv run python -m law_scrapper_mcp
 
-# Or specify custom host and port
-LAW_MCP_TRANSPORT=streamable-http LAW_MCP_HOST=0.0.0.0 LAW_MCP_PORT=8080 uv run python -m law_scrapper_mcp
+# Or specify a custom port (the host stays on loopback unless you configure
+# an authentication mode — see "Authenticated remote deployment" below)
+LAW_MCP_TRANSPORT=streamable-http LAW_MCP_PORT=8080 uv run python -m law_scrapper_mcp
 ```
 
 Configure in your MCP client:
@@ -158,10 +159,16 @@ docker compose -f docker-compose.yml up
 
 All settings are configured via environment variables with the `LAW_MCP_` prefix:
 
+The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
+`LAW_MCP_TRUSTED_PROXIES`, `LAW_MCP_AUTH_REQUIRED_SCOPES` and
+`LAW_MCP_AUTH_ALGORITHMS` — accept either a comma-separated value
+(`a:*, b:*`, the form used throughout this document) or a JSON array
+(`["a:*", "b:*"]`). Both are equivalent; surrounding whitespace is trimmed.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LAW_MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable-http` |
-| `LAW_MCP_HOST` | `0.0.0.0` | HTTP server host (when using streamable-http) |
+| `LAW_MCP_HOST` | `127.0.0.1` | HTTP server host (when using streamable-http). Binding beyond loopback requires `LAW_MCP_AUTH_MODE` — see "Authenticated remote deployment" |
 | `LAW_MCP_PORT` | `7683` | HTTP server port (when using streamable-http) |
 | `LAW_MCP_SHUTDOWN_GRACE` | `15` | Graceful shutdown window in seconds for the HTTP server. Keep `stop_grace_period` in `docker-compose.yml` at or above twice this value — nothing in the code enforces the relation. |
 | `LAW_MCP_API_TIMEOUT` | `30.0` | HTTP request timeout in seconds |
@@ -182,6 +189,16 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | `3` | Test calls in half-open state |
 | `LAW_MCP_MAX_PATTERN_LENGTH` | `512` | Max `filter_results` pattern length, clamped to 64-4096 |
 | `LAW_MCP_FILTER_MAX_RECORDS` | `100` | Max records `filter_results` processes per call; floor 1, no ceiling (very high values lengthen the synchronous but linear scan) |
+| `LAW_MCP_ALLOWED_HOSTS` | `127.0.0.1:*, localhost:*, [::1]:*` | `Host` header allowlist for streamable-http (DNS-rebinding protection). Widening beyond loopback requires an auth mode — see "Authenticated remote deployment" |
+| `LAW_MCP_ALLOWED_ORIGINS` | `http://127.0.0.1:*, http://localhost:*, http://[::1]:*` | `Origin` header allowlist for streamable-http. Same auth-mode requirement as `LAW_MCP_ALLOWED_HOSTS` |
+| `LAW_MCP_AUTH_JWKS_URI` | unset | Override the JWKS URI discovered from `LAW_MCP_AUTH_ISSUER`'s OIDC discovery document; needed only when a provider's discovery document omits or misreports it |
+| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. Meaningful in `oauth` mode only: under `bearer` the static verifier grants exactly these scopes to every holder of the token, so the check is satisfied by construction and confers no authorization |
+| `LAW_MCP_AUTH_ALGORITHMS` | `RS256, ES256` | JWT signature algorithm allowlist passed to the decoder; never read from the token header |
+| `LAW_MCP_AUTH_JWKS_CACHE_TTL` | `3600` | Seconds a fetched JWKS key set is cached before re-fetching |
+| `LAW_MCP_RATE_LIMIT_ENABLED` | `true` | Whether the per-client rate limiter wraps the HTTP app |
+| `LAW_MCP_RATE_LIMIT_REQUESTS` | `60` | Requests allowed per `LAW_MCP_RATE_LIMIT_WINDOW` before throttling |
+| `LAW_MCP_RATE_LIMIT_WINDOW` | `60.0` | Rate limit window in seconds |
+| `LAW_MCP_RATE_LIMIT_BURST` | `10` | Token bucket capacity — how many requests can arrive back-to-back before `429` |
 | `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 
@@ -205,6 +222,69 @@ export LAW_MCP_PORT=7683
 export LAW_MCP_LOG_LEVEL=DEBUG
 export LAW_MCP_CACHE_METADATA_TTL=86400
 ```
+
+### Authenticated remote deployment
+
+The HTTP transport binds `127.0.0.1` by default and refuses to start on any
+other address unless an authentication mode is configured. Two modes exist and
+neither falls back to the other.
+
+**Bearer token** — local and simple deployments:
+
+```bash
+export LAW_MCP_AUTH_TOKEN=$(openssl rand -base64 32)   # min. 32 bytes
+LAW_MCP_TRANSPORT=streamable-http \
+LAW_MCP_HOST=0.0.0.0 \
+LAW_MCP_AUTH_MODE=bearer \
+  law-scrapper
+```
+
+In production prefer `LAW_MCP_AUTH_TOKEN_FILE=/run/secrets/law_mcp_token` —
+an environment variable is visible in `docker inspect` and `/proc/<pid>/environ`.
+Setting both sources is a startup error, not a precedence rule.
+
+**OAuth 2.1 / OIDC** — corporate deployments. Works with any provider publishing
+OIDC discovery and JWKS:
+
+| Provider | `LAW_MCP_AUTH_ISSUER` |
+|---|---|
+| Microsoft Entra ID | `https://login.microsoftonline.com/<tenant>/v2.0` |
+| Google | `https://accounts.google.com` |
+| AWS Cognito | `https://cognito-idp.<region>.amazonaws.com/<pool-id>` |
+| Okta | `https://<org>.okta.com/oauth2/<server-id>` |
+| Auth0 | `https://<tenant>.auth0.com/` |
+
+```bash
+LAW_MCP_AUTH_MODE=oauth \
+LAW_MCP_AUTH_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0 \
+LAW_MCP_AUTH_AUDIENCE=api://law-scrapper \
+LAW_MCP_AUTH_RESOURCE_SERVER_URL=https://mcp.example.com/mcp \
+  law-scrapper
+```
+
+**Reachable through a reverse proxy** — `LAW_MCP_ALLOWED_HOSTS` and
+`LAW_MCP_ALLOWED_ORIGINS` default to loopback-only (F18): a request whose
+`Host` or `Origin` header doesn't match gets `421`/`403` from the SDK's
+DNS-rebinding protection, even with a valid token. This default is
+deliberate — widening the allowlist is only permitted once an auth mode is
+configured (enforced at startup, D6). A reverse proxy that preserves the
+original `Host` (nginx's `proxy_set_header Host $host`, Caddy's default)
+needs both variables set to the public name, for either auth mode above:
+
+```bash
+LAW_MCP_ALLOWED_HOSTS='mcp.example.com:*' \
+LAW_MCP_ALLOWED_ORIGINS='https://mcp.example.com' \
+  law-scrapper
+```
+
+Providers issuing opaque tokens (GitHub) are not supported — they would require
+RFC 7662 introspection. TLS termination stays with the reverse proxy.
+`/health` is intentionally unauthenticated so container healthchecks work; it
+exposes the server version and circuit-breaker state.
+
+Rate limiting is always on for HTTP: `60` requests per `60 s`, burst `10`.
+Behind a proxy, set `LAW_MCP_TRUSTED_PROXIES` (addresses or CIDRs) — otherwise
+`X-Forwarded-For` is ignored and every client shares one bucket.
 
 ## Tools reference
 
@@ -532,9 +612,9 @@ law-scrapper-mcp/
 
 ### Security and deployment
 
-When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
+The server binds `127.0.0.1` by default; binding beyond loopback (as Docker port publishing requires) fails at startup unless an authentication mode is configured — see "Authenticated remote deployment" above. When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination — this project verifies bearer tokens and OAuth 2.1/OIDC access tokens, but does not terminate TLS itself. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
 
-**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). This project defaults `LAW_MCP_HOST` to `0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`LOOPBACK_TRANSPORT_SECURITY`) so requests are still validated against a loopback-only allowlist — `Host` outside `127.0.0.1:*` / `localhost:*` / `[::1]:*` gets `421`, `Origin` outside the matching `http://` variants gets `403` — independent of the bind address. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It does not add authentication or make the HTTP transport safe to expose beyond loopback; that remains a separate, not-yet-scoped project.
+**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). `docker-compose.yml` sets `LAW_MCP_HOST=0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`build_transport_security()`) so requests are still validated against the configured allowlist — `Host` outside it gets `421`, `Origin` outside it gets `403` — independent of the bind address. The allowlist defaults to loopback only (`127.0.0.1:*` / `localhost:*` / `[::1]:*` and the matching `http://` origins) and is widened through `LAW_MCP_ALLOWED_HOSTS` / `LAW_MCP_ALLOWED_ORIGINS`, which startup validation permits only once an authentication mode is configured. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It is a defense-in-depth layer, not a substitute for the authentication mode required to bind beyond loopback in the first place.
 
 One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version — and, since it now also reports the circuit breaker's `circuit_state` and `failure_count`, the health of the Sejm API integration — to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
 
@@ -562,12 +642,14 @@ docker build -t law-scrapper-mcp .
 # Run with STDIO transport
 docker run -it law-scrapper-mcp
 
-# Run with HTTP transport
-docker run -it -p 7683:7683 -e LAW_MCP_TRANSPORT=streamable-http law-scrapper-mcp
-
-# With custom settings
+# Run with HTTP transport, published on the host — the image no longer
+# defaults LAW_MCP_HOST to 0.0.0.0, so publishing the port beyond loopback
+# requires setting the host explicitly together with an authentication mode
 docker run -it -p 7683:7683 \
   -e LAW_MCP_TRANSPORT=streamable-http \
+  -e LAW_MCP_HOST=0.0.0.0 \
+  -e LAW_MCP_AUTH_MODE=bearer \
+  -e LAW_MCP_AUTH_TOKEN="$(openssl rand -base64 32)" \
   -e LAW_MCP_LOG_LEVEL=DEBUG \
   law-scrapper-mcp
 ```
@@ -577,6 +659,9 @@ docker run -it -p 7683:7683 \
 Deployment with docker-compose:
 
 ```bash
+# LAW_MCP_AUTH_TOKEN is required — docker-compose.yml fails fast without it
+export LAW_MCP_AUTH_TOKEN=$(openssl rand -base64 32)
+
 # Start service
 docker compose up -d
 

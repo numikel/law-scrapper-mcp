@@ -302,16 +302,24 @@ def build_uvicorn_config() -> uvicorn.Config:
         # uvicorn's knob is whole seconds; the setting is a float so that it
         # reads like the other timeouts in `Settings`.
         timeout_graceful_shutdown=int(settings.shutdown_grace),
-        # Off on purpose, against uvicorn's default of True. Its
-        # ProxyHeadersMiddleware wraps the application from the outside, so it
-        # rewrites `scope["client"]` from `X-Forwarded-For` before any of our
-        # middleware runs — for every peer matching its own `forwarded_allow_ips`
-        # (default "127.0.0.1"), which is exactly the local reverse proxy this
-        # project is deployed behind. That would silently overrule
-        # LAW_MCP_TRUSTED_PROXIES: the rate limiter would key off a header the
-        # operator never authorised, which is what criterion 11 forbids. One
-        # gate decides whether the header may be believed, and it is ours.
-        proxy_headers=False,
+        # Both derived from LAW_MCP_TRUSTED_PROXIES, so one setting decides who
+        # may speak for a client. uvicorn otherwise defaults `proxy_headers` to
+        # True and wraps the app in ProxyHeadersMiddleware from the outside,
+        # rewriting `scope["client"]` from `X-Forwarded-For` before any of our
+        # middleware runs — for every peer matching `forwarded_allow_ips`, which
+        # falls back to "127.0.0.1". Since this server binds loopback by
+        # default, that is *every* client in the default configuration, not just
+        # a reverse proxy: any local process could pick its own rate-limit
+        # bucket, which is what criterion 11 forbids.
+        #
+        # Passing both explicitly also closes a channel outside this project's
+        # namespace: uvicorn reads FORWARDED_ALLOW_IPS straight from the
+        # environment (uvicorn/config.py:336-337), so an unrelated variable
+        # could otherwise widen the trust boundary with no LAW_MCP_ setting
+        # showing it. An empty list disables the rewrite; None would restore
+        # uvicorn's own default, so the list is always passed.
+        proxy_headers=bool(settings.trusted_proxies),
+        forwarded_allow_ips=list(settings.trusted_proxies),
     )
 
 

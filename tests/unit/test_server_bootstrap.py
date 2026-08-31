@@ -132,17 +132,35 @@ def test_main_stdio_branch_is_untouched(monkeypatch) -> None:
     assert calls == [{"transport": "stdio"}]
 
 
-def test_uvicorn_does_not_rewrite_the_client_from_forwarded_headers() -> None:
+def test_uvicorn_does_not_rewrite_the_client_by_default() -> None:
     """`LAW_MCP_TRUSTED_PROXIES` must be the only gate on `X-Forwarded-For`.
 
     uvicorn defaults `proxy_headers` to True and wraps the application in
     `ProxyHeadersMiddleware` from the outside, so for any peer matching its own
-    `forwarded_allow_ips` (default `127.0.0.1` — a local reverse proxy, which is
-    the documented deployment) it rewrites `scope["client"]` from the header
-    before our rate limiter reads it. The limiter would then key off a header no
-    operator authorised, which is precisely what criterion 11 forbids, and the
-    unit tests would not notice because they drive the ASGI app directly.
+    `forwarded_allow_ips` — which falls back to `127.0.0.1`, and this server
+    binds loopback by default — it rewrites `scope["client"]` from the header
+    before our rate limiter reads it. Any local process could then choose its
+    own bucket, which is what criterion 11 forbids. The unit tests would not
+    notice, because they drive the ASGI app directly with uvicorn out of the
+    stack.
     """
     config = server_module.build_uvicorn_config()
 
     assert config.proxy_headers is False
+    assert config.forwarded_allow_ips == []
+
+
+def test_uvicorn_trusts_exactly_the_configured_proxies(monkeypatch) -> None:
+    """With proxies declared, uvicorn may resolve the client — for those only.
+
+    Keeping the two in step preserves correct access logs and `scope["scheme"]`
+    behind a TLS-terminating proxy, and passing `forwarded_allow_ips` explicitly
+    stops the bare `FORWARDED_ALLOW_IPS` environment variable — read by uvicorn
+    outside this project's namespace — from widening the boundary unseen.
+    """
+    monkeypatch.setattr(server_module.settings, "trusted_proxies", ["10.0.0.1"])
+
+    config = server_module.build_uvicorn_config()
+
+    assert config.proxy_headers is True
+    assert config.forwarded_allow_ips == ["10.0.0.1"]

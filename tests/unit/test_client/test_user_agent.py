@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 
 import pytest
+import respx
+from httpx import Response
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
@@ -16,6 +18,10 @@ CLIENT_PACKAGE = Path(__file__).parents[3] / "src" / "law_scrapper_mcp"
 # Matches a hardcoded "law-scrapper-mcp/<version>" literal — the exact shape that
 # drifted two major versions behind the real one before F52 was fixed.
 VERSIONED_LITERAL = re.compile(r"law-scrapper-mcp/\d")
+
+# The full shape the API administrator sees: name, a three-part version, and a contact
+# channel they can use instead of a ban.
+USER_AGENT_ON_THE_WIRE = re.compile(r"^law-scrapper-mcp/\d+\.\d+\.\d+ \(\+https?://.+\)$")
 
 
 def test_user_agent_reports_the_configured_version() -> None:
@@ -60,3 +66,28 @@ def test_no_module_hardcodes_a_versioned_user_agent() -> None:
         if VERSIONED_LITERAL.search(line)
     ]
     assert offenders == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_the_outgoing_request_carries_the_settings_user_agent() -> None:
+    """Criterion 12: the header must reach the wire, with the version we really run.
+
+    The original F52 defect was not a missing header but a hardcoded version drifting
+    away from the real one, so the assertion ties the sent value back to
+    `settings.server_version` rather than to a literal.
+    """
+    settings = Settings()
+    route = respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(
+        return_value=Response(200, json={"ELI": "DU/2024/1"})
+    )
+    api = SejmApiClient(cache=TTLCache(max_entries=1), user_agent=settings.user_agent)
+    await api.start()
+    try:
+        await api.get_json("acts/DU/2024/1")
+    finally:
+        await api.close()
+
+    sent = route.calls.last.request.headers["User-Agent"]
+    assert USER_AGENT_ON_THE_WIRE.match(sent), sent
+    assert sent.startswith(f"law-scrapper-mcp/{settings.server_version} ")

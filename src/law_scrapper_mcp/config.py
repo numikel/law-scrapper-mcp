@@ -177,7 +177,17 @@ class Settings(BaseSettings):
 
     # API client
     api_timeout: float = 30.0
-    api_max_concurrent: int = 10
+    # Two classes of outbound traffic (D4): this bounds the light JSON calls,
+    # `api_max_concurrent_content` the heavy HTML/PDF downloads. The sum is the peak
+    # the Sejm API sees, and the split keeps it at the pre-split ten.
+    api_max_concurrent: int = Field(default=8, ge=1)
+    api_max_concurrent_content: int = Field(default=2, ge=1)
+    # Egress pace (D1). Concurrency alone bounds nothing: a sequential loop reaches any
+    # rate at all, because a released slot is taken again immediately. A zero rate is
+    # rejected rather than clamped — it would wedge every request on a bucket that
+    # never refills.
+    api_rate_per_second: float = Field(default=5.0, gt=0)
+    api_rate_burst: int = Field(default=10, ge=1)
     # Bounded so that a misconfigured value degrades loudly at startup instead of
     # silently turning the retry loop into zero attempts.
     api_max_attempts: int = Field(default=3, ge=1)

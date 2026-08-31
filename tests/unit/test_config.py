@@ -55,7 +55,7 @@ class TestSettingsDefaults:
     def test_api_concurrency_defaults(self):
         """Test default API concurrency settings."""
         settings = Settings()
-        assert settings.api_max_concurrent == 10
+        assert settings.api_max_concurrent == 8
 
     def test_dead_retry_knob_is_gone(self):
         """api_max_retries never reached the client; keeping it advertised a lie.
@@ -83,6 +83,59 @@ class TestSettingsDefaults:
         monkeypatch.setenv("LAW_MCP_API_MAX_ATTEMPTS", value)
         with pytest.raises(ValidationError):
             Settings()
+
+    def test_api_concurrency_defaults_split_the_previous_budget(self):
+        """Criterion 14: the split rebalances the peak, it does not raise it.
+
+        `api_max_concurrent` narrows to the LIGHT class (JSON), and heavy document
+        downloads get their own two slots — so a run of PDF fetches can never take the
+        last slot a search would have used.
+        """
+        settings = Settings()
+        assert settings.api_max_concurrent == 8
+        assert settings.api_max_concurrent_content == 2
+        assert settings.api_max_concurrent + settings.api_max_concurrent_content == 10
+
+    def test_api_rate_defaults(self):
+        """5 rps with a burst of ten: one fan-out of ten calls pays nothing, a second
+        one within the same second is braked — which is the loop F27 guards against."""
+        settings = Settings()
+        assert settings.api_rate_per_second == pytest.approx(5.0)
+        assert settings.api_rate_burst == 10
+
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_api_rate_per_second_must_be_positive(self, monkeypatch, value):
+        """Criterion 3: a zero rate must fail at startup, not turn the client into a
+        bucket that never refills and a server that never answers."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_PER_SECOND", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_api_rate_burst_below_one_is_rejected(self, monkeypatch, value):
+        """A bucket that cannot hold one whole token never admits a request."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_BURST", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_api_max_concurrent_content_below_one_is_rejected(self, monkeypatch, value):
+        """Zero heavy slots would deadlock every act-content download."""
+        monkeypatch.setenv("LAW_MCP_API_MAX_CONCURRENT_CONTENT", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_api_rate_settings_come_from_the_environment(self, monkeypatch):
+        """The operator's one useful lever when the API admin asks us to slow down."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_PER_SECOND", "2.5")
+        monkeypatch.setenv("LAW_MCP_API_RATE_BURST", "4")
+        monkeypatch.setenv("LAW_MCP_API_MAX_CONCURRENT_CONTENT", "1")
+
+        settings = Settings()
+
+        assert settings.api_rate_per_second == pytest.approx(2.5)
+        assert settings.api_rate_burst == 4
+        assert settings.api_max_concurrent_content == 1
 
     @pytest.mark.parametrize("value", ["0", "-0.5"])
     def test_api_retry_budget_must_be_positive(self, monkeypatch, value):

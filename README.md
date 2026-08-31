@@ -172,7 +172,10 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_PORT` | `7683` | HTTP server port (when using streamable-http) |
 | `LAW_MCP_SHUTDOWN_GRACE` | `15` | Graceful shutdown window in seconds for the HTTP server. Keep `stop_grace_period` in `docker-compose.yml` at or above twice this value — nothing in the code enforces the relation. |
 | `LAW_MCP_API_TIMEOUT` | `30.0` | HTTP request timeout in seconds |
-| `LAW_MCP_API_MAX_CONCURRENT` | `10` | Maximum concurrent API requests |
+| `LAW_MCP_API_MAX_CONCURRENT` | `8` | Concurrent light API requests (JSON metadata and search) |
+| `LAW_MCP_API_MAX_CONCURRENT_CONTENT` | `2` | Concurrent heavy API requests (act HTML and PDF downloads) |
+| `LAW_MCP_API_RATE_PER_SECOND` | `5.0` | Sustained outbound request rate towards the Sejm API |
+| `LAW_MCP_API_RATE_BURST` | `10` | Requests allowed back-to-back before the rate applies |
 | `LAW_MCP_API_MAX_ATTEMPTS` | `3` | Attempts per operation, retries included |
 | `LAW_MCP_API_RETRY_BUDGET` | `45.0` | Seconds the retry sequence of one operation may plan to wait |
 | `LAW_MCP_CACHE_METADATA_TTL` | `86400` | Metadata cache TTL (24 hours) |

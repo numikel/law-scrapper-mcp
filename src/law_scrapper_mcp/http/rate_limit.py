@@ -59,8 +59,12 @@ class RateLimitMiddleware:
         self._lock = asyncio.Lock()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope.get("path") in EXEMPT_PATHS:
+        if scope["type"] != "http":
             await self._app(scope, receive, send)
+            return
+
+        if scope.get("path") in EXEMPT_PATHS:
+            await self._app(_without_authorization(scope), receive, send)
             return
 
         allowed, retry_after = await self._consume(self._client_key(scope))
@@ -107,7 +111,13 @@ class RateLimitMiddleware:
                 # Last entry, per spec §4.5. With a single trusted proxy — the
                 # deployment this exists for — that entry is the client.
                 forwarded = value.decode("latin-1").split(",")[-1].strip()
-                if forwarded:
+                # Only an address may become a bucket key. A proxy that forwards
+                # the client's own header instead of appending to it would
+                # otherwise let a caller mint an unbounded number of buckets,
+                # each keyed by a string it chooses and sized up to the header
+                # limit. Falling back to the peer shares the proxy's bucket,
+                # which throttles harder than intended rather than less.
+                if _is_ip_address(forwarded):
                     return forwarded
         return peer
 
@@ -119,3 +129,34 @@ class RateLimitMiddleware:
         except ValueError:
             return False
         return any(address in network for network in self._trusted)
+
+
+def _is_ip_address(value: str) -> bool:
+    """Whether a forwarded-for entry is an address rather than free text."""
+    try:
+        ip_address(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _without_authorization(scope: Scope) -> Scope:
+    """Strip the credential from a request on an exempt path.
+
+    Exemption from the limiter and exemption from the token verifier are two
+    different boundaries, and the SDK draws them differently: it mounts its
+    authentication backend as application-level middleware, so a token presented
+    on `/health` is verified even though `RequireAuthMiddleware` guards only
+    `/mcp`. That put the verifier on the one route with no request budget. In
+    `oauth` mode an unrecognised `kid` makes PyJWKClient refetch the whole key
+    set, so an anonymous loop over `/health` became unmetered outbound traffic
+    against the operator's identity provider — the denial of service F26 exists
+    to prevent, entering through the path F26 deliberately exempts.
+
+    Nothing behind `/health` reads the header, so dropping it costs nothing.
+    """
+    headers = scope.get("headers", [])
+    kept = [(name, value) for name, value in headers if name != b"authorization"]
+    if len(kept) == len(headers):
+        return scope
+    return {**scope, "headers": kept}

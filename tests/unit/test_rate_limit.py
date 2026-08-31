@@ -106,3 +106,82 @@ def test_non_http_scope_passes_through() -> None:
     client = build_client()
     with client:  # entering the context manager runs the lifespan scope
         assert client.get("/mcp").status_code == 200
+
+
+def build_header_spy_client(**overrides) -> tuple[TestClient, list[list[str]]]:
+    """A client whose inner app records the header names it was handed."""
+    seen: list[list[str]] = []
+
+    async def _record(request):
+        seen.append(sorted(request.headers.keys()))
+        return JSONResponse({"ok": True})
+
+    kwargs = {"requests": 5, "window": 60.0, "burst": 5, "trusted_proxies": []}
+    kwargs.update(overrides)
+    inner = Starlette(routes=[Route("/mcp", _record, methods=["GET"]), Route("/health", _record)])
+    return TestClient(RateLimitMiddleware(inner, **kwargs), client=("127.0.0.1", 50000)), seen
+
+
+def test_health_reaches_the_app_without_the_authorization_header() -> None:
+    """`/health` is exempt from the limiter, so it must not reach the verifier.
+
+    The SDK mounts its authentication backend as application-level middleware,
+    so a token presented here would be verified on the one route with no request
+    budget — in `oauth` mode an unknown `kid` makes PyJWKClient refetch the key
+    set, turning an anonymous loop over `/health` into unmetered outbound
+    traffic against the operator's identity provider.
+    """
+    client, seen = build_header_spy_client()
+
+    response = client.get("/health", headers={"Authorization": "Bearer some.jwt.value"})
+
+    assert response.status_code == 200
+    assert "authorization" not in seen[0]
+
+
+def test_mcp_keeps_the_authorization_header() -> None:
+    """Stripping is confined to exempt paths — the counter-test to the above."""
+    client, seen = build_header_spy_client()
+
+    client.get("/mcp", headers={"Authorization": "Bearer some.jwt.value"})
+
+    assert "authorization" in seen[0]
+
+
+def test_non_address_forwarded_for_falls_back_to_the_peer() -> None:
+    """A forwarded value that is not an address must not become a bucket key.
+
+    A proxy that forwards the caller's own header instead of appending to it
+    would otherwise let one client mint an unbounded number of buckets, each
+    keyed by a string it chooses. Sharing the peer's bucket throttles harder
+    than intended, which is the safe direction to be wrong in.
+    """
+    middleware = RateLimitMiddleware(
+        Starlette(routes=[Route("/mcp", _ok, methods=["GET"])]),
+        requests=5,
+        window=60.0,
+        burst=5,
+        trusted_proxies=["127.0.0.0/8"],
+    )
+    client = TestClient(middleware, client=("127.0.0.1", 50000))
+
+    for junk in ("not-an-address", "a" * 400, "unknown"):
+        client.get("/mcp", headers={"X-Forwarded-For": junk})
+
+    assert middleware._buckets.keys() == {"127.0.0.1"}
+
+
+def test_address_forwarded_for_still_becomes_the_key() -> None:
+    """The counter-test: a real address from a trusted peer is still honoured."""
+    middleware = RateLimitMiddleware(
+        Starlette(routes=[Route("/mcp", _ok, methods=["GET"])]),
+        requests=5,
+        window=60.0,
+        burst=5,
+        trusted_proxies=["127.0.0.0/8"],
+    )
+    client = TestClient(middleware, client=("127.0.0.1", 50000))
+
+    client.get("/mcp", headers={"X-Forwarded-For": "203.0.113.7"})
+
+    assert middleware._buckets.keys() == {"203.0.113.7"}

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Outbound politeness towards `api.sejm.gov.pl` (findings F27, F30, F52, F55). No MCP tool
+changes signature or response shape.
+
+### Added
+
+- **Egress rate limiting** — A token bucket now bounds how fast requests leave for the Sejm
+  API, on top of the existing concurrency bound. Configurable with
+  `LAW_MCP_API_RATE_PER_SECOND` (default `5.0`) and `LAW_MCP_API_RATE_BURST` (default `10`).
+  A `Retry-After` sent by the API now pauses the whole client rather than each failing
+  request separately, so honouring it no longer ends in a synchronised retry burst. The pause
+  is capped at 60 seconds regardless of the header's requested duration, so a large or
+  misconfigured `Retry-After` cannot silently wedge every in-flight tool call.
+- **Separate concurrency budget for content downloads** — `LAW_MCP_API_MAX_CONCURRENT_CONTENT`
+  (default `2`) governs act HTML and PDF downloads, so a run of document fetches can no longer
+  occupy every slot and stall concurrent searches.
+
+### Changed
+
+- **`LAW_MCP_API_MAX_CONCURRENT` default lowered from `10` to `8`,** and its meaning narrowed to
+  light JSON requests. Together with the new `LAW_MCP_API_MAX_CONCURRENT_CONTENT` of `2` the peak
+  concurrency the API sees is unchanged at ten. Deployments that relied on the default now get
+  eight light slots plus two heavy ones; set both variables explicitly to restore any other split.
+- **`browse_acts` fetches one page instead of a whole year.** It now queries `acts/search` with
+  `limit` and `offset` rather than `acts/{publisher}/{year}`, which ignores both and returns the
+  full year every time — 1 093 224 B and 1984 records for `DU/2024`, of which a default page kept
+  twenty. Results, ordering and response fields are unchanged. A `browse_acts` call with a
+  non-numeric `year` now returns a clean tool error instead of silently querying `year=0`.
+
 ## [4.0.1] - 2026-08-31
 
 See [docs/changelogs/v4.0.1.md](docs/changelogs/v4.0.1.md) for details.

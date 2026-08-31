@@ -117,9 +117,11 @@ class SearchService:
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
         items = data.get("items", [])
-        # NOTE: reads `count` (page size), while `browse()` reads `totalCount` (year size).
-        # The divergence is deliberate — this reading is believed suspect for non-browsing search
-        # and is tracked separately.
+        # Reads `count` (page size), while `browse()` reads `totalCount` (year size).
+        # Noted during the Klaster 8 audit/review: this reading is believed wrong for a
+        # search that spans more than one page, but fixing it changes what `total_count`
+        # and `truncated` mean for every existing caller of `search()`, which is a
+        # product decision this branch does not make.
         total_count = data.get("count", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
@@ -158,6 +160,12 @@ class SearchService:
         `cache_browse_ttl=3600`), whichever call stores the entry first decides
         freshness for both — the 6× TTL difference stops applying to whichever method
         writes the cache entry second.
+
+        `limit` is not clamped here (unlike the list tools that call this indirectly),
+        and `acts/search` records carry more fields than the year endpoint's did — the
+        default and typical paths transfer far less than before this change, but an
+        unbounded caller-supplied `limit` now costs more bytes per record than the old
+        `acts/{publisher}/{year}` behaviour did, not less.
         """
         page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)
         page_offset = max(offset or 0, 0)
@@ -169,8 +177,9 @@ class SearchService:
             # record and letting `_output` slice it away keeps the answer identical to
             # the pre-change one without probing that corner.
             "limit": max(page_limit, 1),
-            "offset": page_offset,
         }
+        if page_offset:
+            params["offset"] = page_offset
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_browse_ttl)
 
         items = data.get("items", [])

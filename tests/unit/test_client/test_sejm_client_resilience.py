@@ -482,7 +482,7 @@ def test_settings_expose_retry_budget_and_attempts() -> None:
     assert settings.api_retry_budget == pytest.approx(45.0)
 
 
-def test_lifespan_wires_retry_settings_into_the_client() -> None:
+def test_lifespan_wires_client_settings_into_the_client() -> None:
     """The settings must actually reach the client, not merely exist in the config."""
     import inspect
 
@@ -491,6 +491,11 @@ def test_lifespan_wires_retry_settings_into_the_client() -> None:
     source = inspect.getsource(server.lifespan)
     assert "max_attempts=settings.api_max_attempts" in source
     assert "retry_budget=settings.api_retry_budget" in source
+    assert "max_concurrent=settings.api_max_concurrent" in source
+    assert "max_concurrent_content=settings.api_max_concurrent_content" in source
+    assert "rate_per_second=settings.api_rate_per_second" in source
+    assert "rate_burst=settings.api_rate_burst" in source
+    assert "user_agent=settings.user_agent" in source
 
 
 def test_tenacity_is_not_a_runtime_dependency() -> None:

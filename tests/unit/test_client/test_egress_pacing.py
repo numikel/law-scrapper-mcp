@@ -8,6 +8,7 @@ test measures real elapsed time (design constraint 3).
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -110,6 +111,30 @@ async def test_a_429_pauses_the_whole_client(
         await api.close()
 
     assert paused == [pytest.approx(30.0)]
+
+
+@respx.mock
+async def test_a_pause_below_the_cap_is_still_logged(
+    clock: FakeClock, waits: list[float], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A 55 s freeze of every other caller must not be silent just because it fits under the cap."""
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+
+    api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter)
+    await api.start()
+    respx.get(ACT_URL).mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "30"}),
+            httpx.Response(200, json={"ELI": "DU/2024/1"}),
+        ]
+    )
+    try:
+        with caplog.at_level(logging.WARNING, logger="law_scrapper_mcp"):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert any("Pausing egress for" in r.getMessage() for r in caplog.records)
 
 
 @respx.mock

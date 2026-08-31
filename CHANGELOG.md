@@ -33,7 +33,13 @@ changes signature or response shape.
   `limit` and `offset` rather than `acts/{publisher}/{year}`, which ignores both and returns the
   full year every time — 1 093 224 B and 1984 records for `DU/2024`, of which a default page kept
   twenty. Results, ordering and response fields are unchanged. A `browse_acts` call with a
-  non-numeric `year` now returns a clean tool error instead of silently querying `year=0`.
+  non-numeric `year` now returns a clean tool error instead of silently querying `year=0`. `limit`
+  is not clamped, and `acts/search` records carry more fields than the year endpoint's did, so an
+  unbounded caller-supplied `limit` now transfers more bytes per record than before this change —
+  the default and typical paths are far better off, but callers that pass a large `limit` are not.
+- **`search_legal_acts` and `browse_acts` now query the same `acts/search` endpoint,** which makes
+  a pre-existing asymmetry newly visible: `search_legal_acts` still reports `total_count` as the
+  size of the current page, while `browse_acts` correctly reports the size of the whole year.
 
 ## [4.0.1] - 2026-08-31
 

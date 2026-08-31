@@ -203,6 +203,11 @@ class SejmApiClient:
                             MAX_SERVER_PAUSE,
                             pause,
                         )
+                    else:
+                        logger.warning(
+                            "Pausing egress for %.1fs (server requested via Retry-After).",
+                            pause,
+                        )
                     self._rate_limiter.pause_for(pause)
                 if verdict.breaker_failure:
                     breaker_failure_seen = True

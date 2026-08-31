@@ -63,7 +63,12 @@ async def service() -> AsyncGenerator[SearchService]:
 async def test_browse_fetches_one_page_from_the_search_endpoint(
     service: SearchService, browse_page: dict[str, Any]
 ) -> None:
-    """Criterion 6: exactly one request, to acts/search, carrying limit and offset."""
+    """Criterion 6: exactly one request, to acts/search, carrying limit and offset.
+
+    At `offset=0`, `offset` is omitted from the params dict entirely — matching
+    `search()`'s own `if offset:` idiom — so the two methods build identical
+    parameter dicts (and therefore the same cache key) for the default first page.
+    """
     route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
     year_route = respx.get(YEAR_URL).mock(return_value=Response(200, json={"items": []}))
 
@@ -75,7 +80,7 @@ async def test_browse_fetches_one_page_from_the_search_endpoint(
     assert params["publisher"] == "DU"
     assert params["year"] == "2024"
     assert params["limit"] == "20"
-    assert params["offset"] == "0"
+    assert "offset" not in params
 
 
 @respx.mock
@@ -142,14 +147,33 @@ async def test_browse_reuses_the_cache_entry_written_by_search(
 
     Both calls now hit `acts/search` with the same parameters, so they share the key
     `json:acts/search:{...}`. That is accepted deliberately: separating the keys would
-    fetch the same year twice, which is the opposite of what this cluster is for. The
-    offset is non-zero because `search()` omits the key entirely when it is falsy
-    (`search_service.py:114`), so the two parameter dicts only coincide above zero.
+    fetch the same year twice, which is the opposite of what this cluster is for. Both
+    `search()` and `browse()` omit `offset` from the params dict when it is falsy, so
+    the dicts coincide at this non-zero offset too — the zero-offset case (the more
+    common one) is covered separately below.
     """
     route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
 
     searched = await service.search(publisher="DU", year=2024, limit=5, offset=10)
     browsed = await service.browse("DU", 2024, limit=5, offset=10)
+
+    assert route.call_count == 1
+    assert [act.eli for act in browsed.results] == [act.eli for act in searched.results]
+
+
+@respx.mock
+async def test_browse_reuses_the_cache_entry_written_by_search_at_the_default_offset(
+    service: SearchService, browse_page: dict[str, Any]
+) -> None:
+    """Criterion 11 (D8) at the most common call shape: the default first page.
+
+    `offset=0` is the default for both tools, so this is the single most likely
+    browse+search overlap in real use — and the one the fix in I5 exists for.
+    """
+    route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
+
+    searched = await service.search(publisher="DU", year=2024, limit=20)
+    browsed = await service.browse("DU", 2024, limit=20)
 
     assert route.call_count == 1
     assert [act.eli for act in browsed.results] == [act.eli for act in searched.results]

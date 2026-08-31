@@ -3,17 +3,23 @@
 Extracted from `config.py` (Task 6, Klaster 7 cleanup) so the field list in
 `Settings` reads top-to-bottom without a ~65-line validator wedged between
 unrelated groups of fields. Behaviour is unchanged — only the home of the
-logic moved. Kept as a free function (not a method) so `config.py` can call
-it from inside `Settings._enforce_security_boundary` via a local import,
-which avoids a circular import at module load time (this module imports
-`Settings`-adjacent constants from `config.py`).
+logic moved. Kept as a free function (not a method); `config.py` imports it
+normally at module top level and calls it from inside
+`Settings._enforce_security_boundary`.
+
+Imports its constant/helper from `config_primitives.py`, not from `config.py`
+directly — `config.py` runs `settings = Settings()` at module scope, so an
+import edge back into `config.py` from here would be live (not just
+theoretical) the moment this module is imported before `config.py` finishes
+loading. `config_primitives.py` imports nothing from either module, so it
+cannot be part of a cycle.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .config import MIN_AUTH_TOKEN_BYTES, is_loopback_entry
+from .config_primitives import MIN_AUTH_TOKEN_BYTES, is_loopback_entry
 
 if TYPE_CHECKING:
     from .config import Settings

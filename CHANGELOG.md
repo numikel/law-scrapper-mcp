@@ -17,6 +17,7 @@ Cleanup release — hardening and test coverage from Klaster 7 review findings, 
 
 - **`trusted_proxies` CIDR validation** — Moved to startup instead of first request; binary `LAW_MCP_AUTH_TOKEN_FILE` files now produce a clean error instead of `UnicodeDecodeError`.
 - **OAuth JWKS discovery** — Rejects non-`https://` discovered JWKS URIs; JWKS/IdP communication failures now log at WARNING instead of INFO (including a fix for an except-clause ordering bug).
+- **OAuth issuer/JWKS URI scheme** — `LAW_MCP_AUTH_ISSUER` and a directly configured `LAW_MCP_AUTH_JWKS_URI` now must be `https://`, closing a downgrade path the discovery-time check didn't cover.
 
 ### Changed
 

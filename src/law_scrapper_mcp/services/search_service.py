@@ -117,6 +117,9 @@ class SearchService:
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
         items = data.get("items", [])
+        # NOTE: reads `count` (page size), while `browse()` reads `totalCount` (year size).
+        # The divergence is deliberate — this reading is believed suspect for non-browsing search
+        # and is tracked separately.
         total_count = data.get("count", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
@@ -150,8 +153,11 @@ class SearchService:
         whenever the parameters match exactly. That is deliberate (D8), not an
         oversight: both calls ask the API the same question and get the same answer,
         and giving `browse` its own key prefix would fetch the same year twice — more
-        outbound traffic, which is what this whole change exists to reduce. The only
-        difference is freshness, decided by whichever call stored the entry first.
+        outbound traffic, which is what this whole change exists to reduce. Because
+        the cache key does not include TTL (`cache_search_ttl=600` vs
+        `cache_browse_ttl=3600`), whichever call stores the entry first decides
+        freshness for both — the 6× TTL difference stops applying to whichever method
+        writes the cache entry second.
         """
         page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)
         page_offset = max(offset or 0, 0)

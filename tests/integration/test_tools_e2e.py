@@ -241,6 +241,13 @@ class TestSearchTools:
         assert page_info["limit"] == 1
         assert page_info["offset"] == 0
 
+    async def test_browse_acts_invalid_year_format(self, mcp_client) -> None:
+        """browse_acts with non-numeric year returns is_error=True."""
+        result = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": "dwa tysiące"})
+
+        assert result.is_error is True
+        assert result.structured_content is None
+
     async def test_search_legal_acts_reports_a_page(self, mcp_client) -> None:
         """search_legal_acts reports page_info consistent with returned_count."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024, "limit": 1})

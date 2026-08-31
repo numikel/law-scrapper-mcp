@@ -76,9 +76,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
         """
         search_service = get_app_context(ctx).search_service
 
-        year_int = 0
-        with contextlib.suppress(ValueError, TypeError):
+        try:
             year_int = int(year)
+        except (ValueError, TypeError) as e:
+            raise ValueError("Rok musi być liczbą całkowitą.") from e
 
         limit_int: int | None = None
         if limit is not None:

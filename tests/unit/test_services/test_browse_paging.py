@@ -100,10 +100,11 @@ async def test_first_page_of_a_large_year_reports_a_next_offset(
 ) -> None:
     """Criterion 8: the default first page of DU/2024 is truncated and servable."""
     page = dict(browse_page, count=20, items=browse_page["items"] * 4)
-    respx.get(SEARCH_URL).mock(return_value=Response(200, json=page))
+    route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=page))
 
     output = await service.browse("DU", 2024)
 
+    assert route.calls.last.request.url.params["limit"] == "20"
     assert output.page_info.limit == 20
     assert output.page_info.offset == 0
     assert output.page_info.returned_count == 20

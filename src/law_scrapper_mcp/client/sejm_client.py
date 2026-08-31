@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import StrEnum
 from time import monotonic
 from typing import Any
 
@@ -16,11 +17,24 @@ from law_scrapper_mcp.client.exceptions import (
     SejmApiError,
 )
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
+from law_scrapper_mcp.client.rate_limiter import RateLimiter
 
 # Deliberately carries no version: a hardcoded one drifts, and a client built
 # without settings has no honest version to claim. Production passes
 # `Settings.user_agent`, which derives both name and version from configuration.
 DEFAULT_USER_AGENT = "law-scrapper-mcp"
+
+
+class RequestClass(StrEnum):
+    """Traffic class deciding which concurrency budget a request draws on.
+
+    Split so that a run of act downloads can never take the last slot a search would
+    have used (finding F55). The rate limiter stays shared: pace is a property of all
+    outbound traffic, not of one class.
+    """
+
+    LIGHT = "light"
+    HEAVY = "heavy"
 
 
 async def _delay(seconds: float) -> None:
@@ -40,17 +54,27 @@ class SejmApiClient:
         self,
         cache: TTLCache,
         timeout: float = 30.0,
-        max_concurrent: int = 10,
+        max_concurrent: int = 8,
         circuit_breaker: CircuitBreaker | None = None,
         max_attempts: int = 3,
         retry_budget: float = 45.0,
         user_agent: str = DEFAULT_USER_AGENT,
+        max_concurrent_content: int = 2,
+        rate_per_second: float = 5.0,
+        rate_burst: int = 10,
+        rate_limiter: RateLimiter | None = None,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._semaphores = {
+            RequestClass.LIGHT: asyncio.Semaphore(max_concurrent),
+            RequestClass.HEAVY: asyncio.Semaphore(max_concurrent_content),
+        }
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
+        # Prebuilt limiter accepted on the same terms as the breaker above: production
+        # passes rate and burst, tests pass a limiter with an injected clock.
+        self._rate_limiter = rate_limiter or RateLimiter(rate=rate_per_second, burst=rate_burst)
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
         self._user_agent = user_agent
@@ -73,11 +97,22 @@ class SejmApiClient:
             await self._client.aclose()
             self._client = None
 
-    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Send a single HTTP request.
 
-        Lowest layer: builds the URL, guards the semaphore and raises `httpx`
-        exceptions only. It neither retries nor translates errors.
+        Lowest layer: builds the URL, waits its turn, guards the class semaphore and
+        raises `httpx` exceptions only. It neither retries nor translates errors.
+
+        The token comes before the slot, and the order is load-bearing: a request
+        waiting for a token must not hold a concurrency slot, or rate limiting quietly
+        becomes a second concurrency limit.
 
         Raises:
             httpx.HTTPError: Any transport or status error.
@@ -89,12 +124,21 @@ class SejmApiClient:
 
         url = f"{self.BASE_URL}/{path.lstrip('/')}"
 
-        async with self._semaphore:
+        await self._rate_limiter.acquire()
+
+        async with self._semaphores[request_class]:
             response = await self._client.request(method, url, **kwargs)
             response.raise_for_status()
             return response
 
-    async def _execute_with_resilience(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _execute_with_resilience(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Run a request with retries, a time budget and breaker accounting.
 
         The middle layer sees raw `httpx` exceptions only, so no `except` block
@@ -126,9 +170,16 @@ class SejmApiClient:
                 )
 
             try:
-                response = await self._send(method, path, **kwargs)
+                response = await self._send(method, path, request_class=request_class, **kwargs)
             except httpx.HTTPError as exc:
                 verdict = classify_failure(exc)
+                if verdict.retry_after is not None:
+                    # The pause belongs to the whole client, not to this one request.
+                    # Nine concurrent callers each honouring a private copy of the same
+                    # header would come back as a herd, aimed at a server that just
+                    # asked for quiet. Applied before the give-up check on purpose: the
+                    # signal outlives the request that happened to receive it.
+                    self._rate_limiter.pause_for(verdict.retry_after)
                 if verdict.breaker_failure:
                     breaker_failure_seen = True
                 delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)
@@ -161,7 +212,14 @@ class SejmApiClient:
         # Unreachable: the loop always exits through a return or a raise.
         raise ApiUnavailableError("API Sejmu nie odpowiedziało w ramach dozwolonych prób", status_code=503)
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Run a request and translate `httpx` errors into domain exceptions.
 
         Topmost layer. Translation happens outside the retry loop, so the policy
@@ -182,7 +240,7 @@ class SejmApiClient:
             SejmApiError: For the remaining request-side errors.
         """
         try:
-            return await self._execute_with_resilience(method, path, **kwargs)
+            return await self._execute_with_resilience(method, path, request_class=request_class, **kwargs)
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             url = str(exc.request.url)
@@ -240,7 +298,12 @@ class SejmApiClient:
         Returns:
             Response text
         """
-        response = await self._request("GET", path, headers={"Accept": "text/html, text/plain, */*"})
+        response = await self._request(
+            "GET",
+            path,
+            request_class=RequestClass.HEAVY,
+            headers={"Accept": "text/html, text/plain, */*"},
+        )
         return response.text
 
     async def get_bytes(self, path: str) -> bytes:
@@ -253,7 +316,10 @@ class SejmApiClient:
             Response bytes
         """
         response = await self._request(
-            "GET", path, headers={"Accept": "application/pdf, application/octet-stream, */*"}
+            "GET",
+            path,
+            request_class=RequestClass.HEAVY,
+            headers={"Accept": "application/pdf, application/octet-stream, */*"},
         )
         return response.content
 

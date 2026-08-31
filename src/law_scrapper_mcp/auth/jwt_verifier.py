@@ -92,7 +92,19 @@ class JwtTokenVerifier:
         async with self._lock:
             if self._client is None:
                 uri = self._configured_jwks_uri or await self._discover_jwks_uri()
-                self._client = PyJWKClient(uri, cache_keys=True, lifespan=self._cache_ttl)
+                # `cache_keys=True` is deliberately absent. It would enable
+                # PyJWT's second cache tier: an `lru_cache` over individual
+                # signing keys with no time-based expiry at all
+                # (jwt/jwks_client.py:44-47, :100-104). Once a `kid` had been
+                # resolved, `lifespan` would never be consulted for it again, so
+                # a key the issuer retired would stay acceptable for the lifetime
+                # of the process — and this server has no other revocation
+                # channel. Worse, an issuer rotating the key under an unchanged
+                # `kid` would leave us rejecting tokens signed with the live key
+                # while still honouring the dead one. Tier 1 (`cache_jwk_set`,
+                # on by default) already bounds the fetch rate, and honours
+                # `lifespan`, which is what LAW_MCP_AUTH_JWKS_CACHE_TTL promises.
+                self._client = PyJWKClient(uri, lifespan=self._cache_ttl)
             return self._client
 
     async def _discover_jwks_uri(self) -> str:

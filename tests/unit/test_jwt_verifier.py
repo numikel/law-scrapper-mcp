@@ -51,6 +51,13 @@ def fetch_calls(monkeypatch: pytest.MonkeyPatch, jwks: dict[str, Any]) -> list[s
 
     def fake_fetch(self: jwt.PyJWKClient) -> dict[str, Any]:
         calls.append(self.uri)
+        # The real `fetch_data` writes the result into the key-set cache on
+        # success (jwt/jwks_client.py:132-134). A stub that skips that step
+        # leaves tier-1 caching inert, and a test counting fetches then measures
+        # whichever *other* cache happens to be enabled instead of the one
+        # LAW_MCP_AUTH_JWKS_CACHE_TTL is supposed to control.
+        if self.jwk_set_cache is not None:
+            self.jwk_set_cache.put(jwks)
         return jwks
 
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", fake_fetch)
@@ -210,3 +217,68 @@ async def test_non_json_jwks_response_is_rejected(keypair, monkeypatch: pytest.M
 
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", broken_fetch)
     assert await make_verifier().verify_token(make_token(keypair)) is None
+
+
+def _jwk_for(key: rsa.RSAPrivateKey, kid: str) -> dict[str, Any]:
+    jwk = json.loads(RSAAlgorithm.to_jwk(key.public_key()))
+    jwk.update({"kid": kid, "use": "sig", "alg": "RS256"})
+    return jwk
+
+
+def _token_signed_by(key: rsa.RSAPrivateKey, kid: str) -> str:
+    claims = {
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "sub": "user-42",
+        "exp": int(time.time()) + 600,
+        "iat": int(time.time()),
+    }
+    return jwt.encode(claims, key, algorithm="RS256", headers={"kid": kid})
+
+
+async def test_retired_signing_key_stops_being_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A key the issuer withdrew must not survive in a process-lifetime cache.
+
+    PyJWT's second cache tier (`cache_keys=True`) is an `lru_cache` over
+    individual signing keys with no expiry, so once a `kid` had been resolved it
+    would be honoured until restart. Revoking a compromised key at the identity
+    provider is the only revocation channel a resource server has, so that cache
+    would quietly disable it. This test rotates the published key set and
+    demands the withdrawn key be refused.
+    """
+    retired = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    current = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    published = {"keys": [_jwk_for(retired, "kid-old")]}
+
+    def fake_fetch(self: jwt.PyJWKClient) -> dict[str, Any]:
+        if self.jwk_set_cache is not None:
+            self.jwk_set_cache.put(published)
+        return published
+
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", fake_fetch)
+    verifier = make_verifier()
+
+    assert await verifier.verify_token(_token_signed_by(retired, "kid-old")) is not None
+
+    # The issuer rotates: only the new key is published from now on.
+    published = {"keys": [_jwk_for(current, "kid-new")]}
+    # Stand in for LAW_MCP_AUTH_JWKS_CACHE_TTL elapsing, so the key set is read
+    # afresh. Tier 1 is time-bounded and that bound is the documented contract;
+    # tier 2 would have no bound to elapse, which is the point of this test.
+    client = await verifier._jwk_client()
+    client.jwk_set_cache = None
+
+    assert await verifier.verify_token(_token_signed_by(current, "kid-new")) is not None
+    assert await verifier.verify_token(_token_signed_by(retired, "kid-old")) is None
+
+
+async def test_per_key_cache_tier_stays_disabled(monkeypatch: pytest.MonkeyPatch, jwks: dict[str, Any]) -> None:
+    """Structural guard on the same defect, independent of key material.
+
+    `cache_keys=True` swaps `get_signing_key` for an `lru_cache` wrapper, which
+    is recognisable by the `cache_info` attribute the decorator adds.
+    """
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", lambda _self: jwks)
+    client = await make_verifier()._jwk_client()
+
+    assert not hasattr(client.get_signing_key, "cache_info")

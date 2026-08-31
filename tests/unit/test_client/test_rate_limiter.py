@@ -156,17 +156,22 @@ async def test_a_burst_below_one_is_rejected(burst: int) -> None:
 async def test_concurrent_waiters_are_serialised_in_arrival_order(clock: FakeClock, waits: list[float]) -> None:
     """Lock held across waits serialises multiple waiters; no thundering herd."""
     limiter = RateLimiter(rate=5.0, burst=1, clock=clock)
-    admitted: list[float] = []
+    admitted: list[tuple[int, float]] = []
 
-    async def one_request() -> None:
+    async def one_request(task_id: int) -> None:
         await limiter.acquire()
-        admitted.append(clock.now)
+        admitted.append((task_id, clock.now))
 
     # Drain the single token.
     await limiter.acquire()
 
-    # Three concurrent acquire calls must wait and be admitted at 0.2/0.4/0.6 s,
-    # not all simultaneously at 0.2 s.
-    await asyncio.gather(one_request(), one_request(), one_request())
+    # Three concurrent acquire calls must be admitted in strict arrival order at
+    # 0.2/0.4/0.6 s. Without the lock held across the wait, tasks could be admitted
+    # out of order (e.g., task 1 at 0.2, task 0 at 0.4, task 2 at 0.6).
+    await asyncio.gather(one_request(0), one_request(1), one_request(2))
 
-    assert admitted == [pytest.approx(0.2), pytest.approx(0.4), pytest.approx(0.6)]
+    assert admitted == [
+        (0, pytest.approx(0.2)),
+        (1, pytest.approx(0.4)),
+        (2, pytest.approx(0.6)),
+    ]

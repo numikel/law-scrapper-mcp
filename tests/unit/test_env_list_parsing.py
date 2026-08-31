@@ -55,11 +55,17 @@ def test_json_array_still_reads_as_a_list(monkeypatch: pytest.MonkeyPatch) -> No
         "LAW_MCP_ALLOWED_ORIGINS",
         "LAW_MCP_AUTH_REQUIRED_SCOPES",
         "LAW_MCP_AUTH_ALGORITHMS",
-        "LAW_MCP_TRUSTED_PROXIES",
     ],
 )
 def test_every_list_setting_accepts_a_flat_value(monkeypatch: pytest.MonkeyPatch, variable: str) -> None:
-    """One decoding rule, not four — a new list field must not reintroduce the trap."""
+    """One decoding rule, not four — a new list field must not reintroduce the trap.
+
+    `LAW_MCP_TRUSTED_PROXIES` is deliberately excluded: unlike these four
+    arbitrary-string fields, it carries its own CIDR validator
+    (`Settings._validate_trusted_proxies`), so an arbitrary flat string is
+    rightly rejected there. `test_trusted_proxies_accepts_a_flat_cidr_value`
+    below exercises the same decoding path with a value that satisfies both.
+    """
     monkeypatch.setenv(variable, "https://mcp.example.com")
     monkeypatch.setenv("LAW_MCP_AUTH_MODE", "bearer")
     monkeypatch.setenv("LAW_MCP_AUTH_TOKEN", "x" * 32)
@@ -70,20 +76,28 @@ def test_every_list_setting_accepts_a_flat_value(monkeypatch: pytest.MonkeyPatch
     assert getattr(settings, field) == ["https://mcp.example.com"]
 
 
+def test_trusted_proxies_accepts_a_flat_cidr_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same decoding path as the other list fields, with a value its CIDR
+    validator also accepts — trusted_proxies just narrows what counts as valid."""
+    monkeypatch.setenv("LAW_MCP_TRUSTED_PROXIES", "10.0.0.0/8")
+
+    assert Settings().trusted_proxies == ["10.0.0.0/8"]
+
+
 def test_bracketed_ipv6_is_not_mistaken_for_json(monkeypatch: pytest.MonkeyPatch) -> None:
     """A bracketed IPv6 literal opens and closes like a JSON array.
 
     `[::1]:*` is this project's own default allowlist entry, so the JSON branch
-    must not swallow it — and a lone `[::1]` in the proxy list is
-    indistinguishable from an array by shape alone.
+    must not swallow it. `trusted_proxies` is not exercised here: it is
+    CIDR-validated, and bracketed notation (an HTTP host convention) is never
+    valid CIDR syntax, so the array-shape ambiguity this test targets cannot
+    arise for that field once a value reaches its validator.
     """
     monkeypatch.setenv("LAW_MCP_ALLOWED_HOSTS", "[::1]:*, 127.0.0.1:*")
-    monkeypatch.setenv("LAW_MCP_TRUSTED_PROXIES", "[::1]")
 
     settings = Settings()
 
     assert settings.allowed_hosts == ["[::1]:*", "127.0.0.1:*"]
-    assert settings.trusted_proxies == ["[::1]"]
 
 
 def test_the_shipped_default_allowlist_survives_a_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:

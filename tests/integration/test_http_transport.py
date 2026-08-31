@@ -311,18 +311,16 @@ async def test_live_http_discovery_tools_success_and_error(live_http_server: str
     import httpx2
     from mcp.client.streamable_http import streamable_http_client
 
-    transport = streamable_http_client(
-        live_http_server,
-        http_client=httpx2.AsyncClient(headers={"Authorization": f"Bearer {LIVE_SERVER_TOKEN}"}),
-    )
-    async with Client(transport) as client:
-        assert date.fromisoformat(client.protocol_version) >= PROTOCOL_FLOOR
-        tools = (await client.list_tools()).tools
-        success = await client.call_tool(
-            "calculate_legal_date",
-            {"days": 1, "base_date": "2026-01-01"},
-        )
-        failure = await client.call_tool("get_act_details", {"eli": "INVALID"})
+    async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {LIVE_SERVER_TOKEN}"}) as http_client:
+        transport = streamable_http_client(live_http_server, http_client=http_client)
+        async with Client(transport) as client:
+            assert date.fromisoformat(client.protocol_version) >= PROTOCOL_FLOOR
+            tools = (await client.list_tools()).tools
+            success = await client.call_tool(
+                "calculate_legal_date",
+                {"days": 1, "base_date": "2026-01-01"},
+            )
+            failure = await client.call_tool("get_act_details", {"eli": "INVALID"})
 
     assert len(tools) == 13
     assert success.is_error is False

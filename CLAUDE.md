@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v4.0.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.0.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
+Law Scrapper MCP v4.0.1 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.0.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
 
 ## Development commands
 
@@ -112,3 +112,5 @@ src/law_scrapper_mcp/
   Polish `CHANGELOG` entry, is a convention violation, not a style preference. Match the file's
   convention, not the nearest neighbouring lines — that is how both drifts started
 - asyncio.Lock for all in-memory stores (Cache, DocumentStore, ResultStore)
+- `docs/superpowers/` (specs and implementation plans) is **deliberately untracked** — do not
+  commit it, do not propose tracking it, and do not report it as a gap in a review or audit

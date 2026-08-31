@@ -64,11 +64,33 @@ class JwtTokenVerifier:
                 issuer=self._issuer,
                 options={"require": ["exp", "iss", "aud"]},
             )
-        except (PyJWKClientError, jwt.PyJWTError, httpx.HTTPError, KeyError, ValueError) as error:
-            # KeyError/ValueError: a malformed discovery document (missing
-            # `jwks_uri`) or a non-JSON JWKS/discovery body — `json.JSONDecodeError`
-            # is a ValueError subclass, and neither escapes as PyJWTError or
-            # httpx.HTTPError.
+        except PyJWKClientError as error:
+            # PyJWKClientError is a jwt.PyJWTError subclass, so this clause
+            # MUST come before `except jwt.PyJWTError` below — Python matches
+            # top-down, and the base-class clause would otherwise silently
+            # swallow it, routing real IdP outages through the INFO path.
+            # Message stays type-name-only, unlike the WARNING branch below:
+            # PyJWT reads the unverified `kid` from the token's own header to
+            # build this error ("no signing key matches <kid>"), so `str(error)`
+            # can echo attacker-controlled content into the log.
+            logger.warning("Odrzucono token: %s", type(error).__name__)
+            return None
+        except (httpx.HTTPError, KeyError, ValueError) as error:
+            # A malformed discovery document (missing or non-https `jwks_uri`)
+            # or a non-JSON JWKS/discovery body — `json.JSONDecodeError` is a
+            # ValueError subclass, and neither escapes as PyJWTError or
+            # httpx.HTTPError. These describe the *response*, not the token,
+            # so `str(error)` is safe here and gives an operator something to
+            # act on. These signal that the identity provider is unreachable
+            # or misbehaving, worth a human noticing — WARNING, not INFO.
+            logger.warning("Odrzucono token: %s: %s", type(error).__name__, error)
+            return None
+        except jwt.PyJWTError as error:
+            # A plain token-validation failure (bad signature, expired,
+            # wrong audience/issuer, ...) is routine traffic, not an
+            # operational problem — stays at INFO. Kept as type-name-only,
+            # unlike the WARNING branch: `error` here can echo attacker-
+            # controlled token content.
             logger.info("Odrzucono token: %s", type(error).__name__)
             return None
 
@@ -112,7 +134,14 @@ class JwtTokenVerifier:
         async with httpx.AsyncClient(timeout=DISCOVERY_TIMEOUT) as client:
             response = await client.get(url)
             response.raise_for_status()
-            return str(response.json()["jwks_uri"])
+            jwks_uri = str(response.json()["jwks_uri"])
+            if not jwks_uri.startswith("https://"):
+                # The discovery document itself arrived over HTTPS, but a
+                # misconfigured or compromised IdP could still point key
+                # fetching at plaintext HTTP — fail closed, same as every
+                # other rejection path here.
+                raise ValueError(f"Odkryty jwks_uri nie używa https: {jwks_uri!r}")
+            return jwks_uri
 
 
 def _scopes_of(claims: dict[str, Any]) -> set[str]:

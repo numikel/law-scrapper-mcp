@@ -4,12 +4,32 @@ from __future__ import annotations
 
 import json
 import logging
-from ipaddress import ip_address
+from ipaddress import ip_network
 from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from .config_primitives import MIN_AUTH_TOKEN_BYTES, _host_of, is_loopback_entry
+from .config_validation import enforce_security_boundary
+
+# Re-exported: `_host_of`, `is_loopback_entry` and `MIN_AUTH_TOKEN_BYTES` live in
+# `config_primitives.py` (dependency-free, importable by `config_validation.py`
+# without a cycle), but stay accessible as `law_scrapper_mcp.config.*` because
+# `log_remote_bind_warning` below uses `is_loopback_entry`, and existing tests
+# (`test_config_helpers.py`, `test_auth_settings_validation.py`) import all three
+# straight from this module.
+__all__ = [
+    "MIN_AUTH_TOKEN_BYTES",
+    "Settings",
+    "USER_AGENT_CONTACT",
+    "_host_of",
+    "is_loopback_entry",
+    "log_pattern_limit_clamping",
+    "log_remote_bind_warning",
+    "settings",
+]
 
 MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
@@ -19,34 +39,8 @@ FILTER_MAX_RECORDS_FLOOR = 1
 # institution, so its administrator needs a way to reach us that is not a ban.
 USER_AGENT_CONTACT = "https://github.com/numikel/law-scrapper-mcp"
 
-MIN_AUTH_TOKEN_BYTES = 32
-
 LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
-
-
-def _host_of(entry: str) -> str:
-    """Strip scheme, port and brackets from an allowlist entry."""
-    value = entry.strip()
-    if "://" in value:
-        value = value.split("://", 1)[1]
-    if value.startswith("["):
-        return value[1 : value.index("]")] if "]" in value else value[1:]
-    # Bare IPv6 (contains multiple colons but no brackets): return unchanged
-    if value.count(":") > 1:
-        return value
-    return value.split(":")[0]
-
-
-def is_loopback_entry(entry: str) -> bool:
-    """Whether an allowlist entry or bind address stays inside the loopback."""
-    host = _host_of(entry).lower()
-    if host in {"localhost", "::1"}:
-        return True
-    try:
-        return ip_address(host).is_loopback
-    except ValueError:
-        return False
 
 
 class Settings(BaseSettings):
@@ -60,6 +54,22 @@ class Settings(BaseSettings):
     # mechanism — exposure is a deliberate act requiring an authentication mode.
     host: str = "127.0.0.1"
     port: int = 7683
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _validate_trusted_proxies(cls, value: list[str]) -> list[str]:
+        """Reject malformed CIDR entries at startup instead of on the first request.
+
+        `RateLimitMiddleware.__init__` also calls `ip_network()` on this list —
+        without this validator, a bad entry there raises a raw `ValueError`
+        instead of a clean, Polish-language `ValidationError`.
+        """
+        for entry in value:
+            try:
+                ip_network(entry, strict=False)
+            except ValueError as error:
+                raise ValueError(f"LAW_MCP_TRUSTED_PROXIES zawiera nieprawidłowy wpis '{entry}': {error}") from error
+        return value
 
     @field_validator("transport", mode="before")
     @classmethod
@@ -88,57 +98,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_security_boundary(self) -> Settings:
-        if self.auth_mode == "bearer":
-            if self.auth_token is not None and self.auth_token_file is not None:
-                raise ValueError(
-                    "LAW_MCP_AUTH_TOKEN i LAW_MCP_AUTH_TOKEN_FILE ustawione jednocześnie. "
-                    "Wybierz jedno źródło tokenu — milcząca precedencja ukryłaby podmianę sekretu."
-                )
-            if self.auth_token is None and self.auth_token_file is None:
-                raise ValueError("Tryb 'bearer' wymaga tokenu. Ustaw LAW_MCP_AUTH_TOKEN albo LAW_MCP_AUTH_TOKEN_FILE.")
-            try:
-                token = self.resolve_auth_token()
-            except OSError as error:
-                raise ValueError(
-                    f"Nie udało się odczytać LAW_MCP_AUTH_TOKEN_FILE ({self.auth_token_file}): {error}"
-                ) from error
-            if len(token.encode("utf-8")) < MIN_AUTH_TOKEN_BYTES:
-                raise ValueError(
-                    f"Token uwierzytelniający musi mieć co najmniej {MIN_AUTH_TOKEN_BYTES} bajtów UTF-8. "
-                    "Wygeneruj go poleceniem: openssl rand -base64 32"
-                )
-
-        if self.auth_mode == "oauth":
-            required = (
-                ("LAW_MCP_AUTH_ISSUER", self.auth_issuer),
-                ("LAW_MCP_AUTH_AUDIENCE", self.auth_audience),
-                ("LAW_MCP_AUTH_RESOURCE_SERVER_URL", self.auth_resource_server_url),
-            )
-            missing = [name for name, value in required if value is None]
-            if missing:
-                raise ValueError(
-                    f"Tryb 'oauth' wymaga zmiennych: {', '.join(missing)}. "
-                    "Serwer nie uruchomi się z niepełną konfiguracją OAuth."
-                )
-
-        if self.auth_mode == "none":
-            if self.transport == "streamable-http" and not is_loopback_entry(self.host):
-                raise ValueError(
-                    f"Bind '{self.host}' wykracza poza pętlę zwrotną przy wyłączonym uwierzytelnianiu. "
-                    "Ustaw LAW_MCP_AUTH_MODE na 'bearer' albo 'oauth', albo binduj na 127.0.0.1."
-                )
-            for name, entries in (
-                ("LAW_MCP_ALLOWED_HOSTS", self.allowed_hosts),
-                ("LAW_MCP_ALLOWED_ORIGINS", self.allowed_origins),
-            ):
-                remote = [entry for entry in entries if not is_loopback_entry(entry)]
-                if remote:
-                    raise ValueError(
-                        f"{name} zawiera wpisy spoza pętli zwrotnej ({', '.join(remote)}) "
-                        "przy wyłączonym uwierzytelnianiu. Ustaw LAW_MCP_AUTH_MODE."
-                    )
-
-        return self
+        """Delegates to `config_validation.enforce_security_boundary`."""
+        return enforce_security_boundary(self)
 
     # Graceful shutdown window handed to uvicorn as `timeout_graceful_shutdown`.
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed
@@ -273,7 +234,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "4.0.0"
+    server_version: str = "4.0.1"
 
     @property
     def user_agent(self) -> str:

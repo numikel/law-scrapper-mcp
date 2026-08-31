@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-08-31
+
+See [docs/changelogs/v4.0.1.md](docs/changelogs/v4.0.1.md) for details.
+
+Cleanup release — hardening and test coverage from Klaster 7 review findings, no behavior change for existing correct configurations.
+
+### Fixed
+
+- **`trusted_proxies` CIDR validation** — Moved to startup instead of first request; binary `LAW_MCP_AUTH_TOKEN_FILE` files now produce a clean error instead of `UnicodeDecodeError`.
+- **OAuth JWKS discovery** — Rejects non-`https://` discovered JWKS URIs; JWKS/IdP communication failures now log at WARNING instead of INFO (including a fix for an except-clause ordering bug).
+
+### Changed
+
+- **Test coverage** — Added token boundary, rate-limit-zero, and timing-safety tests; fixed `caplog` scoping.
+- **Dependency and fixture hygiene** — `httpx2` is now an explicit dev dependency with its test client properly closed; the `bearer_app` test fixture no longer mutates global module state.
+- **Config module split** — Security-boundary validation extracted from `config.py` into `config_validation.py` and `config_primitives.py`. No behavior change.
+
 ## [4.0.0] - 2026-08-31
 
 See [docs/changelogs/v4.0.0.md](docs/changelogs/v4.0.0.md) for details.

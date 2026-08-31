@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import StrEnum
 from time import monotonic
 from typing import Any
@@ -19,10 +20,19 @@ from law_scrapper_mcp.client.exceptions import (
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
 from law_scrapper_mcp.client.rate_limiter import RateLimiter
 
+logger = logging.getLogger(__name__)
+
 # Deliberately carries no version: a hardcoded one drifts, and a client built
 # without settings has no honest version to claim. Production passes
 # `Settings.user_agent`, which derives both name and version from configuration.
 DEFAULT_USER_AGENT = "law-scrapper-mcp"
+
+# Bounds what a single Retry-After header can cost every other caller of this
+# client. The request that received it already has its own give-up check
+# (bounded by the retry budget) — this pause has none of its own and outlives
+# that one request, holding every other waiter's `acquire()` regardless of what
+# happens to the request that triggered it.
+MAX_SERVER_PAUSE = 60.0
 
 
 class RequestClass(StrEnum):
@@ -179,7 +189,21 @@ class SejmApiClient:
                     # header would come back as a herd, aimed at a server that just
                     # asked for quiet. Applied before the give-up check on purpose: the
                     # signal outlives the request that happened to receive it.
-                    self._rate_limiter.pause_for(verdict.retry_after)
+                    #
+                    # Clamped here, not in `classify_failure`/`_parse_retry_after`:
+                    # `verdict.retry_after` also drives `delay` and `give_up` below, and
+                    # clamping it there would silently turn "give up now" into "retry
+                    # after the clamp" for this one request. Only the client-wide pause
+                    # is bounded; this request's own retry policy sees the real header.
+                    pause = min(verdict.retry_after, MAX_SERVER_PAUSE)
+                    if verdict.retry_after > MAX_SERVER_PAUSE:
+                        logger.warning(
+                            "Retry-After=%.1fs exceeds the %.1fs cap; pausing egress for %.1fs instead.",
+                            verdict.retry_after,
+                            MAX_SERVER_PAUSE,
+                            pause,
+                        )
+                    self._rate_limiter.pause_for(pause)
                 if verdict.breaker_failure:
                     breaker_failure_seen = True
                 delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)

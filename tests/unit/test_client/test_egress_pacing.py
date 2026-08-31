@@ -134,7 +134,36 @@ async def test_a_429_pauses_the_client_even_when_the_request_gives_up(
 
 
 @respx.mock
-async def test_heavy_downloads_cannot_starve_the_light_lane(waits: list[float]) -> None:
+async def test_a_retry_after_far_above_the_cap_is_clamped_but_retry_policy_is_not(
+    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unbounded Retry-After would wedge every other caller for its full length.
+
+    The clamp lives only at the `pause_for` call site: `delay`/`give_up` still see the
+    real, unclamped header value, so this same oversized response still ends the
+    request immediately (max_attempts=1, no retry sleep) instead of the clamp
+    silently turning "give up now" into "retry after 60s".
+    """
+    paused: list[float] = []
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    monkeypatch.setattr(limiter, "pause_for", paused.append)
+
+    api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter, max_attempts=1)
+    await api.start()
+    route = respx.get(ACT_URL).mock(return_value=httpx.Response(429, headers={"Retry-After": "3600"}))
+    try:
+        with pytest.raises(SejmApiError):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert paused == [pytest.approx(client_module.MAX_SERVER_PAUSE)]
+    assert route.call_count == 1
+    assert waits == []
+
+
+@respx.mock
+async def test_heavy_downloads_cannot_starve_the_light_lane() -> None:
     """Criterion 13: two PDFs hold both heavy slots, a third waits, JSON still passes."""
     gate = asyncio.Event()
     in_flight = 0
@@ -188,12 +217,18 @@ async def test_the_two_lanes_sum_to_the_previous_peak() -> None:
 
 
 @respx.mock
-async def test_the_token_is_taken_before_the_concurrency_slot(clock: FakeClock) -> None:
+async def test_the_token_is_taken_before_the_concurrency_slot() -> None:
     """Spec risk 4: a request waiting for a token must not sit on a concurrency slot.
 
     With the order reversed, rate limiting silently degrades into a second, slower
     concurrency limit. The spy reads the semaphore at the moment the token is asked
     for: still full means the slot has not been taken yet.
+
+    No fake clock here on purpose: a single request against a fresh 10-token burst
+    never waits, so there is no delay to control — wiring in `FakeClock` without also
+    patching `_wait` (as the `waits` fixture does) would leave the limiter's real
+    `asyncio.sleep` reading a clock nothing advances, a hang trap if this test ever
+    grew a second request.
     """
     respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ELI": "DU/2024/1"}))
     observed: list[int] = []
@@ -206,7 +241,7 @@ async def test_the_token_is_taken_before_the_concurrency_slot(clock: FakeClock) 
     api = SejmApiClient(
         cache=TTLCache(max_entries=100),
         max_concurrent=3,
-        rate_limiter=OrderSpy(rate=5.0, burst=10, clock=clock),
+        rate_limiter=OrderSpy(rate=5.0, burst=10),
     )
     await api.start()
     try:

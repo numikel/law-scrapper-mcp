@@ -1,0 +1,11 @@
+{
+  "count": 5,
+  "totalCount": 1984,
+  "items": [
+    {"ELI": "DU/2024/1974", "publisher": "DU", "year": 2024, "pos": 1974, "title": "Akt 1974", "status": "akt objęty tekstem jednolitym", "type": "Rozporządzenie", "promulgation": "2024-12-30", "dateEffect": "2025-01-01", "inForce": "YES", "keywords": ["transport"], "entryIntoForce": "2025-01-01", "references": {}},
+    {"ELI": "DU/2024/1973", "publisher": "DU", "year": 2024, "pos": 1973, "title": "Akt 1973", "status": "akt obowiązujący", "type": "Rozporządzenie", "promulgation": "2024-12-30", "dateEffect": "2025-01-01", "inForce": "YES", "keywords": [], "entryIntoForce": "2025-01-01", "references": {}},
+    {"ELI": "DU/2024/1972", "publisher": "DU", "year": 2024, "pos": 1972, "title": "Akt 1972", "status": "akt obowiązujący", "type": "Ustawa", "promulgation": "2024-12-30", "dateEffect": "2025-01-01", "inForce": "YES", "keywords": [], "entryIntoForce": "2025-01-01", "references": {}},
+    {"ELI": "DU/2024/1971", "publisher": "DU", "year": 2024, "pos": 1971, "title": "Akt 1971", "status": "akt obowiązujący", "type": "Rozporządzenie", "promulgation": "2024-12-30", "dateEffect": "2025-01-01", "inForce": "YES", "keywords": [], "entryIntoForce": "2025-01-01", "references": {}},
+    {"ELI": "DU/2024/1970", "publisher": "DU", "year": 2024, "pos": 1970, "title": "Akt 1970", "status": "akt obowiązujący", "type": "Rozporządzenie", "promulgation": "2024-12-30", "dateEffect": "2025-01-01", "inForce": "YES", "keywords": [], "entryIntoForce": "2025-01-01", "references": {}}
+  ]
+}

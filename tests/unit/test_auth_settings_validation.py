@@ -157,6 +157,41 @@ def test_oauth_with_full_configuration_is_accepted() -> None:
     assert current.auth_jwks_cache_ttl == 3600
 
 
+def test_oauth_http_issuer_is_rejected() -> None:
+    """`AnyHttpUrl` accepts plain `http://` as readily as `https://`; the
+    discovery request built from `auth_issuer` would otherwise go out over an
+    unauthenticated channel an attacker could MITM to substitute a malicious
+    discovery document."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            auth_mode="oauth",
+            auth_issuer="http://login.microsoftonline.com/tenant/v2.0",
+            auth_audience="api://law-scrapper",
+            auth_resource_server_url="https://mcp.example.com/mcp",
+        )
+    message = str(exc_info.value)
+    assert "LAW_MCP_AUTH_ISSUER" in message
+    assert "https" in message
+
+
+def test_oauth_http_jwks_uri_is_rejected() -> None:
+    """A directly-configured `auth_jwks_uri` skips `_discover_jwks_uri`
+    entirely, so its own https-only discovery check never runs — this must be
+    enforced independently, or a plain-http `LAW_MCP_AUTH_JWKS_URI` bypasses
+    the downgrade protection completely."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            auth_mode="oauth",
+            auth_issuer="https://login.microsoftonline.com/tenant/v2.0",
+            auth_jwks_uri="http://login.microsoftonline.com/tenant/discovery/keys",
+            auth_audience="api://law-scrapper",
+            auth_resource_server_url="https://mcp.example.com/mcp",
+        )
+    message = str(exc_info.value)
+    assert "LAW_MCP_AUTH_JWKS_URI" in message
+    assert "https" in message
+
+
 def test_secret_is_not_in_the_repr() -> None:
     """SecretStr keeps the token out of crash dumps and config logging."""
     current = Settings(auth_mode="bearer", auth_token=VALID_TOKEN)
@@ -222,3 +257,19 @@ class TestRemoteBindWarning:
         with caplog.at_level("WARNING"):
             log_remote_bind_warning(current, logging.getLogger("test"))
         assert [r for r in caplog.records if r.name == "test"] == []
+
+
+def test_config_contains_no_wildcard_bind() -> None:
+    """Criterion 13: the wildcard bind must not survive anywhere in config.py.
+
+    The security-boundary validator that used to enforce this at runtime now
+    lives in `config_validation.py` (with shared helpers in
+    `config_primitives.py`), so the source-scan must cover all three modules
+    the split produced, not just the one that kept the `Settings` class.
+    """
+    from pathlib import Path as _Path
+
+    src = _Path(__file__).parents[2] / "src/law_scrapper_mcp"
+    for module in ("config.py", "config_validation.py", "config_primitives.py"):
+        source = (src / module).read_text(encoding="utf-8")
+        assert "0.0.0.0" not in source, module

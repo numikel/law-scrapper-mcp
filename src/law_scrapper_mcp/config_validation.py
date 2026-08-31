@@ -59,6 +59,23 @@ def enforce_security_boundary(current: Settings) -> Settings:
                 f"Tryb 'oauth' wymaga zmiennych: {', '.join(missing)}. "
                 "Serwer nie uruchomi się z niepełną konfiguracją OAuth."
             )
+        # `auth_issuer`/`auth_jwks_uri` are `AnyHttpUrl`, which accepts plain
+        # `http://` as readily as `https://`. `_discover_jwks_uri` in
+        # jwt_verifier.py rejects a *discovered* jwks_uri that isn't https —
+        # but that check never runs when `auth_jwks_uri` is configured
+        # directly (discovery is skipped entirely), and it does nothing about
+        # the discovery *request* itself going out over plain HTTP against an
+        # insecure `auth_issuer`. Both are the same downgrade attack the
+        # discovery check exists to close, so enforce it here too.
+        for name, url in (
+            ("LAW_MCP_AUTH_ISSUER", current.auth_issuer),
+            ("LAW_MCP_AUTH_JWKS_URI", current.auth_jwks_uri),
+        ):
+            if url is not None and url.scheme != "https":
+                raise ValueError(
+                    f"{name} musi używać schematu https (otrzymano: {url.scheme}). "
+                    "Zwykłe http otwiera atak typu downgrade na komunikację z dostawcą tożsamości."
+                )
 
     if current.auth_mode == "none":
         if current.transport == "streamable-http" and not is_loopback_entry(current.host):

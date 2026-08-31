@@ -8,6 +8,7 @@ bounds how many requests are in flight; this module bounds how fast they leave.
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Callable
 from time import monotonic
 
@@ -77,7 +78,11 @@ class RateLimiter:
                     await _wait(pause)
                     continue
                 self._refill(now)
-                if self._tokens >= 1.0 - 1e-9:
+                # Tolerance for fp error in `now - self._updated` (line 61), whose magnitude
+                # scales with the clock's absolute value (`ulp(now) * rate`), not the token count.
+                # Without it, a test clock advancing by exactly the computed deficit spins forever.
+                tolerance = max(1e-9, math.ulp(now) * self._rate)
+                if self._tokens >= 1.0 - tolerance:
                     self._tokens -= 1.0
                     return
                 deficit = 1.0 - self._tokens

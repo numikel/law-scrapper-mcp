@@ -35,12 +35,17 @@ def clock() -> FakeClock:
 
 @pytest.fixture
 def waits(clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Record requested waits and advance the fake clock by each one."""
+    """Record requested waits and advance the fake clock by each one.
+
+    Yields to the event loop to allow other tasks to run (necessary for testing
+    concurrent wait serialisation).
+    """
     recorded: list[float] = []
 
     async def fake_wait(seconds: float) -> None:
         recorded.append(seconds)
         clock.now += seconds
+        await asyncio.sleep(0)
 
     monkeypatch.setattr(limiter_module, "_wait", fake_wait)
     return recorded
@@ -146,3 +151,22 @@ async def test_a_burst_below_one_is_rejected(burst: int) -> None:
     """A bucket that cannot hold a whole token never hands one out."""
     with pytest.raises(ValueError):
         RateLimiter(rate=5.0, burst=burst)
+
+
+async def test_concurrent_waiters_are_serialised_in_arrival_order(clock: FakeClock, waits: list[float]) -> None:
+    """Lock held across waits serialises multiple waiters; no thundering herd."""
+    limiter = RateLimiter(rate=5.0, burst=1, clock=clock)
+    admitted: list[float] = []
+
+    async def one_request() -> None:
+        await limiter.acquire()
+        admitted.append(clock.now)
+
+    # Drain the single token.
+    await limiter.acquire()
+
+    # Three concurrent acquire calls must wait and be admitted at 0.2/0.4/0.6 s,
+    # not all simultaneously at 0.2 s.
+    await asyncio.gather(one_request(), one_request(), one_request())
+
+    assert admitted == [pytest.approx(0.2), pytest.approx(0.4), pytest.approx(0.6)]

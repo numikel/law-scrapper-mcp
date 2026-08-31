@@ -59,12 +59,8 @@ class RateLimitMiddleware:
         self._lock = asyncio.Lock()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        if scope["type"] != "http" or scope.get("path") in EXEMPT_PATHS:
             await self._app(scope, receive, send)
-            return
-
-        if scope.get("path") in EXEMPT_PATHS:
-            await self._app(_without_authorization(scope), receive, send)
             return
 
         allowed, retry_after = await self._consume(self._client_key(scope))
@@ -133,6 +129,27 @@ class RateLimitMiddleware:
         except ValueError:
             return False
         return any(address in network for network in self._trusted)
+
+
+class ExemptPathCredentialStripper:
+    """Removes the credential from requests on paths the limiter exempts.
+
+    Deliberately a separate middleware from `RateLimitMiddleware`, and always
+    installed. The property it enforces is a security one, and putting it inside
+    the limiter made it inherit `LAW_MCP_RATE_LIMIT_ENABLED` — a setting
+    documented as being about request budgets. Turning the limiter off would
+    then quietly re-arm the amplifier described below *and* remove the metering
+    that had been bounding it.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path") in EXEMPT_PATHS:
+            await self._app(_without_authorization(scope), receive, send)
+            return
+        await self._app(scope, receive, send)
 
 
 def _is_ip_address(value: str) -> bool:

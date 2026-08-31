@@ -53,7 +53,10 @@ def test_http_app_still_serves_the_health_route(monkeypatch: pytest.MonkeyPatch)
     """
     monkeypatch.setattr(server_module.settings, "rate_limit_enabled", False)
 
-    paths = {getattr(route, "path", None) for route in server_module.build_http_app().routes}
+    # `build_http_app()` always wraps the app in `ExemptPathCredentialStripper`
+    # (a security property that must not depend on rate limiting being on),
+    # so reach through it to inspect the routes underneath.
+    paths = {getattr(route, "path", None) for route in server_module.build_http_app()._app.routes}
 
     assert "/health" in paths
     assert "/mcp" in paths
@@ -150,17 +153,47 @@ def test_uvicorn_does_not_rewrite_the_client_by_default() -> None:
     assert config.forwarded_allow_ips == []
 
 
-def test_uvicorn_trusts_exactly_the_configured_proxies(monkeypatch) -> None:
-    """With proxies declared, uvicorn may resolve the client — for those only.
+def test_uvicorn_rewrite_stays_off_even_with_trusted_proxies(monkeypatch) -> None:
+    """Declaring a proxy must not switch uvicorn's own rewrite back on.
 
-    Keeping the two in step preserves correct access logs and `scope["scheme"]`
-    behind a TLS-terminating proxy, and passing `forwarded_allow_ips` explicitly
-    stops the bare `FORWARDED_ALLOW_IPS` environment variable — read by uvicorn
-    outside this project's namespace — from widening the boundary unseen.
+    Tying `proxy_headers` to `trusted_proxies` was tried and reverted:
+    `ProxyHeadersMiddleware` writes the header into `scope["client"]` without
+    checking it is an address, and it runs before ours, so `_client_key` would
+    take a forged string as the peer and never reach its own address check.
+    `_client_key` owns `X-Forwarded-For` end to end instead.
     """
     monkeypatch.setattr(server_module.settings, "trusted_proxies", ["10.0.0.1"])
 
     config = server_module.build_uvicorn_config()
 
-    assert config.proxy_headers is True
-    assert config.forwarded_allow_ips == ["10.0.0.1"]
+    assert config.proxy_headers is False
+    assert config.forwarded_allow_ips == []
+
+
+def test_health_credential_is_stripped_with_the_limiter_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The strip must not inherit `LAW_MCP_RATE_LIMIT_ENABLED`.
+
+    It first lived inside `RateLimitMiddleware`, and `build_http_app()` returns
+    the bare app when rate limiting is off — so a setting about request budgets
+    silently decided whether a credential could reach the token verifier on the
+    one unmetered path.
+    """
+    monkeypatch.setattr(server_module.settings, "rate_limit_enabled", False)
+    seen: list[list[bytes]] = []
+
+    async def _record(scope, receive, send) -> None:
+        seen.append([name for name, _ in scope["headers"]])
+
+    monkeypatch.setattr(server_module.app, "streamable_http_app", lambda **kwargs: _record)
+
+    http_app = server_module.build_http_app()
+    scope = {
+        "type": "http",
+        "path": "/health",
+        "headers": [(b"authorization", b"Bearer forged.jwt.value"), (b"accept", b"*/*")],
+    }
+    import asyncio
+
+    asyncio.run(http_app(scope, None, None))
+
+    assert seen == [[b"accept"]]

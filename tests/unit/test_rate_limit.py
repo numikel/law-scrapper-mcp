@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from law_scrapper_mcp.http.rate_limit import RateLimitMiddleware
+from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 
 
 async def _ok(_request):
@@ -122,6 +122,18 @@ def build_header_spy_client(**overrides) -> tuple[TestClient, list[list[str]]]:
     return TestClient(RateLimitMiddleware(inner, **kwargs), client=("127.0.0.1", 50000)), seen
 
 
+def build_stripper_client() -> tuple[TestClient, list[list[str]]]:
+    """The stripper alone, as `build_http_app()` installs it: outermost, always."""
+    seen: list[list[str]] = []
+
+    async def _record(request):
+        seen.append(sorted(request.headers.keys()))
+        return JSONResponse({"ok": True})
+
+    inner = Starlette(routes=[Route("/mcp", _record, methods=["GET"]), Route("/health", _record)])
+    return TestClient(ExemptPathCredentialStripper(inner), client=("127.0.0.1", 50000)), seen
+
+
 def test_health_reaches_the_app_without_the_authorization_header() -> None:
     """`/health` is exempt from the limiter, so it must not reach the verifier.
 
@@ -131,7 +143,7 @@ def test_health_reaches_the_app_without_the_authorization_header() -> None:
     set, turning an anonymous loop over `/health` into unmetered outbound
     traffic against the operator's identity provider.
     """
-    client, seen = build_header_spy_client()
+    client, seen = build_stripper_client()
 
     response = client.get("/health", headers={"Authorization": "Bearer some.jwt.value"})
 
@@ -141,9 +153,22 @@ def test_health_reaches_the_app_without_the_authorization_header() -> None:
 
 def test_mcp_keeps_the_authorization_header() -> None:
     """Stripping is confined to exempt paths — the counter-test to the above."""
-    client, seen = build_header_spy_client()
+    client, seen = build_stripper_client()
 
     client.get("/mcp", headers={"Authorization": "Bearer some.jwt.value"})
+
+    assert "authorization" in seen[0]
+
+
+def test_rate_limiter_alone_does_not_strip() -> None:
+    """The limiter exempts `/health`; removing the credential is not its job.
+
+    Recorded so the split stays deliberate: the strip was moved out precisely
+    because living here made it conditional on `LAW_MCP_RATE_LIMIT_ENABLED`.
+    """
+    client, seen = build_header_spy_client()
+
+    client.get("/health", headers={"Authorization": "Bearer some.jwt.value"})
 
     assert "authorization" in seen[0]
 

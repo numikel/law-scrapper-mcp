@@ -20,7 +20,7 @@ from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, log_remote_bind_warning, settings
 from law_scrapper_mcp.context import AppContext
-from law_scrapper_mcp.http.rate_limit import RateLimitMiddleware
+from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -276,19 +276,23 @@ def build_http_app() -> ASGIApp:
         host=settings.host,
     )
     if not settings.rate_limit_enabled:
-        return http_app
+        # Still stripped: the credential must not reach the verifier on an
+        # unmetered path regardless of whether request budgets are switched on.
+        return ExemptPathCredentialStripper(http_app)
     # Wrapping from the outside means the cheapest check runs first: the actual
     # order is rate limiting → authentication → Host/Origin validation (D13).
     # `RequireAuthMiddleware` wraps the `/mcp` route directly and is reached
     # before Host/Origin validation, which sits deeper inside the streamable
     # transport — a consequence of the SDK's own layering, not a choice this
     # project makes. The SDK offers no injection point to reorder it.
-    return RateLimitMiddleware(
-        http_app,
-        requests=settings.rate_limit_requests,
-        window=settings.rate_limit_window,
-        burst=settings.rate_limit_burst,
-        trusted_proxies=settings.trusted_proxies,
+    return ExemptPathCredentialStripper(
+        RateLimitMiddleware(
+            http_app,
+            requests=settings.rate_limit_requests,
+            window=settings.rate_limit_window,
+            burst=settings.rate_limit_burst,
+            trusted_proxies=settings.trusted_proxies,
+        )
     )
 
 
@@ -302,24 +306,29 @@ def build_uvicorn_config() -> uvicorn.Config:
         # uvicorn's knob is whole seconds; the setting is a float so that it
         # reads like the other timeouts in `Settings`.
         timeout_graceful_shutdown=int(settings.shutdown_grace),
-        # Both derived from LAW_MCP_TRUSTED_PROXIES, so one setting decides who
-        # may speak for a client. uvicorn otherwise defaults `proxy_headers` to
-        # True and wraps the app in ProxyHeadersMiddleware from the outside,
-        # rewriting `scope["client"]` from `X-Forwarded-For` before any of our
-        # middleware runs — for every peer matching `forwarded_allow_ips`, which
-        # falls back to "127.0.0.1". Since this server binds loopback by
-        # default, that is *every* client in the default configuration, not just
-        # a reverse proxy: any local process could pick its own rate-limit
-        # bucket, which is what criterion 11 forbids.
+        # Off unconditionally, against uvicorn's default of True.
+        # ProxyHeadersMiddleware wraps the app from the outside and writes the
+        # `X-Forwarded-For` value into `scope["client"]` *without validating it
+        # as an address*, so `_client_key` would take it as the peer and never
+        # reach its own address check. One host inside a trusted range could
+        # then mint a bucket per request with forged keys and never be
+        # throttled — the criterion 11 bypass, reintroduced above the layer
+        # meant to prevent it.
         #
-        # Passing both explicitly also closes a channel outside this project's
-        # namespace: uvicorn reads FORWARDED_ALLOW_IPS straight from the
-        # environment (uvicorn/config.py:336-337), so an unrelated variable
-        # could otherwise widen the trust boundary with no LAW_MCP_ setting
-        # showing it. An empty list disables the rewrite; None would restore
-        # uvicorn's own default, so the list is always passed.
-        proxy_headers=bool(settings.trusted_proxies),
-        forwarded_allow_ips=list(settings.trusted_proxies),
+        # Tying this to `trusted_proxies` was tried and rejected for exactly
+        # that reason: it switched uvicorn's unvalidated rewrite on together
+        # with our validated one, and uvicorn's runs first. `_client_key` owns
+        # `X-Forwarded-For` end to end instead. Nothing else needs the rewrite —
+        # the SDK builds its auth URLs from configured settings, never from the
+        # request — so the only cost is that uvicorn's access log records the
+        # proxy's address rather than the client's.
+        #
+        # `forwarded_allow_ips` is passed explicitly even though the middleware
+        # is off, so the bare FORWARDED_ALLOW_IPS environment variable, which
+        # uvicorn reads outside this project's namespace
+        # (uvicorn/config.py:336-337), cannot widen anything unseen.
+        proxy_headers=False,
+        forwarded_allow_ips=[],
     )
 
 

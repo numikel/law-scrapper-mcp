@@ -202,8 +202,16 @@ class Settings(BaseSettings):
         if not isinstance(value, str):
             return value
         text = value.strip()
-        if text.startswith("["):
-            return json.loads(text)
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Not JSON after all. A bracketed IPv6 literal opens and closes
+                # with the same characters as a JSON array — `[::1]:*` is this
+                # project's own default allowlist entry, and a lone `[::1]` in
+                # LAW_MCP_TRUSTED_PROXIES is indistinguishable by shape. Falling
+                # through to the comma reading keeps those working.
+                pass
         return [item.strip() for item in text.split(",") if item.strip()]
 
     # API client

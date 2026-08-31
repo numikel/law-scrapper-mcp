@@ -70,6 +70,31 @@ def test_every_list_setting_accepts_a_flat_value(monkeypatch: pytest.MonkeyPatch
     assert getattr(settings, field) == ["https://mcp.example.com"]
 
 
+def test_bracketed_ipv6_is_not_mistaken_for_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bracketed IPv6 literal opens and closes like a JSON array.
+
+    `[::1]:*` is this project's own default allowlist entry, so the JSON branch
+    must not swallow it — and a lone `[::1]` in the proxy list is
+    indistinguishable from an array by shape alone.
+    """
+    monkeypatch.setenv("LAW_MCP_ALLOWED_HOSTS", "[::1]:*, 127.0.0.1:*")
+    monkeypatch.setenv("LAW_MCP_TRUSTED_PROXIES", "[::1]")
+
+    settings = Settings()
+
+    assert settings.allowed_hosts == ["[::1]:*", "127.0.0.1:*"]
+    assert settings.trusted_proxies == ["[::1]"]
+
+
+def test_the_shipped_default_allowlist_survives_a_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Copying the documented default into the environment must work."""
+    from law_scrapper_mcp.config import LOOPBACK_ALLOWED_HOSTS
+
+    monkeypatch.setenv("LAW_MCP_ALLOWED_HOSTS", ", ".join(LOOPBACK_ALLOWED_HOSTS))
+
+    assert Settings().allowed_hosts == LOOPBACK_ALLOWED_HOSTS
+
+
 def test_empty_value_reads_as_an_empty_list(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LAW_MCP_TRUSTED_PROXIES", "")
 

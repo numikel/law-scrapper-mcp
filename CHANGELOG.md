@@ -24,7 +24,7 @@ Cleanup release — hardening and test coverage from Klaster 7 review findings, 
 - **Dependency and fixture hygiene** — `httpx2` is now an explicit dev dependency with its test client properly closed; the `bearer_app` test fixture no longer mutates global module state.
 - **Config module split** — Security-boundary validation extracted from `config.py` into `config_validation.py` and `config_primitives.py`. No behavior change.
 
-## [4.0.0] - 2026-08-30
+## [4.0.0] - 2026-08-31
 
 See [docs/changelogs/v4.0.0.md](docs/changelogs/v4.0.0.md) for details.
 

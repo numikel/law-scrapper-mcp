@@ -117,6 +117,17 @@ def test_invalid_trusted_proxy_cidr_is_rejected() -> None:
     assert "nie-cidr" in message
 
 
+def test_bracketed_ipv6_trusted_proxy_is_rejected() -> None:
+    """`[::1]:*` is valid in LAW_MCP_ALLOWED_HOSTS, so writing `[::1]` here by
+    analogy is the obvious mistake — but bracketed notation is an HTTP host
+    convention, never valid CIDR syntax, and trusted_proxies must be `::1`."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(trusted_proxies=["[::1]"])
+    message = str(exc_info.value)
+    assert "LAW_MCP_TRUSTED_PROXIES" in message
+    assert "[::1]" in message
+
+
 def test_valid_trusted_proxy_cidr_is_accepted() -> None:
     current = Settings(trusted_proxies=["10.0.0.0/8", "192.168.1.1"])
     assert current.trusted_proxies == ["10.0.0.0/8", "192.168.1.1"]

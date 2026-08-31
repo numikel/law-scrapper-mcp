@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
@@ -151,8 +152,8 @@ class Settings(BaseSettings):
     # Network boundary (F18). The defaults reproduce, value for value, the
     # constant that used to be hardcoded in server.py:43-47 — introducing the
     # fields changes nothing but the ability to override them.
-    allowed_hosts: list[str] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_HOSTS))
-    allowed_origins: list[str] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_ORIGINS))
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_HOSTS))
+    allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: list(LOOPBACK_ALLOWED_ORIGINS))
 
     # Authentication (F17)
     auth_mode: Literal["none", "bearer", "oauth"] = "none"
@@ -162,11 +163,11 @@ class Settings(BaseSettings):
     auth_audience: str | None = None
     auth_jwks_uri: AnyHttpUrl | None = None
     auth_resource_server_url: AnyHttpUrl | None = None
-    auth_required_scopes: list[str] = Field(default_factory=list)
+    auth_required_scopes: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # An allowlist handed to the decoder, never read from the token header:
     # a decoder honouring `alg` accepts `none`, or HS256 verified with the
     # public JWKS key the attacker already has.
-    auth_algorithms: list[str] = Field(default_factory=lambda: ["RS256", "ES256"])
+    auth_algorithms: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["RS256", "ES256"])
     auth_jwks_cache_ttl: int = 3600
 
     # Inbound rate limiting (F26). Outbound throttling towards api.sejm.gov.pl
@@ -175,7 +176,35 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=60, ge=1)
     rate_limit_window: float = Field(default=60.0, gt=0)
     rate_limit_burst: int = Field(default=10, ge=1)
-    trusted_proxies: list[str] = Field(default_factory=list)
+    trusted_proxies: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator(
+        "allowed_hosts",
+        "allowed_origins",
+        "auth_required_scopes",
+        "auth_algorithms",
+        "trusted_proxies",
+        mode="before",
+    )
+    @classmethod
+    def _accept_comma_separated_list(cls, value: object) -> object:
+        """Read a list setting from the environment as comma-separated text.
+
+        Without this, pydantic-settings decodes every complex field from the
+        environment as JSON, and does it inside the settings source — before any
+        validator on this model runs. `LAW_MCP_ALLOWED_HOSTS=mcp.example.com:*`
+        therefore died with a bare `SettingsError` naming `EnvSettingsSource`,
+        never reaching the Polish diagnostics below, and the reverse-proxy recipe
+        in README.md could not work as written. `NoDecode` on the fields hands us
+        the raw string instead, so both spellings are accepted here: JSON stays
+        valid for anyone already using it, comma-separated is what the docs show.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     # API client
     api_timeout: float = 30.0

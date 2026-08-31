@@ -159,6 +159,12 @@ docker compose -f docker-compose.yml up
 
 All settings are configured via environment variables with the `LAW_MCP_` prefix:
 
+The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
+`LAW_MCP_TRUSTED_PROXIES`, `LAW_MCP_AUTH_REQUIRED_SCOPES` and
+`LAW_MCP_AUTH_ALGORITHMS` — accept either a comma-separated value
+(`a:*, b:*`, the form used throughout this document) or a JSON array
+(`["a:*", "b:*"]`). Both are equivalent; surrounding whitespace is trimmed.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LAW_MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable-http` |
@@ -186,7 +192,7 @@ All settings are configured via environment variables with the `LAW_MCP_` prefix
 | `LAW_MCP_ALLOWED_HOSTS` | `127.0.0.1:*, localhost:*, [::1]:*` | `Host` header allowlist for streamable-http (DNS-rebinding protection). Widening beyond loopback requires an auth mode — see "Authenticated remote deployment" |
 | `LAW_MCP_ALLOWED_ORIGINS` | `http://127.0.0.1:*, http://localhost:*, http://[::1]:*` | `Origin` header allowlist for streamable-http. Same auth-mode requirement as `LAW_MCP_ALLOWED_HOSTS` |
 | `LAW_MCP_AUTH_JWKS_URI` | unset | Override the JWKS URI discovered from `LAW_MCP_AUTH_ISSUER`'s OIDC discovery document; needed only when a provider's discovery document omits or misreports it |
-| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. OAuth mode only — see finding 7 note below |
+| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. Meaningful in `oauth` mode only: under `bearer` the static verifier grants exactly these scopes to every holder of the token, so the check is satisfied by construction and confers no authorization |
 | `LAW_MCP_AUTH_ALGORITHMS` | `RS256, ES256` | JWT signature algorithm allowlist passed to the decoder; never read from the token header |
 | `LAW_MCP_AUTH_JWKS_CACHE_TTL` | `3600` | Seconds a fetched JWKS key set is cached before re-fetching |
 | `LAW_MCP_RATE_LIMIT_ENABLED` | `true` | Whether the per-client rate limiter wraps the HTTP app |
@@ -608,7 +614,7 @@ law-scrapper-mcp/
 
 The server binds `127.0.0.1` by default; binding beyond loopback (as Docker port publishing requires) fails at startup unless an authentication mode is configured — see "Authenticated remote deployment" above. When exposing the HTTP transport (`streamable-http`) to a network, place the server behind a reverse proxy (nginx, Caddy, Traefik) with TLS termination — this project verifies bearer tokens and OAuth 2.1/OIDC access tokens, but does not terminate TLS itself. The `/health` endpoint is unauthenticated and intended for container healthchecks only — do not expose it publicly without access controls. Dependency versions are pinned in `uv.lock` with security overrides in `pyproject.toml` (`cryptography`, `urllib3`, `idna`, `werkzeug`, `requests`).
 
-**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). `docker-compose.yml` sets `LAW_MCP_HOST=0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`LOOPBACK_TRANSPORT_SECURITY`) so requests are still validated against a loopback-only allowlist — `Host` outside `127.0.0.1:*` / `localhost:*` / `[::1]:*` gets `421`, `Origin` outside the matching `http://` variants gets `403` — independent of the bind address. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It is a defense-in-depth layer, not a substitute for the authentication mode required to bind beyond loopback in the first place.
+**Host/Origin allowlist (DNS-rebinding protection):** the official MCP SDK only auto-enables `Host`/`Origin` validation when the server binds to a literal loopback address (`127.0.0.1`, `localhost`, `::1`). `docker-compose.yml` sets `LAW_MCP_HOST=0.0.0.0` so Docker can publish the port, which would otherwise leave that validation disabled. `server.py` passes `transport_security` explicitly (`build_transport_security()`) so requests are still validated against the configured allowlist — `Host` outside it gets `421`, `Origin` outside it gets `403` — independent of the bind address. The allowlist defaults to loopback only (`127.0.0.1:*` / `localhost:*` / `[::1]:*` and the matching `http://` origins) and is widened through `LAW_MCP_ALLOWED_HOSTS` / `LAW_MCP_ALLOWED_ORIGINS`, which startup validation permits only once an authentication mode is configured. This restores the pre-3.0.0 FastMCP posture **for `/mcp`**. It is a defense-in-depth layer, not a substitute for the authentication mode required to bind beyond loopback in the first place.
 
 One deliberate difference from the pre-3.0.0 server: the SDK applies this validation inside the Streamable HTTP app, not as whole-app middleware, so `/health` is **not** covered by the allowlist and answers any `Host`. That is what keeps container healthchecks working when they connect by container name or bridge IP, but it also means `/health` discloses the server name and version — and, since it now also reports the circuit breaker's `circuit_state` and `failure_count`, the health of the Sejm API integration — to anything that can reach the published port. FastMCP guarded `/health` too. Restrict the published port, or front it with a proxy, if that disclosure matters to you.
 

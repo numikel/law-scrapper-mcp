@@ -104,57 +104,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_security_boundary(self) -> Settings:
-        if self.auth_mode == "bearer":
-            if self.auth_token is not None and self.auth_token_file is not None:
-                raise ValueError(
-                    "LAW_MCP_AUTH_TOKEN i LAW_MCP_AUTH_TOKEN_FILE ustawione jednocześnie. "
-                    "Wybierz jedno źródło tokenu — milcząca precedencja ukryłaby podmianę sekretu."
-                )
-            if self.auth_token is None and self.auth_token_file is None:
-                raise ValueError("Tryb 'bearer' wymaga tokenu. Ustaw LAW_MCP_AUTH_TOKEN albo LAW_MCP_AUTH_TOKEN_FILE.")
-            try:
-                token = self.resolve_auth_token()
-            except (OSError, UnicodeDecodeError) as error:
-                raise ValueError(
-                    f"Nie udało się odczytać LAW_MCP_AUTH_TOKEN_FILE ({self.auth_token_file}): {error}"
-                ) from error
-            if len(token.encode("utf-8")) < MIN_AUTH_TOKEN_BYTES:
-                raise ValueError(
-                    f"Token uwierzytelniający musi mieć co najmniej {MIN_AUTH_TOKEN_BYTES} bajtów UTF-8. "
-                    "Wygeneruj go poleceniem: openssl rand -base64 32"
-                )
+        """Delegates to `config_validation.enforce_security_boundary`.
 
-        if self.auth_mode == "oauth":
-            required = (
-                ("LAW_MCP_AUTH_ISSUER", self.auth_issuer),
-                ("LAW_MCP_AUTH_AUDIENCE", self.auth_audience),
-                ("LAW_MCP_AUTH_RESOURCE_SERVER_URL", self.auth_resource_server_url),
-            )
-            missing = [name for name, value in required if value is None]
-            if missing:
-                raise ValueError(
-                    f"Tryb 'oauth' wymaga zmiennych: {', '.join(missing)}. "
-                    "Serwer nie uruchomi się z niepełną konfiguracją OAuth."
-                )
+        Local import breaks the circular import: `config_validation` imports
+        constants/helpers from this module at its own module-load time, so it
+        cannot be imported at the top of this file.
+        """
+        from .config_validation import enforce_security_boundary
 
-        if self.auth_mode == "none":
-            if self.transport == "streamable-http" and not is_loopback_entry(self.host):
-                raise ValueError(
-                    f"Bind '{self.host}' wykracza poza pętlę zwrotną przy wyłączonym uwierzytelnianiu. "
-                    "Ustaw LAW_MCP_AUTH_MODE na 'bearer' albo 'oauth', albo binduj na 127.0.0.1."
-                )
-            for name, entries in (
-                ("LAW_MCP_ALLOWED_HOSTS", self.allowed_hosts),
-                ("LAW_MCP_ALLOWED_ORIGINS", self.allowed_origins),
-            ):
-                remote = [entry for entry in entries if not is_loopback_entry(entry)]
-                if remote:
-                    raise ValueError(
-                        f"{name} zawiera wpisy spoza pętli zwrotnej ({', '.join(remote)}) "
-                        "przy wyłączonym uwierzytelnianiu. Ustaw LAW_MCP_AUTH_MODE."
-                    )
-
-        return self
+        return enforce_security_boundary(self)
 
     # Graceful shutdown window handed to uvicorn as `timeout_graceful_shutdown`.
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed

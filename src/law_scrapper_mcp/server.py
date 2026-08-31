@@ -329,6 +329,15 @@ def build_uvicorn_config() -> uvicorn.Config:
         # (uvicorn/config.py:336-337), cannot widen anything unseen.
         proxy_headers=False,
         forwarded_allow_ips=[],
+        # No route here speaks WebSocket, and leaving uvicorn's "auto" in place
+        # makes that depend on whether an optional package happens to be
+        # installed. It matters because the two middlewares below only handle
+        # `http` scopes, while starlette's AuthenticationMiddleware also handles
+        # `websocket` and calls the verifier on it: an upgrade request would
+        # reach `verify_token` past both the budget and the credential strip.
+        # Today `websockets` is absent so uvicorn degrades the upgrade to plain
+        # http, but that is an accident of the dependency tree, not a decision.
+        ws="none",
     )
 
 

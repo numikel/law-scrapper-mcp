@@ -153,6 +153,19 @@ def test_uvicorn_does_not_rewrite_the_client_by_default() -> None:
     assert config.forwarded_allow_ips == []
 
 
+def test_uvicorn_refuses_websocket_upgrades() -> None:
+    """No route speaks WebSocket, and the middlewares only handle `http`.
+
+    Starlette's `AuthenticationMiddleware` also handles `websocket` scopes and
+    calls the verifier on them, while `RateLimitMiddleware` and
+    `ExemptPathCredentialStripper` pass anything non-http straight through — so
+    an upgrade would reach `verify_token` past both the budget and the strip.
+    Leaving uvicorn's `ws="auto"` made that hinge on whether an optional package
+    was installed rather than on a decision.
+    """
+    assert server_module.build_uvicorn_config().ws == "none"
+
+
 def test_uvicorn_rewrite_stays_off_even_with_trusted_proxies(monkeypatch) -> None:
     """Declaring a proxy must not switch uvicorn's own rewrite back on.
 
@@ -170,15 +183,21 @@ def test_uvicorn_rewrite_stays_off_even_with_trusted_proxies(monkeypatch) -> Non
     assert config.forwarded_allow_ips == []
 
 
-def test_health_credential_is_stripped_with_the_limiter_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("rate_limit_enabled", [True, False])
+def test_health_credential_is_stripped(monkeypatch: pytest.MonkeyPatch, rate_limit_enabled: bool) -> None:
     """The strip must not inherit `LAW_MCP_RATE_LIMIT_ENABLED`.
 
     It first lived inside `RateLimitMiddleware`, and `build_http_app()` returns
     the bare app when rate limiting is off — so a setting about request budgets
     silently decided whether a credential could reach the token verifier on the
     one unmetered path.
+
+    Both branches, deliberately. Covering only the disabled one left the
+    *default* branch — the one that actually deploys — unasserted: a mutation
+    that skipped the strip solely when wrapping the limiter passed the whole
+    suite. That is the same defect shape one layer up, in the tests.
     """
-    monkeypatch.setattr(server_module.settings, "rate_limit_enabled", False)
+    monkeypatch.setattr(server_module.settings, "rate_limit_enabled", rate_limit_enabled)
     seen: list[list[bytes]] = []
 
     async def _record(scope, receive, send) -> None:
@@ -190,6 +209,9 @@ def test_health_credential_is_stripped_with_the_limiter_disabled(monkeypatch: py
     scope = {
         "type": "http",
         "path": "/health",
+        # The limiter reads the peer address, so it must be present for the
+        # enabled branch to get as far as the inner app.
+        "client": ("127.0.0.1", 50000),
         "headers": [(b"authorization", b"Bearer forged.jwt.value"), (b"accept", b"*/*")],
     }
     import asyncio

@@ -19,7 +19,7 @@ import respx
 from law_scrapper_mcp.client import rate_limiter as limiter_module
 from law_scrapper_mcp.client import sejm_client as client_module
 from law_scrapper_mcp.client.cache import TTLCache
-from law_scrapper_mcp.client.exceptions import SejmApiError
+from law_scrapper_mcp.client.exceptions import ApiUnavailableError, SejmApiError
 from law_scrapper_mcp.client.rate_limiter import RateLimiter
 from law_scrapper_mcp.client.sejm_client import RequestClass, SejmApiClient
 from law_scrapper_mcp.config import Settings
@@ -209,10 +209,22 @@ async def test_heavy_downloads_cannot_starve_the_light_lane() -> None:
     await api.start()
     try:
         downloads = [asyncio.create_task(api.get_bytes(PDF_PATH)) for _ in range(3)]
-        for _ in range(20):
+        # Yield until the lane is observably full rather than a fixed number of times:
+        # how many turns three requests need to reach the transport is a property of
+        # httpx and respx internals, not of the code under test, so a magic count is a
+        # silent flake waiting for a dependency bump. The bound only stops a hang.
+        for _ in range(1_000):
+            if in_flight == 2:
+                break
             await asyncio.sleep(0)
 
         assert in_flight == 2, "the third download must wait for a heavy slot"
+        # The loop above exits as soon as two are in flight, so the third could still be
+        # in transit. Give it every chance to slip through the lane before we conclude
+        # that it cannot.
+        for _ in range(50):
+            await asyncio.sleep(0)
+        assert in_flight == 2, "the third download must still be waiting"
 
         light = await api.get_json(ACT_PATH)
         assert light == {"ELI": "DU/2024/1"}
@@ -259,9 +271,9 @@ async def test_the_token_is_taken_before_the_concurrency_slot() -> None:
     observed: list[int] = []
 
     class OrderSpy(RateLimiter):
-        async def acquire(self) -> None:
+        async def acquire(self, *, deadline: float | None = None) -> None:
             observed.append(api._semaphores[RequestClass.LIGHT]._value)
-            await super().acquire()
+            await super().acquire(deadline=deadline)
 
     api = SejmApiClient(
         cache=TTLCache(max_entries=100),
@@ -275,3 +287,96 @@ async def test_the_token_is_taken_before_the_concurrency_slot() -> None:
         await api.close()
 
     assert observed == [3]
+
+
+@respx.mock
+async def test_a_pause_it_cannot_afford_fails_fast_instead_of_hanging(
+    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The operation's time budget must reach the limiter, not stop above it.
+
+    `monotonic` is patched onto the same fake clock the limiter uses, because the
+    deadline the retry loop computes and the pause the limiter measures have to be on
+    one scale before either can bound the other.
+
+    Without the bound this call returned only after the whole 60 s pause — longer than
+    most MCP clients wait — so the agent saw a client-side timeout and no explanation.
+    """
+    monkeypatch.setattr(client_module, "monotonic", clock)
+    respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ELI": "DU/2024/1"}))
+
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter, retry_budget=5.0)
+    await api.start()
+    try:
+        limiter.pause_for(60.0)
+
+        with pytest.raises(ApiUnavailableError) as refused:
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert waits == []
+    assert clock.now == 0.0
+    # The agent is told who is holding the traffic back. "Sejm is down" would be a lie:
+    # nothing was even sent.
+    assert "wstrzymany" in str(refused.value)
+
+
+@respx.mock
+async def test_a_refused_pause_leaves_the_client_usable_afterwards(
+    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refusal must leave the client able to serve the very next call.
+
+    Scoped honestly: the breaker is CLOSED here, where releasing a slot is a no-op, so
+    this pins recovery of the ordinary path and NOT the HALF_OPEN probe release. The
+    HALF_OPEN accounting is covered by the breaker's own suite; what this rules out is a
+    refusal leaving the limiter or the client wedged for everyone behind it.
+    """
+    monkeypatch.setattr(client_module, "monotonic", clock)
+    respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ELI": "DU/2024/1"}))
+
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter, retry_budget=5.0)
+    await api.start()
+    try:
+        limiter.pause_for(60.0)
+        with pytest.raises(ApiUnavailableError):
+            await api.get_json(ACT_PATH)
+
+        clock.now = 61.0  # the quiet window has passed
+
+        assert await api.get_json(ACT_PATH) == {"ELI": "DU/2024/1"}
+    finally:
+        await api.close()
+
+
+@respx.mock
+async def test_a_429_holds_back_a_request_that_never_saw_it(clock: FakeClock, waits: list[float]) -> None:
+    """Criterion 4 end to end, with nothing mocked in the middle.
+
+    The other three tests of this criterion replace `pause_for` with a spy, so they
+    prove the client *asks* for a pause and stop there. The behaviour D2 exists for is
+    the next step: a request that never saw the 429 waits it out too.
+
+    `max_attempts=1` keeps the timeline honest — the failing call gives up instead of
+    retrying, so the clock at the second call still reads 0 and the 30 s that follow can
+    only have come from the pause.
+    """
+    respx.get(ACT_URL).mock(return_value=httpx.Response(429, headers={"Retry-After": "30"}))
+    respx.get(PDF_URL).mock(return_value=httpx.Response(200, content=b"%PDF-1.4"))
+
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    api = SejmApiClient(cache=TTLCache(max_entries=100), max_attempts=1, rate_limiter=limiter)
+    await api.start()
+    try:
+        with pytest.raises(SejmApiError):
+            await api.get_json(ACT_PATH)
+        assert clock.now == 0.0
+
+        assert await api.get_bytes(PDF_PATH) == b"%PDF-1.4"
+    finally:
+        await api.close()
+
+    assert clock.now == pytest.approx(30.0)

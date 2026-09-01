@@ -18,7 +18,7 @@ from law_scrapper_mcp.client.exceptions import (
     SejmApiError,
 )
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
-from law_scrapper_mcp.client.rate_limiter import RateLimiter
+from law_scrapper_mcp.client.rate_limiter import EgressPaceDeadlineError, RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,10 @@ class SejmApiClient:
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         # Prebuilt limiter accepted on the same terms as the breaker above: production
-        # passes rate and burst, tests pass a limiter with an injected clock.
+        # passes rate and burst, tests pass a limiter with an injected clock. A limiter
+        # injected here MUST share the clock this class reads for deadlines (module-level
+        # `monotonic`), or the pacing bound silently fails open — the limiter compares a
+        # deadline it cannot interpret and simply never refuses.
         self._rate_limiter = rate_limiter or RateLimiter(rate=rate_per_second, burst=rate_burst)
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
@@ -113,19 +116,30 @@ class SejmApiClient:
         path: str,
         *,
         request_class: RequestClass = RequestClass.LIGHT,
+        deadline: float | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Send a single HTTP request.
 
-        Lowest layer: builds the URL, waits its turn, guards the class semaphore and
-        raises `httpx` exceptions only. It neither retries nor translates errors.
+        Lowest layer: builds the URL, waits its turn and guards the class semaphore. It
+        neither retries nor translates errors, and every error it raises about the wire
+        is an `httpx` one — the single exception is its own pacing refusal below.
 
         The token comes before the slot, and the order is load-bearing: a request
         waiting for a token must not hold a concurrency slot, or rate limiting quietly
         becomes a second concurrency limit.
 
+        `deadline` is the operation's own time budget, forwarded to the limiter so that
+        pacing cannot outlive it. Without it the wait for a token — up to
+        `MAX_SERVER_PAUSE` after a server-requested pause — sits below the layer that
+        owns the budget and is invisible to it, so `api_retry_budget` stops bounding
+        anything on the success path.
+
         Raises:
             httpx.HTTPError: Any transport or status error.
+            EgressPaceDeadlineError: Pacing alone would exhaust `deadline`. Deliberately
+                not an `httpx` error: it is our own policy speaking, not the wire, and
+                the retry loop must not reclassify it as an upstream failure.
         """
         if self._client is None:
             await self.start()
@@ -134,7 +148,7 @@ class SejmApiClient:
 
         url = f"{self.BASE_URL}/{path.lstrip('/')}"
 
-        await self._rate_limiter.acquire()
+        await self._rate_limiter.acquire(deadline=deadline)
 
         async with self._semaphores[request_class]:
             response = await self._client.request(method, url, **kwargs)
@@ -160,6 +174,9 @@ class SejmApiClient:
 
         Raises:
             ApiUnavailableError: When the breaker refuses admission.
+            EgressPaceDeadlineError: When pacing alone would exhaust the budget. Passes
+                through untouched: `classify_failure` never sees it, so this loop cannot
+                mistake our own policy for an upstream failure.
             httpx.HTTPError: The last error once attempts or budget run out.
         """
         deadline = monotonic() + self._retry_budget
@@ -180,7 +197,7 @@ class SejmApiClient:
                 )
 
             try:
-                response = await self._send(method, path, request_class=request_class, **kwargs)
+                response = await self._send(method, path, request_class=request_class, deadline=deadline, **kwargs)
             except httpx.HTTPError as exc:
                 verdict = classify_failure(exc)
                 if verdict.retry_after is not None:
@@ -203,7 +220,9 @@ class SejmApiClient:
                             MAX_SERVER_PAUSE,
                             pause,
                         )
-                    else:
+                    elif pause > 0:
+                        # `Retry-After: 0` is legal and means "go ahead"; logging a
+                        # 0.0 s pause would announce a hold that never happens.
                         logger.warning(
                             "Pausing egress for %.1fs (server requested via Retry-After).",
                             pause,
@@ -232,7 +251,15 @@ class SejmApiClient:
                     throttled = True
                 await _delay(delay)
             except BaseException:
-                self._circuit_breaker.release_probe()
+                # Same accounting as the admission-refused branch above: a failure
+                # already booked in this sequence must not vanish because the sequence
+                # ended some other way — a cancellation, or pacing refusing a wait it
+                # cannot afford. Releasing it as a clean probe would let a still-broken
+                # API be declared recovered in HALF_OPEN.
+                if breaker_failure_seen:
+                    self._circuit_breaker.release_failure()
+                else:
+                    self._circuit_breaker.release_probe()
                 raise
             else:
                 self._circuit_breaker.release_success()
@@ -270,6 +297,25 @@ class SejmApiClient:
         """
         try:
             return await self._execute_with_resilience(method, path, request_class=request_class, **kwargs)
+        except EgressPaceDeadlineError as exc:
+            # Reported as unavailability, which is what it is from the caller's side —
+            # but the message says who is holding the traffic back, so an agent is not
+            # told "Sejm is down" when the truth is "we are keeping the pace we promised".
+            # `max(1, ...)` because a sub-second wait floored to "~0 s" reads as "no wait
+            # at all" and invites an immediate retry. The two causes get different
+            # sentences: only a server-requested pause is a halt — the other is this
+            # client keeping the pace it promised, and saying "halted" there would
+            # describe a condition that does not exist.
+            seconds = max(1, round(exc.wait))
+            cause = (
+                f"Ruch do API Sejmu jest wstrzymany na prośbę serwera (~{seconds} s)"
+                if exc.paused
+                else f"Żądanie musiałoby czekać w kolejce na przepustowość (~{seconds} s)"
+            )
+            raise ApiUnavailableError(
+                f"{cause} — nie zmieściłoby się w budżecie czasu operacji. Spróbuj ponownie za chwilę.",
+                status_code=503,
+            ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             url = str(exc.request.url)

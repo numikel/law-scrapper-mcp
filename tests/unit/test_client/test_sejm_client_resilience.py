@@ -22,7 +22,7 @@ from law_scrapper_mcp.client.exceptions import (
     ApiUnavailableError,
     SejmApiError,
 )
-from law_scrapper_mcp.client.sejm_client import SejmApiClient
+from law_scrapper_mcp.client.sejm_client import RequestClass, SejmApiClient
 
 ACT_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1"
 ACT_PATH = "acts/DU/2024/1"
@@ -508,3 +508,39 @@ def test_tenacity_is_not_a_runtime_dependency() -> None:
         dependencies = tomllib.load(pyproject)["project"]["dependencies"]
 
     assert not any(dependency.lower().startswith("tenacity") for dependency in dependencies)
+
+
+@pytest.mark.asyncio
+async def test_the_lifespan_hands_the_client_the_configured_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same wiring as above, proven by effect instead of by reading the source.
+
+    `test_lifespan_wires_client_settings_into_the_client` asserts on the *text* of
+    `lifespan`, which stays green for code that never runs — a construction moved behind
+    a false branch, shadowed by a later one, or wrapped in a helper all keep the
+    substrings in place while `LAW_MCP_API_RATE_PER_SECOND` quietly stops working. This
+    one builds the real context and asks the client what it ended up with.
+    """
+    from law_scrapper_mcp import server
+    from law_scrapper_mcp.config import Settings
+
+    configured = Settings(
+        api_rate_per_second=1.5,
+        api_rate_burst=3,
+        api_max_concurrent=6,
+        api_max_concurrent_content=4,
+        api_max_attempts=2,
+        api_retry_budget=7.0,
+    )
+    monkeypatch.setattr(server, "settings", configured)
+
+    async with server.lifespan(None) as app_context:  # type: ignore[arg-type]
+        client = app_context.client
+        try:
+            assert client._rate_limiter._rate == pytest.approx(1.5)
+            assert client._rate_limiter._burst == pytest.approx(3.0)
+            assert client._semaphores[RequestClass.LIGHT]._value == 6
+            assert client._semaphores[RequestClass.HEAVY]._value == 4
+            assert client._max_attempts == 2
+            assert client._retry_budget == pytest.approx(7.0)
+        finally:
+            await client.close()

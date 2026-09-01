@@ -13,6 +13,27 @@ from collections.abc import Callable
 from time import monotonic
 
 
+class EgressPaceDeadlineError(Exception):
+    """The next pacing wait would end past the caller's deadline.
+
+    Raised instead of sitting the wait out. The caller would have run out of budget
+    anyway, and waiting first is strictly worse: it holds a circuit-breaker probe slot
+    for the whole window, so other callers are refused with "API unavailable" while the
+    real condition is that we are pacing ourselves.
+
+    Carries the refused wait, and whether it came from a server-requested pause or from
+    ordinary queueing for a token. The translating layer needs both: only the first is a
+    halt, and telling an agent that traffic is "halted" when it is merely being paced
+    describes a condition that does not exist.
+    """
+
+    def __init__(self, wait: float, *, paused: bool) -> None:
+        cause = "a server-requested pause" if paused else "queueing for a token"
+        super().__init__(f"Egress pacing ({cause}) would wait {wait:.1f}s past the operation deadline.")
+        self.wait = wait
+        self.paused = paused
+
+
 async def _wait(seconds: float) -> None:
     """Sole waiting point of the limiter.
 
@@ -57,24 +78,55 @@ class RateLimiter:
         if seconds <= 0:
             return
         self._paused_until = max(self._paused_until, self._clock() + seconds)
+        # Bank what has been earned up to now before moving the refill mark forward:
+        # skipping this would forfeit the tokens accrued since the last `_refill`, which
+        # are pre-pause credit and belong to the caller.
+        self._refill(self._clock())
+        # Refill then resumes at the end of the quiet window, not before it. `_refill` is
+        # never called while paused, so without this the first refill afterwards sees
+        # the whole pause as elapsed time and clamps the bucket to a full burst — the
+        # herd this pause exists to prevent, moved to the moment the window lifts.
+        # Tokens earned before the pause survive on purpose: those are D1's happy path.
+        self._updated = max(self._updated, self._paused_until)
 
     def _refill(self, now: float) -> None:
         elapsed = max(now - self._updated, 0.0)
         self._tokens = min(self._burst, self._tokens + elapsed * self._rate)
         self._updated = now
 
-    async def acquire(self) -> None:
+    def _refuse_past_deadline(self, now: float, wait: float, deadline: float | None, *, paused: bool) -> None:
+        """Raise rather than start a wait that ends past `deadline`.
+
+        Compared with `>=` on the model of the retry loop's own give-up check: a wait
+        landing exactly on the deadline leaves nothing for the request itself.
+        """
+        if deadline is not None and now + wait >= deadline:
+            raise EgressPaceDeadlineError(wait, paused=paused)
+
+    async def acquire(self, *, deadline: float | None = None) -> None:
         """Return once this request may go out, waiting for a token if it must.
 
         The wait happens while holding the lock, which serialises waiters into arrival
         order and hands each one an exact deficit to sleep off. Releasing the lock
         before sleeping would wake every waiter onto the same single token.
+
+        `deadline` is an instant on THIS limiter's `clock()`, which is a contract the
+        caller has to honour: a client that injects a limiter clock but derives its
+        deadline from `time.monotonic()` hands over two unrelated scales, and the bound
+        then fails silently open rather than loudly. Absolute instants are kept rather
+        than durations so that a pause extended mid-wait is re-measured correctly. It is checked before every wait, not once on entry, because a pause
+        may be extended by another task while this one is already waiting. `None` means
+        the caller accepts an unbounded wait.
+
+        Raises:
+            EgressPaceDeadlineError: The next wait would end past `deadline`.
         """
         async with self._lock:
             while True:
                 now = self._clock()
                 pause = self._paused_until - now
                 if pause > 0:
+                    self._refuse_past_deadline(now, pause, deadline, paused=True)
                     await _wait(pause)
                     continue
                 self._refill(now)
@@ -86,4 +138,6 @@ class RateLimiter:
                     self._tokens -= 1.0
                     return
                 deficit = 1.0 - self._tokens
-                await _wait(deficit / self._rate)
+                wait = deficit / self._rate
+                self._refuse_past_deadline(now, wait, deadline, paused=False)
+                await _wait(wait)

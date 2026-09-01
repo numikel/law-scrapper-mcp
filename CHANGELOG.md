@@ -30,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `search_legal_acts` now sends `limit` upstream even when the caller does not supply one
   (default 20). Without it the API built a page of its own choosing — a measured 709 437 B
-  and 500 records for `DU/2024` — of which nineteen out of twenty records were discarded
-  locally. An explicit `limit` is still not clamped.
+  and 500 records for `DU/2024` — of which twenty-four out of twenty-five records were
+  discarded locally. An explicit `limit` is still not clamped.
 - Large searches now return `was_truncated=true` together with a pagination hint, which is a
   consequence of the `total_count` fix rather than a separate behaviour change.
 

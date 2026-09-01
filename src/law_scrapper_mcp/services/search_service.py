@@ -109,20 +109,33 @@ class SearchService:
         if in_force is not None:
             params["inForce"] = in_force
             summary_parts.append(f"in_force={in_force}")
-        if limit:
-            params["limit"] = limit
+        # Always sent now, the default included (D7). Without it the API builds a page
+        # of its own choosing: a measured 709 437 B and 500 records for DU/2024
+        # (tests/fixtures/search_default_page.provenance.md), of which `_output` keeps
+        # twenty and discards the rest locally. An explicit `limit` is still not clamped
+        # — `search_legal_acts` remains the one list tool without a ceiling, pinned by
+        # `test_limit_above_the_shared_maximum_is_not_clamped`.
+        #
+        # Floored at 1 for the same reason `browse()` floors it: what the search endpoint
+        # does with `limit=0` is unverified, and a zero-item page still owes the caller a
+        # truthful `totalCount`. `_output` slices the record away either way.
+        params["limit"] = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 1)
         if offset:
             params["offset"] = offset
 
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
         items = data.get("items", [])
-        # Reads `count` (page size), while `browse()` reads `totalCount` (year size).
-        # Noted during the Klaster 8 audit/review: this reading is believed wrong for a
-        # search that spans more than one page, but fixing it changes what `total_count`
-        # and `truncated` mean for every existing caller of `search()`, which is a
-        # product decision this branch does not make.
-        total_count = data.get("count", len(items))
+        # `totalCount` is the size of the corpus, `count` the size of the returned page.
+        # Reading `count` here made a search matching 1984 acts report twenty, and with it
+        # `was_truncated=False` and no pagination hint at all — the model was told "that is
+        # everything there is". The product decision Klaster 8 deferred was taken in
+        # Klaster 9 (D1): docs/superpowers/specs/2026-09-01-klaster-9.md.
+        #
+        # The fallback chain is not decoration. Responses without `totalCount` keep their
+        # previous meaning, which is what lets every existing pagination test pass
+        # unmodified — the change shows up where the API supplies the truth and nowhere else.
+        total_count = data.get("totalCount", data.get("count", len(items)))
 
         results = [self._format_act(item, detail_level) for item in items]
         query_summary = " | ".join(summary_parts)

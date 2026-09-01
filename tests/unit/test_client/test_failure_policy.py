@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
+
 import httpx
 import pytest
 
+from law_scrapper_mcp.client import failure_policy
 from law_scrapper_mcp.client.failure_policy import Verdict, backoff, classify_failure
 
 REQUEST = httpx.Request("GET", "https://api.sejm.gov.pl/eli/acts/DU/2024/1")
@@ -45,12 +49,65 @@ def test_429_honours_numeric_retry_after() -> None:
     assert verdict.retry_after == pytest.approx(2.0)
 
 
-@pytest.mark.parametrize("raw", ["", "later", "-5", "Wed, 21 Oct 2026 07:28:00 GMT", "inf", "nan", "1e400"])
+@pytest.mark.parametrize("raw", ["", "later", "-5", "inf", "nan", "1e400"])
 def test_unparsable_retry_after_falls_back_to_backoff(raw: str) -> None:
-    """An HTTP-date or junk header must not upset the classification."""
+    """A junk header must not upset the classification."""
     verdict = classify_failure(_status_error(429, {"Retry-After": raw}))
     assert verdict.retryable is True
     assert verdict.retry_after is None
+
+
+PINNED_NOW = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def pinned_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the module's one clock reading.
+
+    Comparing against a live `datetime.now()` would need a tolerance window, and this
+    suite's rule is that no assertion depends on real elapsed time. `_now` exists to be
+    pinned, exactly like `_wait` and `_delay` elsewhere in the client.
+    """
+    monkeypatch.setattr(failure_policy, "_now", lambda: PINNED_NOW)
+
+
+def test_429_honours_an_http_date_retry_after(pinned_clock: None) -> None:
+    """The date form drives the pause too, now that the pause is client-wide.
+
+    This reverses an earlier decision to skip the date form on the grounds that the
+    Sejm API does not send it. The API answers from behind a WAF, and an unparsed
+    header does not fail loudly — it just means the global pause never engages while
+    every other caller keeps its pace at a server that asked for quiet.
+    """
+    when = format_datetime(PINNED_NOW + timedelta(seconds=120), usegmt=True)
+
+    verdict = classify_failure(_status_error(429, {"Retry-After": when}))
+
+    assert verdict.retry_after == pytest.approx(120.0)
+
+
+def test_an_expired_http_date_falls_back_to_backoff(pinned_clock: None) -> None:
+    """A date already past is a stale instruction, not "retry immediately".
+
+    Reading it as zero would retry with no backoff at all — the opposite of what a
+    `Retry-After` asks for.
+    """
+    when = format_datetime(PINNED_NOW - timedelta(hours=1), usegmt=True)
+
+    verdict = classify_failure(_status_error(429, {"Retry-After": when}))
+
+    assert verdict.retry_after is None
+
+
+def test_duplicate_retry_after_headers_resolve_to_the_longest_wait(pinned_clock: None) -> None:
+    """`httpx` joins repeated headers into one comma-separated value.
+
+    Parsed as a single value it is junk, which used to silence the pause entirely.
+    The longest of the two is the polite reading.
+    """
+    verdict = classify_failure(_status_error(429, {"Retry-After": "60, 120"}))
+
+    assert verdict.retry_after == pytest.approx(120.0)
 
 
 @pytest.mark.parametrize(

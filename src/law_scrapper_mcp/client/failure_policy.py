@@ -1,14 +1,20 @@
 """Pure failure-classification policy for Sejm API requests.
 
-The module touches neither the network, the clock, nor shared state, which keeps
-the whole retry policy testable offline — including a sweep over every status
-code. The network layer (`sejm_client`) only reads the verdict.
+The module touches neither the network nor shared state, which keeps the whole retry
+policy testable offline — including a sweep over every status code. The network layer
+(`sejm_client`) only reads the verdict.
+
+It was clock-free too until the date form of `Retry-After` had to be honoured; that one
+reading is confined to `_now()`. This is a documented deviation from the Klaster 8 plan,
+which froze this module precisely because it was pure — see the cluster review.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -33,21 +39,68 @@ class Verdict:
     rate_limited: bool = False
 
 
-def _parse_retry_after(raw: str | None) -> float | None:
-    """Read a Retry-After header expressed in seconds.
+def _now() -> datetime:
+    """Sole clock reading of this module, extracted so tests can pin it.
 
-    The HTTP-date form is deliberately skipped — the Sejm API does not return
-    it, and an unparsed header degrades safely into the ordinary backoff.
+    Follows the `_wait`/`_delay` pattern this codebase already uses for its other
+    unavoidable side channels. The module was written to be clock-free and says so at
+    the top; reading the date form of `Retry-After` is what made a clock unavoidable,
+    and confining it to one function keeps that deviation visible and testable rather
+    than sprinkled through the parser.
     """
-    if raw is None:
-        return None
+    return datetime.now(UTC)
+
+
+def _http_date_delta(candidate: str) -> float | None:
+    """Turn an HTTP-date into seconds from now, or `None` if it is not one."""
     try:
-        seconds = float(raw.strip())
-    except ValueError:
+        when = parsedate_to_datetime(candidate)
+    except (TypeError, ValueError):
         return None
+    if when.tzinfo is None:
+        # RFC 9110 dates are GMT; a naive result means the zone was simply absent.
+        when = when.replace(tzinfo=UTC)
+    delta = (when - _now()).total_seconds()
+    # An expired date is a stale instruction, not a server saying "retry now". Reading it
+    # as zero would mean retrying with no backoff at all, which is the opposite of what a
+    # `Retry-After` is for; ordinary backoff is the polite answer.
+    return delta if delta > 0 else None
+
+
+def _single_retry_after(text: str) -> float | None:
+    """Read one Retry-After value in either of the two forms RFC 9110 defines."""
+    candidate = text.strip()
+    try:
+        seconds = float(candidate)
+    except ValueError:
+        return _http_date_delta(candidate)
     if not math.isfinite(seconds) or seconds < 0:
         return None
     return seconds
+
+
+def _parse_retry_after(raw: str | None) -> float | None:
+    """Read a Retry-After header in both forms RFC 9110 allows.
+
+    The HTTP-date form used to be skipped, on the stated grounds that the Sejm API does
+    not send it. That premise stopped carrying enough weight once the header began
+    driving a client-wide pause instead of one request's backoff: the API answers from
+    behind a WAF, a WAF is free to reply in the date form, and an unparsed value means
+    the pause never engages — every other caller keeps its full pace at a server that
+    just asked for quiet. The failure is silent, which is the worst part of it.
+
+    Duplicate headers, which `httpx` joins into `"60, 120"`, are resolved to the longest
+    wait and only after a whole-string parse has failed: an HTTP-date contains commas
+    itself, so splitting first would shred a valid header.
+    """
+    if raw is None:
+        return None
+    candidate = raw.strip()
+    single = _single_retry_after(candidate)
+    if single is not None or "," not in candidate:
+        return single
+    waits = [w for w in (_single_retry_after(part) for part in candidate.split(",")) if w is not None]
+    return max(waits) if waits else None
 
 
 def classify_failure(exc: httpx.HTTPError) -> Verdict:

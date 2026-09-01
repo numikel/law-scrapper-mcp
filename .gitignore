@@ -104,3 +104,7 @@ docker-compose.override.yml
 
 # Other
 .worktrees/
+
+# Superpowers specs/plans workspace — deliberately untracked (see CLAUDE.md)
+docs/superpowers/
+.superpowers/

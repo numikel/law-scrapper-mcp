@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Outbound politeness towards `api.sejm.gov.pl` (findings F27, F30, F52, F55). No MCP tool
+changes signature or response shape.
+
+### Added
+
+- **Egress rate limiting** — A token bucket now bounds how fast requests leave for the Sejm
+  API, on top of the existing concurrency bound. Configurable with
+  `LAW_MCP_API_RATE_PER_SECOND` (default `5.0`) and `LAW_MCP_API_RATE_BURST` (default `10`).
+  A `Retry-After` sent by the API now pauses the whole client rather than each failing
+  request separately, so honouring it no longer ends in a synchronised retry burst. The pause
+  is capped at 60 seconds regardless of the header's requested duration, so a large or
+  misconfigured `Retry-After` cannot silently wedge every in-flight tool call. Pacing is also
+  bounded by `LAW_MCP_API_RETRY_BUDGET`: a call that cannot be paced within its own time
+  budget fails immediately with a message naming the pause, instead of waiting out a window
+  it was never going to survive and returning a bare client-side timeout.
+- **`Retry-After` is now read in both forms RFC 9110 allows.** Only the delta-seconds form was
+  understood before; a date-form header — which the WAF in front of the API may send even
+  though the API itself does not — was discarded, which silently left the client-wide pause
+  switched off. Repeated headers are resolved to the longest wait.
+- **Separate concurrency budget for content downloads** — `LAW_MCP_API_MAX_CONCURRENT_CONTENT`
+  (default `2`) governs act HTML and PDF downloads, so a run of document fetches can no longer
+  occupy every slot and stall concurrent searches.
+
+### Changed
+
+- **`LAW_MCP_API_MAX_CONCURRENT` default lowered from `10` to `8`,** and its meaning narrowed to
+  light JSON requests. Together with the new `LAW_MCP_API_MAX_CONCURRENT_CONTENT` of `2` the peak
+  concurrency the API sees is unchanged at ten. Deployments that relied on the default now get
+  eight light slots plus two heavy ones; set both variables explicitly to restore any other split.
+- **`browse_acts` fetches one page instead of a whole year.** It now queries `acts/search` with
+  `limit` and `offset` rather than `acts/{publisher}/{year}`, which ignores both and returns the
+  full year every time — 1 093 224 B and 1984 records for `DU/2024`, of which a default page kept
+  twenty. Results, ordering and response fields are unchanged. A `browse_acts` call with a
+  non-numeric `year` now returns a clean tool error instead of silently querying `year=0`. `limit`
+  is now clamped to the same maximum of 100 items every other list tool applies, because it reaches
+  the API and decides the page width where the year endpoint used to ignore it; a negative `limit`
+  or `offset` returns a clean tool error instead of being silently dropped.
+- **`search_legal_acts` and `browse_acts` now query the same `acts/search` endpoint,** which makes
+  a pre-existing asymmetry newly visible: `search_legal_acts` still reports `total_count` as the
+  size of the current page, while `browse_acts` correctly reports the size of the whole year.
+
 ## [4.0.1] - 2026-08-31
 
 See [docs/changelogs/v4.0.1.md](docs/changelogs/v4.0.1.md) for details.

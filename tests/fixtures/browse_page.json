@@ -1,0 +1,361 @@
+{
+  "count": 5,
+  "items": [
+    {
+      "address": "WDU20240001984",
+      "announcementDate": "2024-12-30",
+      "changeDate": "2025-01-02T10:57:07",
+      "displayAddress": "Dz.U. 2024 poz. 1984",
+      "pos": 1984,
+      "promulgation": "2024-12-31",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": true,
+      "textPDF": true,
+      "title": "Rozporządzenie Rady Ministrów z dnia 30 grudnia 2024 r. zmieniające rozporządzenie w sprawie algorytmu przekazywania środków Państwowego Funduszu Rehabilitacji Osób Niepełnosprawnych samorządom wojewódzkim i powiatowym",
+      "type": "Rozporządzenie",
+      "volume": 0,
+      "year": 2024,
+      "authorizedBody": [],
+      "directives": [],
+      "entryIntoForce": "2025-01-01",
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "rehabilitacja zawodowa",
+        "niepełnosprawni"
+      ],
+      "keywordsNames": [
+        "Państwowy Fundusz Rehabilitacji Osób Niepełnosprawnych"
+      ],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Akty zmienione": [
+          {
+            "id": "DU/2003/808",
+            "date": "2025-01-01"
+          }
+        ],
+        "Podstawa prawna": [
+          {
+            "id": "DU/1997/776"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/1997/776",
+            "art": "art. 48 ust. 2"
+          }
+        ]
+      },
+      "releasedBy": [
+        "RADA MINISTRÓW"
+      ],
+      "texts": [
+        {
+          "fileName": "text.html",
+          "type": "H"
+        },
+        {
+          "fileName": "D20241984.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20241984.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2024/1984"
+    },
+    {
+      "address": "WDU20240001983",
+      "announcementDate": "2024-12-11",
+      "changeDate": "2025-01-02T10:57:07",
+      "displayAddress": "Dz.U. 2024 poz. 1983",
+      "pos": 1983,
+      "promulgation": "2024-12-31",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": true,
+      "textPDF": true,
+      "title": "Obwieszczenie Ministra Obrony Narodowej z dnia 11 grudnia 2024 r. w sprawie ogłoszenia jednolitego tekstu rozporządzenia Ministra Obrony Narodowej w sprawie oddelegowania funkcjonariusza Służby Kontrwywiadu Wojskowego do wykonywania zadań służbowych poza Służbą Kontrwywiadu Wojskowego",
+      "type": "Obwieszczenie",
+      "volume": 0,
+      "year": 2024,
+      "authorizedBody": [],
+      "directives": [],
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "funkcjonariusz publiczny"
+      ],
+      "keywordsNames": [
+        "Służba Kontrwywiadu Wojskowego"
+      ],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Podstawa prawna": [
+          {
+            "id": "DU/2000/718"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2000/718",
+            "art": "art. 16 ust. 3"
+          }
+        ],
+        "Tekst jednolity dla aktu": [
+          {
+            "id": "DU/2006/1345"
+          }
+        ]
+      },
+      "releasedBy": [
+        "MIN. OBRONY NARODOWEJ"
+      ],
+      "texts": [
+        {
+          "fileName": "text.html",
+          "type": "H"
+        },
+        {
+          "fileName": "D20241983.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20241983.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2024/1983"
+    },
+    {
+      "address": "WDU20240001982",
+      "announcementDate": "2024-12-11",
+      "changeDate": "2025-10-28T08:23:36",
+      "displayAddress": "Dz.U. 2024 poz. 1982",
+      "pos": 1982,
+      "promulgation": "2024-12-31",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": true,
+      "textPDF": true,
+      "title": "Obwieszczenie Ministra Obrony Narodowej z dnia 11 grudnia 2024 r. w sprawie ogłoszenia jednolitego tekstu rozporządzenia Ministra Obrony Narodowej w sprawie norm zakwaterowania żołnierzy we wspólnych kwaterach stałych oraz trybu ich kwaterowania",
+      "type": "Obwieszczenie",
+      "volume": 0,
+      "year": 2024,
+      "authorizedBody": [],
+      "directives": [],
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "żołnierz zawodowy",
+        "zakwaterowanie",
+        "zakwaterowanie sił zbrojnych"
+      ],
+      "keywordsNames": [],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Podstawa prawna": [
+          {
+            "id": "DU/2000/718"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2000/718",
+            "art": "art. 16 ust. 3"
+          }
+        ],
+        "Tekst jednolity dla aktu": [
+          {
+            "id": "DU/2011/989"
+          }
+        ]
+      },
+      "releasedBy": [
+        "MIN. OBRONY NARODOWEJ"
+      ],
+      "texts": [
+        {
+          "fileName": "text.html",
+          "type": "H"
+        },
+        {
+          "fileName": "D20241982.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20241982.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2024/1982"
+    },
+    {
+      "address": "WDU20240001981",
+      "announcementDate": "2024-12-22",
+      "changeDate": "2025-01-02T10:57:07",
+      "displayAddress": "Dz.U. 2024 poz. 1981",
+      "pos": 1981,
+      "promulgation": "2024-12-31",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": true,
+      "textPDF": true,
+      "title": "Rozporządzenie Ministra Rolnictwa i Rozwoju Wsi z dnia 22 grudnia 2024 r. zmieniające rozporządzenie w sprawie wykazu punktów wjazdu podróżnych oraz warunków i sposobu współpracy organów Inspekcji Weterynaryjnej z organami celnymi przy kontroli przemieszczanych w celach niehandlowych zwierząt domowych towarzyszących podróżnym",
+      "type": "Rozporządzenie",
+      "volume": 0,
+      "year": 2024,
+      "authorizedBody": [],
+      "directives": [],
+      "entryIntoForce": "2025-01-15",
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "weterynaryjna służba",
+        "zwierzęta",
+        "choroby zakaźne",
+        "ochrona zwierząt",
+        "choroby zwierząt"
+      ],
+      "keywordsNames": [],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Akty zmienione": [
+          {
+            "id": "DU/2022/1660",
+            "date": "2025-01-15"
+          }
+        ],
+        "Podstawa prawna": [
+          {
+            "id": "DU/2004/625"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2004/625",
+            "art": "art. 24b ust. 10"
+          }
+        ]
+      },
+      "releasedBy": [
+        "MIN. ROLNICTWA I ROZWOJU WSI"
+      ],
+      "texts": [
+        {
+          "fileName": "text.html",
+          "type": "H"
+        },
+        {
+          "fileName": "D20241981.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20241981.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2024/1981"
+    },
+    {
+      "address": "WDU20240001980",
+      "announcementDate": "2024-12-30",
+      "changeDate": "2025-01-02T10:57:06",
+      "displayAddress": "Dz.U. 2024 poz. 1980",
+      "pos": 1980,
+      "promulgation": "2024-12-31",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": true,
+      "textPDF": true,
+      "title": "Rozporządzenie Ministra Przemysłu oraz Ministra Klimatu i Środowiska z dnia 30 grudnia 2024 r. zmieniające rozporządzenie w sprawie wymagań jakościowych dla paliw ciekłych",
+      "type": "Rozporządzenie",
+      "volume": 0,
+      "year": 2024,
+      "authorizedBody": [],
+      "directives": [
+        {
+          "address": "32024R2522",
+          "date": "2024-09-23",
+          "title": "Rozporządzenie wykonawcze Komisji (UE) 2024/2522 z dnia 23 września 2024 r. zmieniające załącznik I do rozporządzenia Rady (EWG) nr 2658/87 w sprawie nomenklatury taryfowej i statystycznej oraz w sprawie Wspólnej Taryfy Celnej"
+        }
+      ],
+      "entryIntoForce": "2025-01-01",
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "paliwa",
+        "kontrola"
+      ],
+      "keywordsNames": [],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Akty zmienione": [
+          {
+            "id": "DU/2024/1018",
+            "date": "2025-01-01"
+          }
+        ],
+        "Podstawa prawna": [
+          {
+            "id": "DU/2006/1200"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2006/1200",
+            "art": "art. 3 ust. 2 pkt 1"
+          }
+        ]
+      },
+      "releasedBy": [
+        "MIN. PRZEMYSŁU",
+        "MIN. KLIMATU I ŚRODOWISKA"
+      ],
+      "texts": [
+        {
+          "fileName": "text.html",
+          "type": "H"
+        },
+        {
+          "fileName": "D20241980.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20241980.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2024/1980"
+    }
+  ],
+  "offset": 0,
+  "totalCount": 1984,
+  "searchQuery": {
+    "comparator": {
+      "column": "publisher",
+      "dir": "asc"
+    },
+    "dateEffectType": "NONE",
+    "dateType": "NONE",
+    "exile": false,
+    "keyword": [],
+    "position": -1,
+    "pubDateType": "NONE",
+    "publisher": "DU",
+    "publisherName": "Dziennik Ustaw",
+    "statusInForce": false,
+    "title": "",
+    "type": [],
+    "volume": -1,
+    "year": 2024
+  }
+}

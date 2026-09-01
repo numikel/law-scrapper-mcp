@@ -45,6 +45,13 @@ tests/
 │   ├── test_paginated_tool_outputs.py
 │   ├── test_server.py
 │   ├── test_dependency_policy.py
+│   ├── test_client/
+│   │   ├── test_circuit_breaker.py
+│   │   ├── test_failure_policy.py
+│   │   ├── test_sejm_client_resilience.py
+│   │   ├── test_rate_limiter.py    # Outbound token bucket, fake clock
+│   │   ├── test_egress_pacing.py   # Limiter + light/heavy lanes in the client
+│   │   └── test_user_agent.py      # Identity sent to api.sejm.gov.pl
 │   └── test_services/
 └── integration/           # MCP protocol integration tests
     ├── test_tools_e2e.py           # In-memory Client, all 13 tools

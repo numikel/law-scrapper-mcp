@@ -33,14 +33,14 @@ class SearchService:
     ) -> SearchOutput:
         """Build one page of results together with truthful page metadata.
 
-        `window_offset` is the offset the Sejm API already applied server-side:
-        `search` passes the request offset, because the API skipped those
-        records itself, while `browse` passes zero, because the whole year
-        arrives in one response and the slice happens here.
+        `window_offset` is the offset the Sejm API already applied server-side. Both
+        callers now pass the request offset, because both go through `acts/search`,
+        which skips those records upstream. A zero here would mean the caller received
+        an unwindowed payload and wants the slice done locally.
 
-        `total` is clamped up to the records actually held. A `count` smaller
-        than the payload would otherwise fail `PageInfo` validation and turn a
-        quirky upstream response into a tool error.
+        `total` is clamped up to the records actually held. A `count` smaller than the
+        payload would otherwise fail `PageInfo` validation and turn a quirky upstream
+        response into a tool error.
         """
         page_limit = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 0)
         page_offset = max(offset, 0)
@@ -117,6 +117,11 @@ class SearchService:
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
         items = data.get("items", [])
+        # Reads `count` (page size), while `browse()` reads `totalCount` (year size).
+        # Noted during the Klaster 8 audit/review: this reading is believed wrong for a
+        # search that spans more than one page, but fixing it changes what `total_count`
+        # and `truncated` mean for every existing caller of `search()`, which is a
+        # product decision this branch does not make.
         total_count = data.get("count", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
@@ -139,11 +144,48 @@ class SearchService:
         limit: int | None = None,
         offset: int | None = None,
     ) -> SearchOutput:
-        """Browse acts by publisher and year and return a stored result page."""
-        path = f"acts/{publisher}/{year}"
-        data = await self._client.get_json(path, cache_ttl=settings.cache_browse_ttl)
+        """Browse acts by publisher and year and return a stored result page.
+
+        Goes through `acts/search` rather than `acts/{publisher}/{year}`: the year
+        endpoint ignores `limit` and `offset` and answers every page with the entire
+        year (1 093 224 B and 1984 records for DU/2024), while the search endpoint
+        honours both and preserves the year endpoint's order and `totalCount`.
+
+        The cache key `json:acts/search:{params}` is now shared with `search()`
+        whenever the parameters match exactly. That is deliberate (D8), not an
+        oversight: both calls ask the API the same question and get the same answer,
+        and giving `browse` its own key prefix would fetch the same year twice — more
+        outbound traffic, which is what this whole change exists to reduce. Because
+        the cache key does not include TTL (`cache_search_ttl=600` vs
+        `cache_browse_ttl=3600`), whichever call stores the entry first decides
+        freshness for both — the 6× TTL difference stops applying to whichever method
+        writes the cache entry second.
+
+        `limit` is clamped by the calling tool, not here, and that clamp is load-bearing
+        now rather than cosmetic: `acts/search` honours `limit`, so it decides how wide a
+        page the API builds, and its records carry more fields than the year endpoint's
+        did. Unclamped, a large `limit` would cost more bytes per record than the old
+        `acts/{publisher}/{year}` behaviour did, not less.
+        """
+        page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)
+        page_offset = max(offset or 0, 0)
+        params: dict[str, Any] = {
+            "publisher": publisher,
+            "year": year,
+            # A zero-item page still owes the caller a truthful `totalCount`, and what
+            # the search endpoint does with `limit=0` is unverified. Asking for one
+            # record and letting `_output` slice it away keeps the answer identical to
+            # the pre-change one without probing that corner.
+            "limit": max(page_limit, 1),
+        }
+        if page_offset:
+            params["offset"] = page_offset
+        data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_browse_ttl)
 
         items = data.get("items", [])
+        # `count` is the size of the returned page on this endpoint; the size of the
+        # year is `totalCount`. Copying the `count` reading from `search()` above would
+        # report total_count=20 and was_truncated=False for a 1984-act year.
         total_count = data.get("totalCount", len(items))
 
         results = [self._format_act(item, detail_level) for item in items]
@@ -154,8 +196,10 @@ class SearchService:
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
-            offset=offset or 0,
-            window_offset=0,
+            offset=page_offset,
+            # The API skipped these records itself, so `_output` must not skip them
+            # again — the same contract `search()` has used since pagination landed.
+            window_offset=page_offset,
         )
 
     def _format_act(self, item: dict[str, Any], detail_level: DetailLevel) -> ActSummaryOutput:

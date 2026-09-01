@@ -133,7 +133,7 @@ class TestSearchService:
     @respx.mock
     async def test_browse_by_publisher_year(self, service: SearchService, search_results: dict):
         """Test browsing acts by publisher and year."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024").mock(return_value=Response(200, json=search_results))
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         output = await service.browse("DU", 2024)
 
@@ -144,7 +144,7 @@ class TestSearchService:
     @respx.mock
     async def test_browse_with_detail_level(self, service: SearchService, search_results: dict):
         """Test browse with detail level."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/MP/2023").mock(return_value=Response(200, json=search_results))
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 
         output = await service.browse("MP", 2023, detail_level=DetailLevel.FULL)
 
@@ -155,7 +155,7 @@ class TestSearchService:
     async def test_browse_empty_results(self, service: SearchService):
         """Test browse with no results."""
         empty_results = {"totalCount": 0, "items": []}
-        respx.get("https://api.sejm.gov.pl/eli/acts/DU/1900").mock(return_value=Response(200, json=empty_results))
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=empty_results))
 
         output = await service.browse("DU", 1900)
 

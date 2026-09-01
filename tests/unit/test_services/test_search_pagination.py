@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
 
@@ -33,6 +34,24 @@ def _client(payload: dict[str, Any]) -> AsyncMock:
 
 def _service(payload: dict[str, Any]) -> tuple[SearchService, AsyncMock]:
     client = _client(payload)
+    return SearchService(client, ResultStore()), client
+
+
+def _paging_service(total: int) -> tuple[SearchService, AsyncMock]:
+    """A client that windows server-side, the way `acts/search` does."""
+    client = AsyncMock()
+
+    async def page(_path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None):
+        window = params or {}
+        start = int(window.get("offset", 0))
+        end = start + int(window.get("limit", DEFAULT_ITEM_LIMIT))
+        return {
+            "count": max(min(end, total) - start, 0),
+            "totalCount": total,
+            "items": [_item(n) for n in range(start, min(end, total))],
+        }
+
+    client.get_json.side_effect = page
     return SearchService(client, ResultStore()), client
 
 
@@ -104,9 +123,9 @@ class TestSearchPage:
 
 
 class TestBrowsePage:
-    async def test_browse_slices_locally_and_pages_are_disjoint(self) -> None:
-        payload = {"items": [_item(n) for n in range(50)], "totalCount": 50}
-        service, _ = _service(payload)
+    async def test_browse_pages_come_from_the_api_window(self) -> None:
+        """The API skips the records; browse must not skip them a second time."""
+        service, _ = _paging_service(50)
 
         first = await service.browse("DU", 2024, limit=10, offset=0)
         second = await service.browse("DU", 2024, limit=10, offset=10)
@@ -115,8 +134,7 @@ class TestBrowsePage:
         assert [act.eli for act in second.results] == [f"DU/2024/{n}" for n in range(10, 20)]
 
     async def test_next_offset_is_servable_by_browse(self) -> None:
-        payload = {"items": [_item(n) for n in range(50)], "totalCount": 50}
-        service, _ = _service(payload)
+        service, _ = _paging_service(50)
 
         first = await service.browse("DU", 2024, limit=10)
         assert first.page_info.next_offset == 10
@@ -126,14 +144,23 @@ class TestBrowsePage:
         assert second.results[0].eli == "DU/2024/10"
 
     async def test_browse_does_not_issue_extra_upstream_requests_for_a_page(self) -> None:
-        service, client = _service({"items": [_item(n) for n in range(50)], "totalCount": 50})
+        service, client = _paging_service(50)
 
         await service.browse("DU", 2024, limit=10, offset=30)
 
         assert client.get_json.await_count == 1
 
+    async def test_the_requested_window_reaches_the_api(self) -> None:
+        """The point of F30: the window is a query parameter, not a local slice."""
+        service, client = _paging_service(1984)
+
+        await service.browse("DU", 2024, limit=10, offset=30)
+
+        params = client.get_json.await_args.kwargs["params"]
+        assert (params["limit"], params["offset"]) == (10, 30)
+
     async def test_offset_past_the_end_returns_an_empty_untruncated_page(self) -> None:
-        service, _ = _service({"items": [_item(n) for n in range(5)], "totalCount": 5})
+        service, _ = _paging_service(5)
 
         output = await service.browse("DU", 2024, limit=10, offset=99)
 

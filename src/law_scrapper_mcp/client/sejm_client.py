@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from enum import StrEnum
 from time import monotonic
 from typing import Any
 
@@ -16,11 +18,33 @@ from law_scrapper_mcp.client.exceptions import (
     SejmApiError,
 )
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
+from law_scrapper_mcp.client.rate_limiter import EgressPaceDeadlineError, RateLimiter
+
+logger = logging.getLogger(__name__)
 
 # Deliberately carries no version: a hardcoded one drifts, and a client built
 # without settings has no honest version to claim. Production passes
 # `Settings.user_agent`, which derives both name and version from configuration.
 DEFAULT_USER_AGENT = "law-scrapper-mcp"
+
+# Bounds what a single Retry-After header can cost every other caller of this
+# client. The request that received it already has its own give-up check
+# (bounded by the retry budget) — this pause has none of its own and outlives
+# that one request, holding every other waiter's `acquire()` regardless of what
+# happens to the request that triggered it.
+MAX_SERVER_PAUSE = 60.0
+
+
+class RequestClass(StrEnum):
+    """Traffic class deciding which concurrency budget a request draws on.
+
+    Split so that a run of act downloads can never take the last slot a search would
+    have used (finding F55). The rate limiter stays shared: pace is a property of all
+    outbound traffic, not of one class.
+    """
+
+    LIGHT = "light"
+    HEAVY = "heavy"
 
 
 async def _delay(seconds: float) -> None:
@@ -40,17 +64,30 @@ class SejmApiClient:
         self,
         cache: TTLCache,
         timeout: float = 30.0,
-        max_concurrent: int = 10,
+        max_concurrent: int = 8,
         circuit_breaker: CircuitBreaker | None = None,
         max_attempts: int = 3,
         retry_budget: float = 45.0,
         user_agent: str = DEFAULT_USER_AGENT,
+        max_concurrent_content: int = 2,
+        rate_per_second: float = 5.0,
+        rate_burst: int = 10,
+        rate_limiter: RateLimiter | None = None,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._semaphores = {
+            RequestClass.LIGHT: asyncio.Semaphore(max_concurrent),
+            RequestClass.HEAVY: asyncio.Semaphore(max_concurrent_content),
+        }
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
+        # Prebuilt limiter accepted on the same terms as the breaker above: production
+        # passes rate and burst, tests pass a limiter with an injected clock. A limiter
+        # injected here MUST share the clock this class reads for deadlines (module-level
+        # `monotonic`), or the pacing bound silently fails open — the limiter compares a
+        # deadline it cannot interpret and simply never refuses.
+        self._rate_limiter = rate_limiter or RateLimiter(rate=rate_per_second, burst=rate_burst)
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
         self._user_agent = user_agent
@@ -73,14 +110,36 @@ class SejmApiClient:
             await self._client.aclose()
             self._client = None
 
-    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        deadline: float | None = None,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Send a single HTTP request.
 
-        Lowest layer: builds the URL, guards the semaphore and raises `httpx`
-        exceptions only. It neither retries nor translates errors.
+        Lowest layer: builds the URL, waits its turn and guards the class semaphore. It
+        neither retries nor translates errors, and every error it raises about the wire
+        is an `httpx` one — the single exception is its own pacing refusal below.
+
+        The token comes before the slot, and the order is load-bearing: a request
+        waiting for a token must not hold a concurrency slot, or rate limiting quietly
+        becomes a second concurrency limit.
+
+        `deadline` is the operation's own time budget, forwarded to the limiter so that
+        pacing cannot outlive it. Without it the wait for a token — up to
+        `MAX_SERVER_PAUSE` after a server-requested pause — sits below the layer that
+        owns the budget and is invisible to it, so `api_retry_budget` stops bounding
+        anything on the success path.
 
         Raises:
             httpx.HTTPError: Any transport or status error.
+            EgressPaceDeadlineError: Pacing alone would exhaust `deadline`. Deliberately
+                not an `httpx` error: it is our own policy speaking, not the wire, and
+                the retry loop must not reclassify it as an upstream failure.
         """
         if self._client is None:
             await self.start()
@@ -89,12 +148,21 @@ class SejmApiClient:
 
         url = f"{self.BASE_URL}/{path.lstrip('/')}"
 
-        async with self._semaphore:
+        await self._rate_limiter.acquire(deadline=deadline)
+
+        async with self._semaphores[request_class]:
             response = await self._client.request(method, url, **kwargs)
             response.raise_for_status()
             return response
 
-    async def _execute_with_resilience(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _execute_with_resilience(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Run a request with retries, a time budget and breaker accounting.
 
         The middle layer sees raw `httpx` exceptions only, so no `except` block
@@ -106,6 +174,9 @@ class SejmApiClient:
 
         Raises:
             ApiUnavailableError: When the breaker refuses admission.
+            EgressPaceDeadlineError: When pacing alone would exhaust the budget. Passes
+                through untouched: `classify_failure` never sees it, so this loop cannot
+                mistake our own policy for an upstream failure.
             httpx.HTTPError: The last error once attempts or budget run out.
         """
         deadline = monotonic() + self._retry_budget
@@ -126,9 +197,37 @@ class SejmApiClient:
                 )
 
             try:
-                response = await self._send(method, path, **kwargs)
+                response = await self._send(method, path, request_class=request_class, deadline=deadline, **kwargs)
             except httpx.HTTPError as exc:
                 verdict = classify_failure(exc)
+                if verdict.retry_after is not None:
+                    # The pause belongs to the whole client, not to this one request.
+                    # Nine concurrent callers each honouring a private copy of the same
+                    # header would come back as a herd, aimed at a server that just
+                    # asked for quiet. Applied before the give-up check on purpose: the
+                    # signal outlives the request that happened to receive it.
+                    #
+                    # Clamped here, not in `classify_failure`/`_parse_retry_after`:
+                    # `verdict.retry_after` also drives `delay` and `give_up` below, and
+                    # clamping it there would silently turn "give up now" into "retry
+                    # after the clamp" for this one request. Only the client-wide pause
+                    # is bounded; this request's own retry policy sees the real header.
+                    pause = min(verdict.retry_after, MAX_SERVER_PAUSE)
+                    if verdict.retry_after > MAX_SERVER_PAUSE:
+                        logger.warning(
+                            "Retry-After=%.1fs exceeds the %.1fs cap; pausing egress for %.1fs instead.",
+                            verdict.retry_after,
+                            MAX_SERVER_PAUSE,
+                            pause,
+                        )
+                    elif pause > 0:
+                        # `Retry-After: 0` is legal and means "go ahead"; logging a
+                        # 0.0 s pause would announce a hold that never happens.
+                        logger.warning(
+                            "Pausing egress for %.1fs (server requested via Retry-After).",
+                            pause,
+                        )
+                    self._rate_limiter.pause_for(pause)
                 if verdict.breaker_failure:
                     breaker_failure_seen = True
                 delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)
@@ -152,7 +251,15 @@ class SejmApiClient:
                     throttled = True
                 await _delay(delay)
             except BaseException:
-                self._circuit_breaker.release_probe()
+                # Same accounting as the admission-refused branch above: a failure
+                # already booked in this sequence must not vanish because the sequence
+                # ended some other way — a cancellation, or pacing refusing a wait it
+                # cannot afford. Releasing it as a clean probe would let a still-broken
+                # API be declared recovered in HALF_OPEN.
+                if breaker_failure_seen:
+                    self._circuit_breaker.release_failure()
+                else:
+                    self._circuit_breaker.release_probe()
                 raise
             else:
                 self._circuit_breaker.release_success()
@@ -161,7 +268,14 @@ class SejmApiClient:
         # Unreachable: the loop always exits through a return or a raise.
         raise ApiUnavailableError("API Sejmu nie odpowiedziało w ramach dozwolonych prób", status_code=503)
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        request_class: RequestClass = RequestClass.LIGHT,
+        **kwargs: Any,
+    ) -> httpx.Response:
         """Run a request and translate `httpx` errors into domain exceptions.
 
         Topmost layer. Translation happens outside the retry loop, so the policy
@@ -182,7 +296,26 @@ class SejmApiClient:
             SejmApiError: For the remaining request-side errors.
         """
         try:
-            return await self._execute_with_resilience(method, path, **kwargs)
+            return await self._execute_with_resilience(method, path, request_class=request_class, **kwargs)
+        except EgressPaceDeadlineError as exc:
+            # Reported as unavailability, which is what it is from the caller's side —
+            # but the message says who is holding the traffic back, so an agent is not
+            # told "Sejm is down" when the truth is "we are keeping the pace we promised".
+            # `max(1, ...)` because a sub-second wait floored to "~0 s" reads as "no wait
+            # at all" and invites an immediate retry. The two causes get different
+            # sentences: only a server-requested pause is a halt — the other is this
+            # client keeping the pace it promised, and saying "halted" there would
+            # describe a condition that does not exist.
+            seconds = max(1, round(exc.wait))
+            cause = (
+                f"Ruch do API Sejmu jest wstrzymany na prośbę serwera (~{seconds} s)"
+                if exc.paused
+                else f"Żądanie musiałoby czekać w kolejce na przepustowość (~{seconds} s)"
+            )
+            raise ApiUnavailableError(
+                f"{cause} — nie zmieściłoby się w budżecie czasu operacji. Spróbuj ponownie za chwilę.",
+                status_code=503,
+            ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             url = str(exc.request.url)
@@ -240,7 +373,12 @@ class SejmApiClient:
         Returns:
             Response text
         """
-        response = await self._request("GET", path, headers={"Accept": "text/html, text/plain, */*"})
+        response = await self._request(
+            "GET",
+            path,
+            request_class=RequestClass.HEAVY,
+            headers={"Accept": "text/html, text/plain, */*"},
+        )
         return response.text
 
     async def get_bytes(self, path: str) -> bytes:
@@ -253,7 +391,10 @@ class SejmApiClient:
             Response bytes
         """
         response = await self._request(
-            "GET", path, headers={"Accept": "application/pdf, application/octet-stream, */*"}
+            "GET",
+            path,
+            request_class=RequestClass.HEAVY,
+            headers={"Accept": "application/pdf, application/octet-stream, */*"},
         )
         return response.content
 

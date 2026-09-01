@@ -171,6 +171,21 @@ class FilterOutput(BaseModel):
     original_count: int
     filtered_count: int
     filters_applied: dict[str, Any] = {}
+    source_scope: ResultSetScope = Field(
+        description="Zasięg zestawu, który filtrowano — decyduje, czego dowodzi pusty wynik."
+    )
+    result_set_scope: ResultSetScope | None = Field(
+        default=None,
+        description="Zasięg zestawu powstałego z filtrowania. None, gdy nic nie dopasowano.",
+    )
+    no_match_is_inconclusive: bool = Field(
+        default=False,
+        description=(
+            "True, gdy filtrowano okno i nic nie dopasowano. Wynik NIE rozstrzyga, "
+            "czy akt istnieje w zbiorze — przeszukano tylko okno. Poszerz zestaw "
+            "albo zawęź kryteria wyszukiwania przed wyciągnięciem wniosku."
+        ),
+    )
     page_info: PageInfo
 
 

@@ -589,3 +589,73 @@ class TestSetScope:
         await store.store(sample_results, "query", 1984)
         listed = await store.list_sets()
         assert listed[0]["scope"] is SetScope.PAGE
+
+
+class TestInheritedScope:
+    """A filtered subset is complete with respect to its source, not to the corpus."""
+
+    async def test_filtering_a_window_yields_a_window(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id, source_scope = await store.store(sample_results, "query", 1984)
+        assert source_scope.scope is SetScope.PAGE
+
+        output = await store.filter_and_store(source_id, type_equals="Ustawa")
+
+        assert output.source_scope.scope is SetScope.PAGE
+        assert output.source_scope.corpus_count == 1984
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope is SetScope.PAGE
+        # We know how many records matched inside the window. We do not know how
+        # many corpus records would have matched, and must not invent it.
+        assert output.result_set_scope.corpus_count is None
+
+    async def test_filtering_a_complete_set_yields_a_complete_set(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id, source_scope = await store.store(sample_results, "query", len(sample_results))
+        assert source_scope.scope is SetScope.COMPLETE
+
+        output = await store.filter_and_store(source_id, type_equals="Ustawa")
+
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope is SetScope.COMPLETE
+        assert output.result_set_scope.corpus_count == output.filtered_count
+
+
+class TestInconclusiveEmptyMatch:
+    """An empty filter on a window is the failure mode this cluster exists to stop."""
+
+    async def test_empty_match_on_a_window_is_inconclusive(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id, _ = await store.store(sample_results, "query", 1984)
+
+        output = await store.filter_and_store(source_id, pattern="nie-ma-takiego-slowa")
+
+        assert output.filtered_count == 0
+        assert output.no_match_is_inconclusive is True
+        # No derived set is created for an empty match; the source reach still is.
+        assert output.result_set_scope is None
+        assert output.source_scope.scope is SetScope.PAGE
+
+    async def test_empty_match_on_a_complete_set_is_conclusive(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        source_id, _ = await store.store(sample_results, "query", len(sample_results))
+
+        output = await store.filter_and_store(source_id, pattern="nie-ma-takiego-slowa")
+
+        assert output.filtered_count == 0
+        assert output.no_match_is_inconclusive is False
+
+    async def test_a_non_empty_match_on_a_window_is_not_flagged(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        """A warning shown on every window filter would stop meaning anything."""
+        source_id, _ = await store.store(sample_results, "query", 1984)
+
+        output = await store.filter_and_store(source_id, type_equals="Ustawa")
+
+        assert output.filtered_count > 0
+        assert output.no_match_is_inconclusive is False

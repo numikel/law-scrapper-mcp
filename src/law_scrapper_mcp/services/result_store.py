@@ -189,9 +189,23 @@ class ResultStore:
             page_info=page_info,
         )
 
-    async def filter_results(
+    async def _require(self, result_set_id: str) -> StoredResultSet:
+        """Fetch a set for filtering, or explain why it cannot be filtered.
+
+        Split out so `filter_and_store` reads the set exactly once. Calling `get()`
+        a second time to recover the source reach would refresh `last_accessed` and
+        move the set to the front of the LRU order as a side effect of describing it.
+        """
+        rs = await self.get(result_set_id)
+        if rs is None:
+            raise ResultSetNotFoundError(result_set_id)
+        if len(rs.results) > self.max_records:
+            raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
+        return rs
+
+    def _apply_filters(
         self,
-        result_set_id: str,
+        rs: StoredResultSet,
         *,
         pattern: str | None = None,
         field: str = "title",
@@ -204,14 +218,7 @@ class ResultStore:
         sort_by: str | None = None,
         sort_desc: bool = False,
     ) -> tuple[list[ActSummaryOutput], int]:
-        """Filter a stored result set. Returns (filtered_results, original_count)."""
-        rs = await self.get(result_set_id)
-        if rs is None:
-            raise ResultSetNotFoundError(result_set_id)
-
-        if len(rs.results) > self.max_records:
-            raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
-
+        """Apply every filter in memory. Returns (filtered_results, original_count)."""
         filtered = list(rs.results)
         original_count = len(filtered)
 
@@ -244,6 +251,37 @@ class ResultStore:
 
         return filtered, original_count
 
+    async def filter_results(
+        self,
+        result_set_id: str,
+        *,
+        pattern: str | None = None,
+        field: str = "title",
+        type_equals: str | None = None,
+        status_equals: str | None = None,
+        year_equals: int | None = None,
+        date_field: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str | None = None,
+        sort_desc: bool = False,
+    ) -> tuple[list[ActSummaryOutput], int]:
+        """Filter a stored result set. Returns (filtered_results, original_count)."""
+        rs = await self._require(result_set_id)
+        return self._apply_filters(
+            rs,
+            pattern=pattern,
+            field=field,
+            type_equals=type_equals,
+            status_equals=status_equals,
+            year_equals=year_equals,
+            date_field=date_field,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
+
     async def filter_and_store(
         self,
         result_set_id: str,
@@ -262,8 +300,10 @@ class ResultStore:
         offset: int = 0,
     ) -> FilterOutput:
         """Filter one set, persist the result, and build its public output."""
-        filtered, original_count = await self.filter_results(
-            result_set_id,
+        rs = await self._require(result_set_id)
+        source_scope = rs.scope_view()
+        filtered, original_count = self._apply_filters(
+            rs,
             pattern=pattern,
             field=field,
             type_equals=type_equals,
@@ -293,7 +333,8 @@ class ResultStore:
         if sort_by:
             filters_applied.update(sort_by=sort_by, sort_desc=sort_desc)
 
-        new_set_id = None
+        new_set_id: str | None = None
+        new_scope: ResultSetScope | None = None
         if filtered:
             description = _build_filters_description(
                 pattern=pattern,
@@ -305,10 +346,15 @@ class ResultStore:
                 date_from=date_from,
                 date_to=date_to,
             )
-            new_set_id, _ = await self.store(
+            # Inherited, not derived: a subset of a window is complete with respect
+            # to the window only. Letting `store()` derive the reach here would call
+            # it COMPLETE — every filtered set starts at index 0 and holds exactly as
+            # many records as it holds — and that would be false.
+            new_set_id, new_scope = await self.store(
                 filtered,
                 f"filtered({result_set_id}): {description}",
                 len(filtered),
+                scope=source_scope.scope,
             )
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
@@ -324,6 +370,12 @@ class ResultStore:
             original_count=original_count,
             filtered_count=len(filtered),
             filters_applied=filters_applied,
+            source_scope=source_scope,
+            result_set_scope=new_scope,
+            # Both conditions matter. Without the window check the flag would be
+            # wrong; without the empty check it would fire on every window filter
+            # and stop being read.
+            no_match_is_inconclusive=source_scope.scope is SetScope.PAGE and not filtered,
             page_info=page_info,
         )
 
@@ -368,8 +420,10 @@ class ResultSetTooLargeError(Exception):
             f"limit={limit}, węższe kryteria w browse_acts, albo — dla "
             f"track_legal_changes, które nie ma parametru limit — zawęź "
             f"date_from/date_to lub dodaj keywords. Wynik częściowy nie jest "
-            f"zwracany, aby brak dopasowania zawsze oznaczał przeszukanie "
-            f"całego zestawu."
+            f"zwracany, aby brak dopasowania zawsze oznaczał "
+            f"przeszukanie całego ZESTAWU. Uwaga: to gwarancja o zestawie, nie o zbiorze "
+            f"— jeśli zestaw jest oknem (pole set_scope w odpowiedzi ma wartość 'page'), "
+            f"brak dopasowania nadal nie dowodzi, że akt nie istnieje."
         )
 
 

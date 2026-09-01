@@ -135,5 +135,6 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 offset=offset_int or 0,
                 returned_count=output.returned_count,
                 applied_limit=applied_limit,
+                max_result_limit=MAX_ITEM_LIMIT,
             ),
         )

@@ -35,15 +35,22 @@ def _complete_set_hint(
     next_call_params: dict[str, Any],
     corpus_count: int,
     filter_max_records: int,
+    max_result_limit: int | None = None,
 ) -> Hint:
     """Tell the model how to get a complete set — or that it cannot, and what to do instead.
 
-    The suggested limit is clamped to the filter ceiling (D9). Suggesting `limit=1984`
-    would be unexecutable: the resulting set is rejected by `ResultSetTooLargeError` on
-    the first `filter_results` call, so the hint would be an instruction the model cannot
-    carry out — the same defect as F48, one level up.
+    The suggested limit is clamped to whichever ceiling actually binds (D9): the
+    `filter_results` ceiling, or the calling tool's own hard cap on `limit`
+    (`max_result_limit`, e.g. `browse_acts`'s page-size clamp), whichever is lower.
+    Suggesting a `limit` above either would be unexecutable — either
+    `ResultSetTooLargeError` on the first `filter_results` call, or the calling tool
+    silently clamping the value before it ever reaches the result store, handing back
+    another PAGE instead of the COMPLETE set the hint promised. Both are the same
+    defect as F48, one level up. `max_result_limit=None` means the calling tool's
+    `limit` is genuinely unbounded (true for `search_legal_acts`).
     """
-    if corpus_count <= filter_max_records:
+    effective_ceiling = filter_max_records if max_result_limit is None else min(filter_max_records, max_result_limit)
+    if corpus_count <= effective_ceiling:
         return Hint(
             message=(
                 f"Aby zestaw objął CAŁY zbiór ({corpus_count} dopasowań) i filtrowanie było "
@@ -55,12 +62,16 @@ def _complete_set_hint(
             # one, which is defined by carrying an offset.
             parameters={**next_call_params, "limit": corpus_count},
         )
+    if max_result_limit is not None and max_result_limit < filter_max_records:
+        limiting_reason = f"limit narzędzia {tool_name} ({max_result_limit} rekordów)"
+    else:
+        limiting_reason = f"limit filter_results ({filter_max_records} rekordów)"
     return Hint(
         message=(
-            f"Zbiór liczy {corpus_count} dopasowań i przekracza limit filter_results "
-            f"({filter_max_records} rekordów), więc powiększenie okna nie da zestawu "
-            f"kompletnego — taki zestaw zostanie odrzucony przy filtrowaniu. "
-            f"Zawęź kryteria wyszukiwania (tytuł, typ aktu, słowa kluczowe albo zakres dat)."
+            f"Zbiór liczy {corpus_count} dopasowań i przekracza {limiting_reason}, "
+            f"więc powiększenie okna nie da zestawu kompletnego — taki zestaw zostanie "
+            f"odrzucony lub przycięty. Zawęź kryteria wyszukiwania (tytuł, typ aktu, "
+            f"słowa kluczowe albo zakres dat)."
         ),
         tool=tool_name,
     )
@@ -79,6 +90,7 @@ def search_hints(
     offset: int = 0,
     returned_count: int = 0,
     applied_limit: int | None = None,
+    max_result_limit: int | None = None,
 ) -> list[Hint]:
     """Generate hints for search and browse results.
 
@@ -121,7 +133,15 @@ def search_hints(
         )
 
     if scope is not None and scope.scope is SetScope.PAGE and scope.corpus_count is not None:
-        hints.append(_complete_set_hint(tool_name, next_call_params, scope.corpus_count, filter_max_records))
+        hints.append(
+            _complete_set_hint(
+                tool_name,
+                next_call_params,
+                scope.corpus_count,
+                filter_max_records,
+                max_result_limit,
+            )
+        )
 
     if not has_results:
         if next_call_params.get("keywords"):

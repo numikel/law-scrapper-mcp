@@ -180,6 +180,52 @@ def test_an_unreachable_corpus_is_told_to_narrow_instead() -> None:
     assert any("Zawęź kryteria" in h.message for h in hints)
 
 
+def test_max_result_limit_caps_the_suggestion_below_the_filter_ceiling() -> None:
+    """A corpus fits under filter_max_records but exceeds the calling tool's own cap.
+
+    `browse_acts` clamps `limit` to MAX_ITEM_LIMIT (100) regardless of
+    `filter_max_records`. Suggesting limit=300 here would be silently clamped by
+    `browse_acts` before it reaches the result store, handing back another PAGE
+    instead of the COMPLETE set the hint promised — the exact defect this task exists
+    to eliminate, one level removed.
+    """
+    hints = search_hints(
+        300,
+        True,
+        "DU/2024/1",
+        "rs_1",
+        tool_name="browse_acts",
+        next_call_params={"publisher": "DU", "year": 2024},
+        filter_max_records=500,
+        scope=_page_scope(corpus=300),
+        returned_count=20,
+        applied_limit=20,
+        max_result_limit=100,
+    )
+    limits = [h.parameters["limit"] for h in hints if h.parameters and "limit" in h.parameters]
+    assert all(value <= 100 for value in limits)
+    assert any("Zawęź kryteria" in h.message for h in hints)
+
+
+def test_max_result_limit_allows_the_suggestion_when_corpus_fits_both_ceilings() -> None:
+    """Mirror image: a corpus under both ceilings still gets a concrete limit."""
+    hints = search_hints(
+        60,
+        True,
+        "DU/2024/1",
+        "rs_1",
+        tool_name="browse_acts",
+        next_call_params={"publisher": "DU", "year": 2024},
+        filter_max_records=500,
+        scope=_page_scope(corpus=60),
+        returned_count=20,
+        applied_limit=20,
+        max_result_limit=100,
+    )
+    suggested = [h for h in hints if h.parameters and h.parameters.get("limit") == 60]
+    assert suggested, "a corpus below both ceilings should get a concrete limit suggestion"
+
+
 def test_the_filter_hint_says_what_is_being_narrowed() -> None:
     hints = search_hints(
         1_984,

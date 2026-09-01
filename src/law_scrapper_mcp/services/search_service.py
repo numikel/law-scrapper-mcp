@@ -161,10 +161,10 @@ class SearchService:
         freshness for both — the 6× TTL difference stops applying to whichever method
         writes the cache entry second.
 
-        `limit` is not clamped here (unlike the list tools that call this indirectly),
-        and `acts/search` records carry more fields than the year endpoint's did — the
-        default and typical paths transfer far less than before this change, but an
-        unbounded caller-supplied `limit` now costs more bytes per record than the old
+        `limit` is clamped by the calling tool, not here, and that clamp is load-bearing
+        now rather than cosmetic: `acts/search` honours `limit`, so it decides how wide a
+        page the API builds, and its records carry more fields than the year endpoint's
+        did. Unclamped, a large `limit` would cost more bytes per record than the old
         `acts/{publisher}/{year}` behaviour did, not less.
         """
         page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)

@@ -70,19 +70,38 @@ class TestToolInputSchemaDescriptions:
                     f"Tool '{tool.name}' parameter '{param_name}' is missing input_schema description"
                 )
 
-    @pytest.mark.parametrize("tool_name", ["search_legal_acts", "browse_acts"])
-    async def test_unclamped_limit_is_documented(self, mcp_client, tool_name: str) -> None:
-        """P5 keeps these two tools free of the shared 100-item clamp.
+    async def test_unclamped_limit_is_documented(self, mcp_client) -> None:
+        """P5 keeps `search_legal_acts` free of the shared 100-item clamp.
 
         The asymmetry is only defensible while the schema says so, otherwise a
-        client reading tools/list sees thirteen identical page shapes and two
-        silent exceptions.
+        client reading tools/list sees thirteen identical page shapes and a
+        silent exception.
+
+        `browse_acts` used to be the second exception and no longer is — see
+        `test_browse_limit_is_documented_as_clamped` below for why the premise
+        under P5 changed for that tool specifically.
         """
-        tool = await _get_tool(mcp_client, tool_name)
+        tool = await _get_tool(mcp_client, "search_legal_acts")
         description = tool.input_schema["properties"]["limit"]["description"]
 
         assert "100" in description
         assert "bez górnej granicy" in description.lower()
+
+    async def test_browse_limit_is_documented_as_clamped(self, mcp_client) -> None:
+        """`browse_acts` left P5's exception when the endpoint under it changed.
+
+        P5 could treat an unbounded `limit` as free because `acts/{publisher}/{year}`
+        ignored it: the year arrived whole whatever the caller asked for. Since Klaster 8
+        routed browse through `acts/search`, `limit` reaches the wire and decides how
+        wide a page the Sejm API builds, so the same schema promise now buys real
+        upstream cost. The clamp and this description have to move together — an agent
+        that reads "bez górnej granicy" and gets 100 rows is being lied to.
+        """
+        tool = await _get_tool(mcp_client, "browse_acts")
+        description = tool.input_schema["properties"]["limit"]["description"]
+
+        assert "100" in description
+        assert "bez górnej granicy" not in description.lower()
 
     async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(self, mcp_client) -> None:
         tools = (await mcp_client.list_tools()).tools

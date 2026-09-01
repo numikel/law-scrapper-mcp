@@ -1,6 +1,5 @@
 """Browse legal acts by publisher and year."""
 
-import contextlib
 import logging
 from typing import Annotated
 
@@ -11,6 +10,12 @@ from pydantic import Field
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
+from law_scrapper_mcp.services.pagination import (
+    DEFAULT_ITEM_LIMIT,
+    MAX_ITEM_LIMIT,
+    parse_non_negative,
+)
+from law_scrapper_mcp.services.pagination import effective_limit as clamp_limit
 from law_scrapper_mcp.services.response_enrichment import search_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -38,8 +43,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             str | int | None,
             Field(
                 description=(
-                    "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. Bez górnej granicy — "
-                    "w odróżnieniu od pozostałych narzędzi listujących, gdzie limit jest przycinany do 100."
+                    "Maksymalna liczba wyników do zwrócenia. Domyślnie 20, maksymalnie 100 — "
+                    "wartości powyżej są przycinane, tak samo jak w pozostałych narzędziach listujących."
                 ),
             ),
         ] = None,
@@ -81,15 +86,19 @@ def register(mcp: MCPServer[AppContext]) -> None:
         except (ValueError, TypeError) as e:
             raise ValueError("Rok musi być liczbą całkowitą.") from e
 
+        # Clamped, and no longer silently: since `browse()` started paging through
+        # `acts/search`, `limit` reaches the wire and decides how wide a page the Sejm
+        # API builds. The year endpoint used to ignore it, which is why this tool was
+        # the one list tool never routed through `effective_limit` — the endpoint
+        # changed underneath it and the guard was never added. An unbounded value here
+        # asks a public API for as many records as an agent cares to type.
         limit_int: int | None = None
         if limit is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                limit_int = int(limit)
+            limit_int = clamp_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
 
         offset_int: int | None = None
         if offset is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                offset_int = int(offset)
+            offset_int = parse_non_negative(offset, name="offset", default=0)
 
         try:
             detail_enum = DetailLevel(detail_level)
@@ -104,7 +113,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
             offset=offset_int,
         )
 
-        effective_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
+        applied_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
         first_eli = output.results[0].eli if output.results else None
 
         return EnrichedResponse[SearchOutput](
@@ -116,6 +125,6 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 output.result_set_id,
                 offset=offset_int or 0,
                 returned_count=output.returned_count,
-                applied_limit=effective_limit,
+                applied_limit=applied_limit,
             ),
         )

@@ -248,6 +248,29 @@ class TestSearchTools:
         assert result.is_error is True
         assert result.structured_content is None
 
+    async def test_browse_acts_clamps_an_oversized_limit(self, mcp_client) -> None:
+        """An unbounded `limit` must not reach api.sejm.gov.pl.
+
+        Since browse started paging through `acts/search`, `limit` decides how wide a
+        page the API builds — the year endpoint used to ignore it. This tool is the one
+        list tool that was never routed through the project's clamp, so an agent could
+        ask a public API for a page as wide as it cared to type.
+        """
+        result = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": 2024, "limit": 100_000})
+        payload = parse_tool_result(result)
+
+        assert payload["data"]["page_info"]["limit"] == 100
+
+    async def test_browse_acts_rejects_a_negative_limit(self, mcp_client) -> None:
+        """A negative limit is a caller error, reported rather than silently dropped.
+
+        The same treatment `year` already got in this branch, applied to the other two
+        numeric parameters of the same tool.
+        """
+        result = await mcp_client.call_tool("browse_acts", {"publisher": "DU", "year": 2024, "limit": -5})
+
+        assert result.is_error is True
+
     async def test_search_legal_acts_reports_a_page(self, mcp_client) -> None:
         """search_legal_acts reports page_info consistent with returned_count."""
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024, "limit": 1})

@@ -8,17 +8,17 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
 from pydantic import Field
 
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import (
     EnrichedResponse,
     FilterOutput,
-    Hint,
     ResultSetListOutput,
 )
 from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
-from law_scrapper_mcp.services.response_enrichment import result_sets_hints
+from law_scrapper_mcp.services.response_enrichment import filter_hints, result_sets_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
 
         Kiedy użyć: Po search_legal_acts/browse_acts/track_legal_changes aby zawęzić wyniki.
         Kiedy NIE używać: Gdy potrzebujesz nowych wyników z API → użyj search_legal_acts.
+        Kiedy NIE używać: Do dowodzenia, że akt nie istnieje, dopóki pole source_scope
+        odpowiedzi ma wartość 'page' — filtrowane jest wtedy okno, a nie cały zbiór,
+        więc pusty wynik nie rozstrzyga. Odpowiedź sygnalizuje to polem
+        no_match_is_inconclusive.
 
         Przykłady:
         - filter_results(result_set_id="rs_1", type_equals="Rozporządzenie") - Tylko rozporządzenia
@@ -171,25 +175,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
             offset=offset_int,
         )
 
-        hints = []
-        if output.results:
-            hints.append(
-                Hint(
-                    message="Użyj get_act_details aby zobaczyć szczegóły wybranego aktu.",
-                    tool="get_act_details",
-                    parameters={"eli": output.results[0].eli},
-                )
-            )
-            if output.result_set_id:
-                hints.append(
-                    Hint(
-                        message=f"Możesz dalej filtrować te wyniki używając result_set_id='{output.result_set_id}'.",
-                        tool="filter_results",
-                        parameters={"result_set_id": output.result_set_id},
-                    )
-                )
-
-        return EnrichedResponse[FilterOutput](data=output, hints=hints)
+        return EnrichedResponse[FilterOutput](
+            data=output,
+            hints=filter_hints(output, filter_max_records=settings.effective_filter_max_records),
+        )
 
     @mcp.tool(meta={"tags": ["utility", "filter"]})
     @handle_tool_errors

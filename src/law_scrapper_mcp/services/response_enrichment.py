@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from law_scrapper_mcp.models.tool_outputs import (
+    FilterOutput,
     Hint,
     LoadedDocumentInfo,
     ResultSetInfo,
@@ -166,6 +167,64 @@ def search_hints(
                 parameters={"category": "keywords"},
             )
         )
+    return hints
+
+
+def _inconclusive_match_hint(output: FilterOutput, filter_max_records: int) -> Hint:
+    """Explain that an empty result proves nothing, and give a step that can be taken.
+
+    This hint deliberately carries **no** `tool`. `FilterOutput` does not record which
+    tool produced the source set, and naming `search_legal_acts` on a set that came from
+    `browse_acts` would reproduce F48 inside the fix for it. The model knows which call
+    it made; the server does not, and says so by omission rather than by guessing.
+    """
+    scope = output.source_scope
+    corpus = scope.corpus_count
+    seen = (
+        f"{scope.stored_count} rekordów z {corpus} dopasowań"
+        if corpus is not None
+        else f"{scope.stored_count} rekordów"
+    )
+    if corpus is not None and corpus <= filter_max_records:
+        step = (
+            f"Powtórz wyszukiwanie, które utworzyło {output.source_result_set_id}, "
+            f"z limit={corpus}, aby zestaw objął cały zbiór, i filtruj ponownie."
+        )
+    else:
+        step = (
+            f"Zawęź kryteria wyszukiwania (tytuł, typ aktu, słowa kluczowe albo zakres dat), "
+            f"aby zbiór zmieścił się w limicie filter_results ({filter_max_records} rekordów), "
+            f"i filtruj ponownie."
+        )
+    return Hint(
+        message=(
+            f"Brak dopasowań, ale filtrowano OKNO: {seen}. Ten wynik NIE dowodzi, że akt "
+            f"nie istnieje — pozostałe rekordy zbioru nie zostały sprawdzone. {step}"
+        )
+    )
+
+
+def filter_hints(output: FilterOutput, *, filter_max_records: int) -> list[Hint]:
+    """Generate hints for filtered results."""
+    hints = []
+    if output.results:
+        hints.append(
+            Hint(
+                message="Użyj get_act_details aby zobaczyć szczegóły wybranego aktu.",
+                tool="get_act_details",
+                parameters={"eli": output.results[0].eli},
+            )
+        )
+        if output.result_set_id:
+            hints.append(
+                Hint(
+                    message=f"Możesz dalej filtrować te wyniki używając result_set_id='{output.result_set_id}'.",
+                    tool="filter_results",
+                    parameters={"result_set_id": output.result_set_id},
+                )
+            )
+    if output.no_match_is_inconclusive:
+        hints.append(_inconclusive_match_hint(output, filter_max_records))
     return hints
 
 

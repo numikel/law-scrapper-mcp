@@ -1,7 +1,8 @@
 """Tests for search/browse response hint generation."""
 
-from law_scrapper_mcp.models.tool_outputs import Hint, ResultSetScope, SetScope
-from law_scrapper_mcp.services.response_enrichment import metadata_hints, search_hints
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput, Hint, ResultSetScope, SetScope
+from law_scrapper_mcp.services.pagination import paginate_items
+from law_scrapper_mcp.services.response_enrichment import filter_hints, metadata_hints, search_hints
 
 
 def _page_scope(stored: int = 20, corpus: int = 1_984, offset: int = 0) -> ResultSetScope:
@@ -271,3 +272,78 @@ def test_context_chars_within_the_limit_produces_no_hint() -> None:
     from law_scrapper_mcp.services.response_enrichment import search_in_act_hints
 
     assert search_in_act_hints(300, 300) == []
+
+
+def _filter_output(
+    *,
+    source_scope: ResultSetScope,
+    filtered: list[ActSummaryOutput],
+    inconclusive: bool,
+    result_set_id: str | None = None,
+) -> FilterOutput:
+    page, page_info = paginate_items(filtered, limit=20, offset=0)
+    return FilterOutput(
+        source_result_set_id="rs_1",
+        result_set_id=result_set_id,
+        results=page,
+        original_count=source_scope.stored_count,
+        filtered_count=len(filtered),
+        source_scope=source_scope,
+        no_match_is_inconclusive=inconclusive,
+        page_info=page_info,
+    )
+
+
+def test_an_empty_match_on_a_window_gets_an_executable_next_step() -> None:
+    """Criterion 14. The worst failure mode in a legal domain is a confident 'no'."""
+    output = _filter_output(
+        source_scope=_page_scope(stored=20, corpus=60),
+        filtered=[],
+        inconclusive=True,
+    )
+
+    hints = filter_hints(output, filter_max_records=100)
+
+    assert hints, "an inconclusive empty match must not be answered with silence"
+    message = hints[0].message
+    assert "OKNO" in message
+    assert "NIE dowodzi" in message
+    assert "limit=60" in message
+
+
+def test_an_unreachable_corpus_is_told_to_narrow_the_search() -> None:
+    output = _filter_output(
+        source_scope=_page_scope(stored=20, corpus=1_984),
+        filtered=[],
+        inconclusive=True,
+    )
+
+    hints = filter_hints(output, filter_max_records=100)
+
+    assert "Zawęź kryteria" in hints[0].message
+
+
+def test_a_conclusive_empty_match_gets_no_warning() -> None:
+    """Criterion 15 seen from the hint side: silence is the correct answer here."""
+    output = _filter_output(
+        source_scope=_complete_scope(stored=5),
+        filtered=[],
+        inconclusive=False,
+    )
+
+    assert filter_hints(output, filter_max_records=100) == []
+
+
+def test_the_inconclusive_hint_names_no_tool() -> None:
+    """Deliberate: FilterOutput does not carry which tool produced the source set.
+
+    Guessing `search_legal_acts` when the source came from `browse_acts` would
+    reproduce F48 inside the fix for F48. The model knows which tool it called.
+    """
+    output = _filter_output(
+        source_scope=_page_scope(stored=20, corpus=60),
+        filtered=[],
+        inconclusive=True,
+    )
+
+    assert filter_hints(output, filter_max_records=100)[0].tool is None

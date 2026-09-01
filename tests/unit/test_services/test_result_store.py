@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from law_scrapper_mcp.models.pagination import PageUnit
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, SetScope
 from law_scrapper_mcp.services.pattern_matching import (
     CompiledPattern,
     PatternValidationError,
@@ -496,3 +496,96 @@ async def test_store_keeps_query_text_off_info(caplog: pytest.LogCaptureFixture)
     assert all(query not in r.getMessage() for r in info_records)
     assert any(result_set_id in r.getMessage() for r in info_records)
     assert any(query in r.getMessage() for r in debug_records)
+
+
+class TestSetScope:
+    """The rule that decides whether a stored set is the answer or a window into it."""
+
+    @pytest.mark.parametrize(
+        ("window_offset", "stored_count", "total_count", "expected"),
+        [
+            # The whole answer: starts at the corpus origin, holds everything.
+            (0, 20, 20, SetScope.COMPLETE),
+            # The default search page: twenty records cut out of 1984.
+            (0, 20, 1984, SetScope.PAGE),
+            # The tail of a corpus is still a window — the twenty records that
+            # precede it are not in the set, so a filter that finds nothing here
+            # has not searched them.
+            (20, 5, 25, SetScope.PAGE),
+        ],
+    )
+    async def test_scope_follows_offset_and_size(
+        self,
+        store: ResultStore,
+        window_offset: int,
+        stored_count: int,
+        total_count: int,
+        expected: SetScope,
+    ) -> None:
+        records = [
+            ActSummaryOutput(
+                eli=f"DU/2024/{n}",
+                publisher="DU",
+                year=2024,
+                pos=n,
+                title=f"Akt {n}",
+                status="obowiązujący",
+            )
+            for n in range(stored_count)
+        ]
+        _, scope = await store.store(
+            records,
+            "query",
+            total_count,
+            window_offset=window_offset,
+        )
+        assert scope.scope is expected
+        assert scope.stored_count == stored_count
+        assert scope.window_offset == window_offset
+        assert scope.corpus_count == total_count
+
+    async def test_forced_page_scope_reports_an_unknown_corpus(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        """An inherited PAGE reach means `total_count` describes the set, not a corpus.
+
+        The number of corpus records that would have matched was never computed,
+        so `corpus_count` must stay None rather than repeat the set size.
+        """
+        _, scope = await store.store(
+            sample_results,
+            "filtered(rs_1): pattern=zdrow",
+            len(sample_results),
+            scope=SetScope.PAGE,
+        )
+        assert scope.scope is SetScope.PAGE
+        assert scope.corpus_count is None
+
+    async def test_forced_complete_scope_keeps_the_corpus_count(
+        self, store: ResultStore, sample_results: list[ActSummaryOutput]
+    ) -> None:
+        _, scope = await store.store(
+            sample_results,
+            "filtered(rs_1): pattern=zdrow",
+            len(sample_results),
+            scope=SetScope.COMPLETE,
+        )
+        assert scope.scope is SetScope.COMPLETE
+        assert scope.corpus_count == len(sample_results)
+
+    async def test_an_empty_set_is_never_produced_by_callers(self, store: ResultStore) -> None:
+        """The rule does not blow up on a zero-record set, but nobody stores one.
+
+        Every producer guards with `if results:` — criterion 1's fourth row
+        ("(0, 0, 0) -> the set is not created") is a property of the callers, and
+        is asserted against them in Task 4. This test only pins that the rule
+        itself stays total.
+        """
+        _, scope = await store.store([], "query", 0)
+        assert scope.scope is SetScope.COMPLETE
+        assert scope.stored_count == 0
+
+    async def test_listing_exposes_the_scope(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
+        await store.store(sample_results, "query", 1984)
+        listed = await store.list_sets()
+        assert listed[0]["scope"] is SetScope.PAGE

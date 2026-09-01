@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
@@ -40,6 +41,35 @@ class ActSummaryOutput(BaseModel):
     promulgation_date: str | None = None
     effective_date: str | None = None
     in_force: str | None = None
+
+
+class SetScope(StrEnum):
+    """Whether a stored result set is the whole answer or a window into it."""
+
+    COMPLETE = "complete"
+    PAGE = "page"
+
+
+class ResultSetScope(BaseModel):
+    """Zasięg zestawu wyników względem korpusu, z którego pochodzi."""
+
+    scope: SetScope = Field(
+        description=(
+            "'complete' — zestaw zawiera każdy rekord pasujący do zapytania w chwili wywołania. "
+            "'page' — zestaw jest oknem wyciętym z większego korpusu, więc brak dopasowania "
+            "w filter_results NIE dowodzi, że akt nie istnieje w zbiorze."
+        )
+    )
+    stored_count: int = Field(description="Liczba rekordów w tym zestawie.")
+    window_offset: int = Field(description="Pozycja początku okna w korpusie. Zero dla zestawu kompletnego.")
+    corpus_count: int | None = Field(
+        default=None,
+        description=(
+            "Rozmiar korpusu, z którego pochodzi zestaw. None, gdy nieznany — tak jest dla "
+            "zestawu powstałego z filtrowania okna: wiadomo, ile rekordów trafiło w oknie, "
+            "nie wiadomo, ile rekordów korpusu pasowałoby do tych samych kryteriów."
+        ),
+    )
 
 
 class SearchOutput(BaseModel):

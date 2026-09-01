@@ -76,13 +76,13 @@ class TestResultStore:
     async def test_store_returns_incremental_ids(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        id1 = await store.store(sample_results[:2], "query1", 2)
-        id2 = await store.store(sample_results[2:], "query2", 3)
+        id1, _ = await store.store(sample_results[:2], "query1", 2)
+        id2, _ = await store.store(sample_results[2:], "query2", 3)
         assert id1 == "rs_1"
         assert id2 == "rs_2"
 
     async def test_get_returns_stored_results(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test query", 5)
+        rs_id, _ = await store.store(sample_results, "test query", 5)
         rs = await store.get(rs_id)
         assert rs is not None
         assert len(rs.results) == 5
@@ -112,50 +112,50 @@ class TestResultStore:
     async def test_evicts_expired(self) -> None:
         store = ResultStore(max_sets=5, ttl=0)  # TTL=0 → immediate expiry
         act = _make_act()
-        rs_id = await store.store([act], "query", 1)
+        rs_id, _ = await store.store([act], "query", 1)
         time.sleep(0.01)
         assert await store.get(rs_id) is None
 
 
 class TestResultStoreFiltering:
     async def test_filter_by_type_equals(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, original = await store.filter_results(rs_id, type_equals="Ustawa")
         assert original == 5
         assert len(filtered) == 2
         assert all(r.type == "Ustawa" for r in filtered)
 
     async def test_filter_by_status_equals(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, status_equals="akt jednorazowy")
         assert len(filtered) == 1
         assert filtered[0].eli == "DU/2024/5"
 
     async def test_filter_by_year_equals(self, store: ResultStore) -> None:
         results = [_make_act(year=2023), _make_act(year=2024), _make_act(year=2024)]
-        rs_id = await store.store(results, "test", 3)
+        rs_id, _ = await store.store(results, "test", 3)
         filtered, _ = await store.filter_results(rs_id, year_equals=2024)
         assert len(filtered) == 2
 
     async def test_filter_by_regex_pattern_title(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, pattern="zdrow|Zdrowia")
         assert len(filtered) == 2  # Minister Zdrowia appears in 2 titles
 
     async def test_filter_by_regex_pattern_or(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, pattern="podatk|transport")
         assert len(filtered) == 2
 
     async def test_filter_by_regex_field_eli(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, pattern="DU/2024/[12]$", field="eli")
         assert len(filtered) == 2
 
     async def test_filter_by_date_range(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(
             rs_id,
             date_field="promulgation_date",
@@ -165,7 +165,7 @@ class TestResultStoreFiltering:
         assert len(filtered) == 3
 
     async def test_filter_combined(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(
             rs_id,
             type_equals="Rozporządzenie",
@@ -175,7 +175,7 @@ class TestResultStoreFiltering:
         assert "Zdrowia" in filtered[0].title
 
     async def test_filter_sort_by(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, sort_by="promulgation_date", sort_desc=True)
         dates = [r.promulgation_date for r in filtered]
         assert dates == sorted(dates, key=lambda d: d or "", reverse=True)
@@ -183,7 +183,7 @@ class TestResultStoreFiltering:
     async def test_filter_returns_full_set_before_pagination(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id)
         assert len(filtered) == 5
 
@@ -194,27 +194,27 @@ class TestResultStoreFiltering:
     async def test_filter_invalid_regex_raises(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         with pytest.raises(PatternValidationError, match="nie jest obsługiwany"):
             await store.filter_results(rs_id, pattern="[invalid")
 
     async def test_filter_invalid_field_defaults_to_title(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         # Invalid field should default to title
         filtered, _ = await store.filter_results(rs_id, pattern="podatk", field="nonexistent")
         assert len(filtered) == 1
 
     async def test_filter_empty_results(self, store: ResultStore, sample_results: list[ActSummaryOutput]) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, _ = await store.filter_results(rs_id, pattern="xyznonexistent")
         assert len(filtered) == 0
 
     async def test_filter_no_filters_returns_all(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
         filtered, original = await store.filter_results(rs_id)
         assert len(filtered) == 5
         assert original == 5
@@ -245,7 +245,7 @@ class TestResultStoreReDoSRegression:
         catastrophic pattern (where code after `filter_results` would never be
         reached on a regression to `re`).
         """
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         captured: list[CompiledPattern] = []
 
@@ -275,7 +275,7 @@ class TestResultStoreReDoSRegression:
     @pytest.mark.timeout(5)
     async def test_catastrophic_pattern_returns_promptly(self, store: ResultStore) -> None:
         results = [_make_act(f"DU/2024/{i}", _REALISTIC_LONG_TITLE) for i in range(1, 11)]
-        rs_id = await store.store(results, "test", len(results))
+        rs_id, _ = await store.store(results, "test", len(results))
 
         filtered, original = await store.filter_results(rs_id, pattern="(.+)+!", field="title")
 
@@ -286,7 +286,7 @@ class TestResultStoreReDoSRegression:
     async def test_documented_patterns_still_work(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         health, _ = await store.filter_results(rs_id, pattern="zdrow|Minister Zdrowia|apteka|lekar")
         wildcard, _ = await store.filter_results(rs_id, pattern="Ustawa.*danych")
@@ -302,7 +302,7 @@ class TestResultStoreReDoSRegression:
     async def test_alternation_matches_when_form_agrees(self, store: ResultStore) -> None:
         """Positive control for an alternation pattern — without it the test above is blind."""
         results = [_make_act("DU/2024/9", "Ustawa o podatek akcyza VAT")]
-        rs_id = await store.store(results, "test", 1)
+        rs_id, _ = await store.store(results, "test", 1)
 
         filtered, _ = await store.filter_results(rs_id, pattern="podatek|VAT|akcyza")
 
@@ -311,7 +311,7 @@ class TestResultStoreReDoSRegression:
     async def test_lookaround_is_rejected_with_polish_message(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         with pytest.raises(PatternValidationError) as exc_info:
             await store.filter_results(rs_id, pattern="(?<=Ustawa)o")
@@ -320,7 +320,7 @@ class TestResultStoreReDoSRegression:
 
     async def test_pattern_over_limit_is_rejected(self, sample_results: list[ActSummaryOutput]) -> None:
         store = ResultStore(max_sets=5, ttl=60, max_pattern_length=64)
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         with pytest.raises(PatternValidationError, match="za długi"):
             await store.filter_results(rs_id, pattern="a" * 65)
@@ -328,7 +328,7 @@ class TestResultStoreReDoSRegression:
     async def test_pattern_at_limit_is_accepted(self, sample_results: list[ActSummaryOutput]) -> None:
         """Boundary: a pattern whose length equals the limit exactly is not rejected."""
         store = ResultStore(max_sets=5, ttl=60, max_pattern_length=64)
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         filtered, _ = await store.filter_results(rs_id, pattern="a" * 64)
 
@@ -340,7 +340,7 @@ class TestResultStoreRecordCap:
 
     async def test_oversized_set_is_refused(self, sample_results: list[ActSummaryOutput]) -> None:
         store = ResultStore(max_sets=5, ttl=60, max_records=3)
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         with pytest.raises(ResultSetTooLargeError) as exc_info:
             await store.filter_results(rs_id, pattern="Ustawa")
@@ -352,14 +352,14 @@ class TestResultStoreRecordCap:
     async def test_refusal_applies_without_pattern_too(self, sample_results: list[ActSummaryOutput]) -> None:
         """Refusal applies to the call, not only to the regex path."""
         store = ResultStore(max_sets=5, ttl=60, max_records=3)
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         with pytest.raises(ResultSetTooLargeError):
             await store.filter_results(rs_id, type_equals="Ustawa")
 
     async def test_set_at_limit_is_processed(self, sample_results: list[ActSummaryOutput]) -> None:
         store = ResultStore(max_sets=5, ttl=60, max_records=5)
-        rs_id = await store.store(sample_results, "test", 5)
+        rs_id, _ = await store.store(sample_results, "test", 5)
 
         filtered, original = await store.filter_results(rs_id, type_equals="Ustawa")
 
@@ -371,7 +371,7 @@ class TestResultStoreFilterAndStore:
     async def test_filter_and_store_persists_chained_result_set(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        source_id = await store.store(sample_results, "search query", len(sample_results))
+        source_id, _ = await store.store(sample_results, "search query", len(sample_results))
 
         output = await store.filter_and_store(
             source_id,
@@ -417,7 +417,7 @@ class TestResultStoreFilterAndStore:
     async def test_filter_and_store_records_applied_filters(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        source_id = await store.store(sample_results, "search query", len(sample_results))
+        source_id, _ = await store.store(sample_results, "search query", len(sample_results))
 
         output = await store.filter_and_store(
             source_id,
@@ -438,7 +438,7 @@ class TestResultStoreFilterAndStore:
     async def test_filter_and_store_stores_full_set_but_pages_response(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        source_id = await store.store(sample_results, "search query", len(sample_results))
+        source_id, _ = await store.store(sample_results, "search query", len(sample_results))
 
         output = await store.filter_and_store(
             source_id,
@@ -460,7 +460,7 @@ class TestResultStoreFilterAndStore:
     async def test_filter_and_store_leaves_result_set_id_none_for_empty_matches(
         self, store: ResultStore, sample_results: list[ActSummaryOutput]
     ) -> None:
-        source_id = await store.store(sample_results, "search query", len(sample_results))
+        source_id, _ = await store.store(sample_results, "search query", len(sample_results))
 
         output = await store.filter_and_store(
             source_id,
@@ -487,7 +487,7 @@ async def test_store_keeps_query_text_off_info(caplog: pytest.LogCaptureFixture)
     # test that runs `setup_logging()` earlier in the session would leave the
     # DEBUG record below filtered out before `caplog` ever sees it.
     with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp"):
-        result_set_id = await store.store(results=[], query_summary=query, total_count=7)
+        result_set_id, _ = await store.store(results=[], query_summary=query, total_count=7)
 
     info_records = [r for r in caplog.records if r.levelno == logging.INFO]
     debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]

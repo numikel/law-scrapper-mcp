@@ -121,6 +121,45 @@ class TestSearchPage:
         assert negative.returned_count == 20
         assert negative.page_info.offset == 0
 
+    async def test_a_windowed_page_declares_itself_a_window(self) -> None:
+        service, _ = _service({"items": [_item(n) for n in range(20)], "totalCount": 1_984})
+
+        output = await service.search(year=2024, limit=20)
+
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope == "page"
+        assert output.result_set_scope.stored_count == 20
+        assert output.result_set_scope.window_offset == 0
+        assert output.result_set_scope.corpus_count == 1_984
+
+    async def test_a_page_holding_the_whole_corpus_declares_itself_complete(self) -> None:
+        service, _ = _service({"items": [_item(n) for n in range(5)], "totalCount": 5})
+
+        output = await service.search(year=2024, limit=20)
+
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope == "complete"
+
+    async def test_the_tail_of_a_corpus_is_still_a_window(self) -> None:
+        """Criterion 1, third row: nothing follows it, but twenty records precede it."""
+        service, _ = _paging_service(total=25)
+
+        output = await service.search(year=2024, limit=20, offset=20)
+
+        assert output.returned_count == 5
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope == "page"
+        assert output.result_set_scope.window_offset == 20
+
+    async def test_an_empty_page_stores_no_set_and_reports_no_scope(self) -> None:
+        """Criterion 1, fourth row: the set is not created, so the field is None."""
+        service, _ = _service({"items": [], "totalCount": 0})
+
+        output = await service.search(year=2024)
+
+        assert output.result_set_id is None
+        assert output.result_set_scope is None
+
 
 class TestBrowsePage:
     async def test_browse_pages_come_from_the_api_window(self) -> None:

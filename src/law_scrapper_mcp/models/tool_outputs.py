@@ -80,6 +80,13 @@ class SearchOutput(BaseModel):
     query_summary: str
     returned_count: int
     result_set_id: str | None = None
+    result_set_scope: ResultSetScope | None = Field(
+        default=None,
+        description=(
+            "Zasięg zapisanego zestawu wyników. None, gdy zestaw nie powstał (zero wyników). "
+            "Wartość 'page' oznacza, że filter_results zawęża okno, a nie cały zbiór."
+        ),
+    )
     page_info: PageInfo
 
 
@@ -159,6 +166,13 @@ class ChangesOutput(BaseModel):
     changes: list[ActSummaryOutput]
     total_count: int
     result_set_id: str | None = None
+    result_set_scope: ResultSetScope | None = Field(
+        default=None,
+        description=(
+            "Zasięg zapisanego zestawu zmian. Zawsze 'complete' dla niepustego wyniku — "
+            "to jedyne narzędzie, którego zestaw filter_results przeszukuje w całości."
+        ),
+    )
     page_info: PageInfo
 
 
@@ -207,6 +221,9 @@ class ResultSetInfo(BaseModel):
     query_summary: str
     result_count: int
     total_count: int
+    scope: SetScope = Field(
+        description="Zasięg zestawu: 'complete' (cały zbiór) albo 'page' (okno z większego zbioru)."
+    )
     created_at: str
 
 

@@ -7,7 +7,7 @@ from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, SearchOutput
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ResultSetScope, SearchOutput
 from law_scrapper_mcp.services.pagination import item_page_info
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -48,13 +48,26 @@ class SearchService:
         local_offset = max(page_offset - window_offset, 0)
         page = results[local_offset : local_offset + page_limit]
         total = max(total_count, page_offset + len(page)) if page else total_count
-        result_set_id = (await self._result_store.store(page, query_summary, total))[0] if page else None
+        result_set_id: str | None = None
+        result_set_scope: ResultSetScope | None = None
+        if page:
+            # `page_offset`, not the `window_offset` parameter above: the store wants the
+            # window's position in the corpus, while this method's `window_offset` means
+            # "how much the API already skipped". They are equal for both current callers,
+            # which is exactly why passing the wrong one would go unnoticed.
+            result_set_id, result_set_scope = await self._result_store.store(
+                page,
+                query_summary,
+                total,
+                window_offset=page_offset,
+            )
         return SearchOutput(
             results=page,
             total_count=total,
             query_summary=query_summary,
             returned_count=len(page),
             result_set_id=result_set_id,
+            result_set_scope=result_set_scope,
             page_info=item_page_info(
                 limit=page_limit,
                 offset=page_offset,

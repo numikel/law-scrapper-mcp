@@ -422,7 +422,7 @@ class ResultSetTooLargeError(Exception):
             f"date_from/date_to lub dodaj keywords. Wynik częściowy nie jest "
             f"zwracany, aby brak dopasowania zawsze oznaczał "
             f"przeszukanie całego ZESTAWU. Uwaga: to gwarancja o zestawie, nie o zbiorze "
-            f"— jeśli zestaw jest oknem (pole set_scope w odpowiedzi ma wartość 'page'), "
+            f"— jeśli zestaw jest oknem (pole result_set_scope w odpowiedzi ma wartość 'page'), "
             f"brak dopasowania nadal nie dowodzi, że akt nie istnieje."
         )
 

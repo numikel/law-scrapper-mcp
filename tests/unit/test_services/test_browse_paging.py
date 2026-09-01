@@ -124,7 +124,11 @@ async def test_the_api_window_is_not_sliced_a_second_time(service: SearchService
 
     output = await service.browse("DU", 2024, limit=5, offset=10)
 
-    assert [act.pos for act in output.results] == [1974, 1973, 1972, 1971, 1970]
+    # Derived from the fixture rather than copied out of it: `browse_page.json` is a
+    # recording of the live endpoint (see its provenance note), so refreshing it must not
+    # cost a test edit. The invariant is that every record the API handed back survives
+    # in order — a second local slice would drop the first five.
+    assert [act.pos for act in output.results] == [item["pos"] for item in browse_page["items"]]
 
 
 @respx.mock

@@ -384,6 +384,14 @@ Filter and narrow down previously retrieved search/browse/changes results.
 - Get top 10 most recent results
 ```
 
+**Result-set scope.** Every stored result set declares whether it is the whole answer
+(`complete`) or a window cut from a larger corpus (`page`), in the `result_set_scope` field
+of the response and in `list_result_sets`. The distinction matters because `filter_results`
+narrows the **set**, not the query: an empty filter over a `page` set means "no match among
+these twenty records", not "no such act exists". Responses say so explicitly — a filter that
+matches nothing over a window sets `no_match_is_inconclusive`. `track_legal_changes` is the
+one tool whose set is always `complete`, because it stores the whole fetched range.
+
 ### 5. get_act_details(eli, load_content, detail_level)
 
 Retrieve detailed information about a specific legal act and optionally load its content.

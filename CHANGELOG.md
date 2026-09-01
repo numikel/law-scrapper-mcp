@@ -18,7 +18,14 @@ changes signature or response shape.
   A `Retry-After` sent by the API now pauses the whole client rather than each failing
   request separately, so honouring it no longer ends in a synchronised retry burst. The pause
   is capped at 60 seconds regardless of the header's requested duration, so a large or
-  misconfigured `Retry-After` cannot silently wedge every in-flight tool call.
+  misconfigured `Retry-After` cannot silently wedge every in-flight tool call. Pacing is also
+  bounded by `LAW_MCP_API_RETRY_BUDGET`: a call that cannot be paced within its own time
+  budget fails immediately with a message naming the pause, instead of waiting out a window
+  it was never going to survive and returning a bare client-side timeout.
+- **`Retry-After` is now read in both forms RFC 9110 allows.** Only the delta-seconds form was
+  understood before; a date-form header — which the WAF in front of the API may send even
+  though the API itself does not — was discarded, which silently left the client-wide pause
+  switched off. Repeated headers are resolved to the longest wait.
 - **Separate concurrency budget for content downloads** — `LAW_MCP_API_MAX_CONCURRENT_CONTENT`
   (default `2`) governs act HTML and PDF downloads, so a run of document fetches can no longer
   occupy every slot and stall concurrent searches.
@@ -34,9 +41,9 @@ changes signature or response shape.
   full year every time — 1 093 224 B and 1984 records for `DU/2024`, of which a default page kept
   twenty. Results, ordering and response fields are unchanged. A `browse_acts` call with a
   non-numeric `year` now returns a clean tool error instead of silently querying `year=0`. `limit`
-  is not clamped, and `acts/search` records carry more fields than the year endpoint's did, so an
-  unbounded caller-supplied `limit` now transfers more bytes per record than before this change —
-  the default and typical paths are far better off, but callers that pass a large `limit` are not.
+  is now clamped to the same maximum of 100 items every other list tool applies, because it reaches
+  the API and decides the page width where the year endpoint used to ignore it; a negative `limit`
+  or `offset` returns a clean tool error instead of being silently dropped.
 - **`search_legal_acts` and `browse_acts` now query the same `acts/search` endpoint,** which makes
   a pre-existing asymmetry newly visible: `search_legal_acts` still reports `total_count` as the
   size of the current page, while `browse_acts` correctly reports the size of the whole year.

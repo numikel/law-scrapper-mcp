@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Outbound politeness towards `api.sejm.gov.pl` (findings F27, F30, F52, F55). No MCP tool
-changes signature or response shape.
+## [4.0.2] - 2026-09-01
+
+See [docs/changelogs/v4.0.2.md](docs/changelogs/v4.0.2.md) for details.
+
+Outbound politeness towards `api.sejm.gov.pl` — egress rate limiting and concurrent-request budgeting to respect the public API. No MCP tool changes signature or response shape.
 
 ### Added
 

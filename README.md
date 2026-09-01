@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-4.0.1-orange.svg)
+![Version](https://img.shields.io/badge/version-4.0.2-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />

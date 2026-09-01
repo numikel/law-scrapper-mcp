@@ -26,8 +26,6 @@ from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
 
-pytestmark = pytest.mark.asyncio
-
 SEARCH_URL = "https://api.sejm.gov.pl/eli/acts/search"
 
 
@@ -46,6 +44,7 @@ async def service() -> AsyncGenerator[SearchService]:
     await client.close()
 
 
+@pytest.mark.asyncio
 @respx.mock
 async def test_total_count_is_the_corpus_not_the_page(service: SearchService, browse_page: dict[str, Any]) -> None:
     """Criterion 5. Before D1 this returned total_count=5 and was_truncated=False."""
@@ -59,6 +58,7 @@ async def test_total_count_is_the_corpus_not_the_page(service: SearchService, br
     assert output.page_info.next_offset == 5
 
 
+@pytest.mark.asyncio
 @respx.mock
 async def test_a_response_without_total_count_still_reads_count(service: SearchService) -> None:
     """Criterion 6. The fallback chain keeps every existing pagination test honest."""
@@ -85,6 +85,7 @@ async def test_a_response_without_total_count_still_reads_count(service: SearchS
     assert output.page_info.was_truncated is False
 
 
+@pytest.mark.asyncio
 @respx.mock
 async def test_a_default_call_asks_for_twenty_records(service: SearchService, browse_page: dict[str, Any]) -> None:
     """Criterion 7. Without this the API builds a 500-record page (measured)."""
@@ -96,6 +97,7 @@ async def test_a_default_call_asks_for_twenty_records(service: SearchService, br
     assert route.calls.last.request.url.params["limit"] == "20"
 
 
+@pytest.mark.asyncio
 @respx.mock
 async def test_an_explicit_limit_is_not_clamped(service: SearchService) -> None:
     """Criterion 8. `search_legal_acts` stays the one list tool without a ceiling."""

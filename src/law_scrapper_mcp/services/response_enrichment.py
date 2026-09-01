@@ -3,8 +3,67 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
-from law_scrapper_mcp.models.tool_outputs import Hint, LoadedDocumentInfo, ResultSetInfo
+from law_scrapper_mcp.models.tool_outputs import (
+    Hint,
+    LoadedDocumentInfo,
+    ResultSetInfo,
+    ResultSetScope,
+    SetScope,
+)
+
+
+def _filter_results_hint(result_set_id: str, scope: ResultSetScope | None) -> Hint:
+    """Say what filtering actually narrows — the set, which may be a window."""
+    if scope is not None and scope.scope is SetScope.PAGE and scope.corpus_count is not None:
+        message = (
+            f"Użyj filter_results aby zawęzić wyniki. UWAGA: zawężaniu podlega zestaw "
+            f"{scope.stored_count} rekordów, który jest OKNEM z {scope.corpus_count} dopasowań. "
+            f"Brak dopasowania w filtrze nie dowodzi, że akt nie istnieje w zbiorze."
+        )
+    else:
+        message = (
+            "Użyj filter_results aby zawęzić wyniki, np. po typie dokumentu "
+            "(Ustawa, Rozporządzenie) lub wzorcem regex w tytule."
+        )
+    return Hint(message=message, tool="filter_results", parameters={"result_set_id": result_set_id})
+
+
+def _complete_set_hint(
+    tool_name: str,
+    next_call_params: dict[str, Any],
+    corpus_count: int,
+    filter_max_records: int,
+) -> Hint:
+    """Tell the model how to get a complete set — or that it cannot, and what to do instead.
+
+    The suggested limit is clamped to the filter ceiling (D9). Suggesting `limit=1984`
+    would be unexecutable: the resulting set is rejected by `ResultSetTooLargeError` on
+    the first `filter_results` call, so the hint would be an instruction the model cannot
+    carry out — the same defect as F48, one level up.
+    """
+    if corpus_count <= filter_max_records:
+        return Hint(
+            message=(
+                f"Aby zestaw objął CAŁY zbiór ({corpus_count} dopasowań) i filtrowanie było "
+                f"rozstrzygające, powtórz to wywołanie z limit={corpus_count}."
+            ),
+            tool=tool_name,
+            # No `offset` key on purpose. Zero is the default, so omitting it keeps the
+            # call correct — and it keeps this hint distinguishable from the pagination
+            # one, which is defined by carrying an offset.
+            parameters={**next_call_params, "limit": corpus_count},
+        )
+    return Hint(
+        message=(
+            f"Zbiór liczy {corpus_count} dopasowań i przekracza limit filter_results "
+            f"({filter_max_records} rekordów), więc powiększenie okna nie da zestawu "
+            f"kompletnego — taki zestaw zostanie odrzucony przy filtrowaniu. "
+            f"Zawęź kryteria wyszukiwania (tytuł, typ aktu, słowa kluczowe albo zakres dat)."
+        ),
+        tool=tool_name,
+    )
 
 
 def search_hints(
@@ -13,11 +72,22 @@ def search_hints(
     eli: str | None = None,
     result_set_id: str | None = None,
     *,
+    tool_name: str,
+    next_call_params: dict[str, Any],
+    filter_max_records: int,
+    scope: ResultSetScope | None = None,
     offset: int = 0,
     returned_count: int = 0,
     applied_limit: int | None = None,
 ) -> list[Hint]:
-    """Generate hints for search results."""
+    """Generate hints for search and browse results.
+
+    `tool_name` and `next_call_params` are required and have no defaults on purpose.
+    This function used to hard-code `search_legal_acts`, so every hint `browse_acts`
+    produced pointed the model at a different tool than the one it had called (F48).
+    A default would let that come back. Only the calling tool knows which parameters
+    it accepts, so it builds `next_call_params` itself.
+    """
     hints = []
     if has_results and eli:
         hints.append(
@@ -28,42 +98,45 @@ def search_hints(
             )
         )
     if has_results and result_set_id:
-        hints.append(
-            Hint(
-                message="Użyj filter_results aby zawęzić wyniki, np. po typie dokumentu (Ustawa, Rozporządzenie) lub wzorcem regex w tytule.",
-                tool="filter_results",
-                parameters={"result_set_id": result_set_id},
-            )
-        )
+        hints.append(_filter_results_hint(result_set_id, scope))
+
     was_truncated = offset + returned_count < total_count
     if was_truncated and applied_limit:
+        # A hint the model can copy and run: every source criterion, plus the window.
+        # The previous version said "użyj limit/offset" without saying which values,
+        # while `PageInfo.next_offset` had already computed one of them.
         hints.append(
             Hint(
-                message=f"Wyniki ograniczone do {applied_limit} (z {total_count} dostępnych). "
-                f"Użyj limit/offset do paginacji lub filter_results do zawężenia.",
-                tool="search_legal_acts",
+                message=(
+                    f"Zwrócono {returned_count} z {total_count} dopasowań. "
+                    f"Następna strona to wywołanie z offset={offset + returned_count}."
+                ),
+                tool=tool_name,
+                parameters={
+                    **next_call_params,
+                    "limit": applied_limit,
+                    "offset": offset + returned_count,
+                },
             )
         )
-    elif total_count > 20 and was_truncated:
-        hints.append(
-            Hint(
-                message="Użyj parametrów 'limit' i 'offset' do paginacji wyników.",
-                tool="search_legal_acts",
-            )
-        )
+
+    if scope is not None and scope.scope is SetScope.PAGE and scope.corpus_count is not None:
+        hints.append(_complete_set_hint(tool_name, next_call_params, scope.corpus_count, filter_max_records))
+
     if not has_results:
-        hints.append(
-            Hint(
-                message="Brak wyników. UWAGA: Słowa kluczowe API działają z logiką AND — "
-                "wszystkie muszą wystąpić jednocześnie. Spróbuj mniej słów kluczowych "
-                "lub szukaj każdego osobno (logika OR).",
-                tool="search_legal_acts",
+        if next_call_params.get("keywords"):
+            hints.append(
+                Hint(
+                    message="Brak wyników. UWAGA: Słowa kluczowe API działają z logiką AND — "
+                    "wszystkie muszą wystąpić jednocześnie. Spróbuj mniej słów kluczowych "
+                    "lub szukaj każdego osobno (logika OR).",
+                    tool=tool_name,
+                )
             )
-        )
         hints.append(
             Hint(
                 message="Spróbuj poszerzyć kryteria: usuń filtry dat, zmień typ dokumentu lub rok.",
-                tool="search_legal_acts",
+                tool=tool_name,
             )
         )
         hints.append(

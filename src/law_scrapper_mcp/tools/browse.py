@@ -1,12 +1,13 @@
 """Browse legal acts by publisher and year."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
 from pydantic import Field
 
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
@@ -116,6 +117,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
         applied_limit = limit_int if limit_int is not None else DEFAULT_BROWSE_LIMIT
         first_eli = output.results[0].eli if output.results else None
 
+        next_call_params: dict[str, Any] = {"publisher": publisher, "year": year_int}
+        if detail_enum is not DetailLevel.STANDARD:
+            next_call_params["detail_level"] = detail_enum.value
+
         return EnrichedResponse[SearchOutput](
             data=output,
             hints=search_hints(
@@ -123,6 +128,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 output.returned_count > 0,
                 first_eli,
                 output.result_set_id,
+                tool_name="browse_acts",
+                next_call_params=next_call_params,
+                filter_max_records=settings.effective_filter_max_records,
+                scope=output.result_set_scope,
                 offset=offset_int or 0,
                 returned_count=output.returned_count,
                 applied_limit=applied_limit,

@@ -111,6 +111,23 @@ class TestSettingsDefaults:
         with pytest.raises(ValidationError):
             Settings()
 
+    @pytest.mark.parametrize("value", ["inf", "nan", "0.01", "1e6"])
+    def test_api_rate_per_second_outside_the_sane_band_is_rejected(self, monkeypatch, value):
+        """`inf` used to be accepted: it turns the bucket into no limiter at all, and
+        `nan` poisons every refill comparison. The band 0.1-100 rps rules both out
+        together with values no Sejm deployment could mean."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_PER_SECOND", value)
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_RATE_PER_SECOND" in str(rejected.value)
+
+    def test_api_rate_burst_above_the_cap_is_rejected(self, monkeypatch):
+        """A burst of a million tokens is a limiter that never engages."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_BURST", "1001")
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_RATE_BURST" in str(rejected.value)
+
     @pytest.mark.parametrize("value", ["0", "-1"])
     def test_api_rate_burst_below_one_is_rejected(self, monkeypatch, value):
         """A bucket that cannot hold one whole token never admits a request."""

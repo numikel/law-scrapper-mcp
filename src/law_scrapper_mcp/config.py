@@ -8,7 +8,16 @@ from ipaddress import ip_network
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from .config_primitives import MIN_AUTH_TOKEN_BYTES, _host_of, is_loopback_entry
@@ -43,6 +52,14 @@ LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
 
 
+# Human-readable bands for the egress knobs, quoted by the validator below. Kept next
+# to the fields they describe would be nicer, but a `Field` cannot carry a message.
+_EGRESS_BANDS = {
+    "api_rate_per_second": "0.1-100",
+    "api_rate_burst": "1-1000",
+}
+
+
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
@@ -54,6 +71,25 @@ class Settings(BaseSettings):
     # mechanism — exposure is a deliberate act requiring an authentication mode.
     host: str = "127.0.0.1"
     port: int = 7683
+
+    @field_validator("api_rate_per_second", "api_rate_burst", mode="wrap")
+    @classmethod
+    def _describe_egress_bounds(
+        cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+    ) -> object:
+        """Name the variable and its band instead of pydantic's bare "less than" line.
+
+        The constraints stay on the `Field` so the schema tells the truth; this only
+        rewrites the failure so an operator reading a startup crash knows which
+        `LAW_MCP_*` variable to fix without opening the source. The input is not
+        echoed, matching `hide_input_in_errors`.
+        """
+        try:
+            return handler(value)
+        except ValidationError as error:
+            name = info.field_name or ""
+            band = _EGRESS_BANDS[name]
+            raise ValueError(f"LAW_MCP_{name.upper()} musi być liczbą z zakresu {band}.") from error
 
     @field_validator("trusted_proxies")
     @classmethod
@@ -187,9 +223,11 @@ class Settings(BaseSettings):
     # Egress pace (D1). Concurrency alone bounds nothing: a sequential loop reaches any
     # rate at all, because a released slot is taken again immediately. A zero rate is
     # rejected rather than clamped — it would wedge every request on a bucket that
-    # never refills.
-    api_rate_per_second: float = Field(default=5.0, gt=0)
-    api_rate_burst: int = Field(default=10, ge=1)
+    # never refills. Bounded above as well: `inf` used to pass `gt=0` and turned the
+    # bucket into no limiter at all, `nan` poisoned every refill comparison, and a
+    # burst of a million tokens is a limiter that never engages.
+    api_rate_per_second: float = Field(default=5.0, ge=0.1, le=100, allow_inf_nan=False)
+    api_rate_burst: int = Field(default=10, ge=1, le=1000)
     # Bounded so that a misconfigured value degrades loudly at startup instead of
     # silently turning the retry loop into zero attempts.
     api_max_attempts: int = Field(default=3, ge=1)

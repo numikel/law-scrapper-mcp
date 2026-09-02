@@ -9,6 +9,7 @@ Every test drives an injected clock; none sits out a real delay (design constrai
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
@@ -137,6 +138,38 @@ async def test_a_non_positive_pause_is_ignored(clock: FakeClock, waits: list[flo
     await limiter.acquire()
 
     assert waits == []
+
+
+async def test_a_pause_past_the_cap_is_clamped_to_max_pause(clock: FakeClock, waits: list[float]) -> None:
+    """The limiter owns the bound on what one server signal can cost every caller.
+
+    Before, `pause_for` took any length at face value and relied on its one caller to
+    clamp first; a second caller — or a test — could wedge the whole client for hours.
+    """
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
+
+    limiter.pause_for(10_000.0)
+    await limiter.acquire()
+
+    assert clock.now == pytest.approx(60.0)
+    assert waits == [pytest.approx(60.0)]
+
+
+async def test_a_clamped_pause_is_logged(clock: FakeClock, caplog: pytest.LogCaptureFixture) -> None:
+    """Silently shortening a server's request for quiet would hide the very signal an operator tunes for."""
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
+
+    with caplog.at_level(logging.WARNING, logger="law_scrapper_mcp"):
+        limiter.pause_for(10_000.0)
+
+    assert any("exceeds the 60.0s cap" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("max_pause", [0.0, -1.0])
+async def test_a_non_positive_max_pause_is_rejected(max_pause: float) -> None:
+    """A zero cap would silently turn every server pause into no pause at all."""
+    with pytest.raises(ValueError):
+        RateLimiter(rate=5.0, burst=10, max_pause=max_pause)
 
 
 @pytest.mark.parametrize("rate", [0.0, -1.0])

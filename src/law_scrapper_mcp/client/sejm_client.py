@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from enum import StrEnum
 from time import monotonic
 from typing import Any
@@ -67,6 +68,7 @@ class SejmApiClient:
         rate_burst: int = 10,
         max_server_pause: float = 60.0,
         rate_limiter: RateLimiter | None = None,
+        clock: Callable[[], float] = monotonic,
     ):
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
@@ -78,12 +80,15 @@ class SejmApiClient:
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         # Prebuilt limiter accepted on the same terms as the breaker above: production
         # passes rate, burst and the pause cap, tests pass a limiter with an injected
-        # clock. A limiter injected here MUST share the clock this class reads for
-        # deadlines (module-level `monotonic`), or the pacing bound silently fails open
-        # — the limiter compares a deadline it cannot interpret and simply never refuses.
-        self._rate_limiter = rate_limiter or RateLimiter(
-            rate=rate_per_second, burst=rate_burst, max_pause=max_server_pause
-        )
+        # clock. The deadline this class computes and the waits the limiter measures
+        # must be on one scale, or the pacing bound silently fails open — the limiter
+        # compares a deadline it cannot interpret and simply never refuses. So the two
+        # clocks are never configured independently: an injected limiter lends the
+        # client its clock, and a limiter built here receives the client's.
+        if rate_limiter is None:
+            rate_limiter = RateLimiter(rate=rate_per_second, burst=rate_burst, max_pause=max_server_pause, clock=clock)
+        self._rate_limiter = rate_limiter
+        self._clock = rate_limiter.clock
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
         self._user_agent = user_agent
@@ -175,7 +180,7 @@ class SejmApiClient:
                 mistake our own policy for an upstream failure.
             httpx.HTTPError: The last error once attempts or budget run out.
         """
-        deadline = monotonic() + self._retry_budget
+        deadline = self._clock() + self._retry_budget
         throttled = False
         breaker_failure_seen = False
 
@@ -219,7 +224,7 @@ class SejmApiClient:
                     not verdict.retryable
                     or attempt == self._max_attempts
                     or (verdict.rate_limited and throttled)
-                    or monotonic() + delay >= deadline
+                    or self._clock() + delay >= deadline
                 )
 
                 if give_up:

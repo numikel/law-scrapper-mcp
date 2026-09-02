@@ -158,6 +158,21 @@ async def test_a_429_pauses_the_client_even_when_the_request_gives_up(
     assert paused == [pytest.approx(30.0)]
 
 
+async def test_an_injected_limiter_lends_the_client_its_clock(clock: FakeClock) -> None:
+    """One scale for both sides: the deadline is computed on the clock the limiter measures with."""
+    api = SejmApiClient(cache=TTLCache(max_entries=1), rate_limiter=RateLimiter(rate=5.0, burst=10, clock=clock))
+
+    assert api._clock is clock
+
+
+async def test_the_client_hands_its_own_clock_to_the_limiter_it_builds(clock: FakeClock) -> None:
+    """The other direction of the same contract, for the production path without an injected limiter."""
+    api = SejmApiClient(cache=TTLCache(max_entries=1), clock=clock)
+
+    assert api._rate_limiter.clock is clock
+    assert api._clock is clock
+
+
 async def test_the_server_pause_cap_reaches_the_limiter() -> None:
     """`LAW_MCP_API_MAX_SERVER_PAUSE` is only a setting if the limiter ends up holding it."""
     api = SejmApiClient(cache=TTLCache(max_entries=1), max_server_pause=120.0)
@@ -299,19 +314,17 @@ async def test_the_token_is_taken_before_the_concurrency_slot() -> None:
 
 
 @respx.mock
-async def test_a_pause_it_cannot_afford_fails_fast_instead_of_hanging(
-    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_a_pause_it_cannot_afford_fails_fast_instead_of_hanging(clock: FakeClock, waits: list[float]) -> None:
     """The operation's time budget must reach the limiter, not stop above it.
 
-    `monotonic` is patched onto the same fake clock the limiter uses, because the
-    deadline the retry loop computes and the pause the limiter measures have to be on
-    one scale before either can bound the other.
+    Nothing is patched onto `monotonic` here: the client derives its deadline from the
+    injected limiter's clock, so the deadline the retry loop computes and the pause the
+    limiter measures are on one scale by construction. Before that, the two scales
+    were unrelated and this bound only held while a test patched them together.
 
     Without the bound this call returned only after the whole 60 s pause — longer than
     most MCP clients wait — so the agent saw a client-side timeout and no explanation.
     """
-    monkeypatch.setattr(client_module, "monotonic", clock)
     respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ELI": "DU/2024/1"}))
 
     limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
@@ -333,9 +346,7 @@ async def test_a_pause_it_cannot_afford_fails_fast_instead_of_hanging(
 
 
 @respx.mock
-async def test_a_refused_pause_leaves_the_client_usable_afterwards(
-    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_a_refused_pause_leaves_the_client_usable_afterwards(clock: FakeClock, waits: list[float]) -> None:
     """A refusal must leave the client able to serve the very next call.
 
     Scoped honestly: the breaker is CLOSED here, where releasing a slot is a no-op, so
@@ -343,7 +354,6 @@ async def test_a_refused_pause_leaves_the_client_usable_afterwards(
     HALF_OPEN accounting is covered by the breaker's own suite; what this rules out is a
     refusal leaving the limiter or the client wedged for everyone behind it.
     """
-    monkeypatch.setattr(client_module, "monotonic", clock)
     respx.get(ACT_URL).mock(return_value=httpx.Response(200, json={"ELI": "DU/2024/1"}))
 
     limiter = RateLimiter(rate=5.0, burst=10, clock=clock)

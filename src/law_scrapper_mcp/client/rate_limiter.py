@@ -81,6 +81,15 @@ class RateLimiter:
         self._lock = asyncio.Lock()
 
     @property
+    def clock(self) -> Callable[[], float]:
+        """The clock every deadline handed to `acquire` must be measured on.
+
+        Exposed so a client that receives a prebuilt limiter can compute its deadlines
+        on the same scale instead of assuming the limiter runs on `time.monotonic()`.
+        """
+        return self._clock
+
+    @property
     def max_pause(self) -> float:
         """Longest pause one server signal may impose, in seconds."""
         return self._max_pause
@@ -146,13 +155,13 @@ class RateLimiter:
         order and hands each one an exact deficit to sleep off. Releasing the lock
         before sleeping would wake every waiter onto the same single token.
 
-        `deadline` is an instant on THIS limiter's `clock()`, which is a contract the
-        caller has to honour: a client that injects a limiter clock but derives its
-        deadline from `time.monotonic()` hands over two unrelated scales, and the bound
-        then fails silently open rather than loudly. Absolute instants are kept rather
-        than durations so that a pause extended mid-wait is re-measured correctly. It is checked before every wait, not once on entry, because a pause
-        may be extended by another task while this one is already waiting. `None` means
-        the caller accepts an unbounded wait.
+        `deadline` is an instant on THIS limiter's `clock()`, which the caller reads
+        through the `clock` property rather than assuming `time.monotonic()`: two
+        unrelated scales would make the bound fail silently open rather than loudly.
+        Absolute instants are kept rather than durations so that a pause extended
+        mid-wait is re-measured correctly. It is checked before every wait, not once on
+        entry, because a pause may be extended by another task while this one is
+        already waiting. `None` means the caller accepts an unbounded wait.
 
         Raises:
             EgressPaceDeadlineError: The next wait would end past `deadline`.

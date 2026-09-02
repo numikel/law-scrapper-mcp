@@ -84,6 +84,14 @@ class TestSettingsDefaults:
         with pytest.raises(ValidationError):
             Settings()
 
+    def test_api_max_attempts_above_twenty_is_rejected(self, monkeypatch):
+        """Twenty attempts already exceed any budget; a larger count only reaches the
+        `backoff` exponent guard, never the API."""
+        monkeypatch.setenv("LAW_MCP_API_MAX_ATTEMPTS", "21")
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_MAX_ATTEMPTS" in str(rejected.value)
+
     def test_api_concurrency_defaults_split_the_previous_budget(self):
         """Criterion 14: the split rebalances the peak, it does not raise it.
 

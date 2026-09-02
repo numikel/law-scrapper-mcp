@@ -58,6 +58,7 @@ _EGRESS_BANDS = {
     "api_rate_per_second": "0.1-100",
     "api_rate_burst": "1-1000",
     "api_max_server_pause": "0-600 (powyżej zera)",
+    "api_max_attempts": "1-20",
 }
 
 
@@ -73,7 +74,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 7683
 
-    @field_validator("api_rate_per_second", "api_rate_burst", "api_max_server_pause", mode="wrap")
+    @field_validator("api_rate_per_second", "api_rate_burst", "api_max_server_pause", "api_max_attempts", mode="wrap")
     @classmethod
     def _describe_egress_bounds(
         cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
@@ -234,8 +235,10 @@ class Settings(BaseSettings):
     # other caller. Ten minutes is already past what any MCP client waits.
     api_max_server_pause: float = Field(default=60.0, gt=0, le=600, allow_inf_nan=False)
     # Bounded so that a misconfigured value degrades loudly at startup instead of
-    # silently turning the retry loop into zero attempts.
-    api_max_attempts: int = Field(default=3, ge=1)
+    # silently turning the retry loop into zero attempts. Capped as well: twenty
+    # attempts already outlast any retry budget, and a larger count only reaches the
+    # `backoff` exponent guard, never the API.
+    api_max_attempts: int = Field(default=3, ge=1, le=20)
     api_retry_budget: float = Field(default=45.0, gt=0)
 
     # Cache TTL (seconds)

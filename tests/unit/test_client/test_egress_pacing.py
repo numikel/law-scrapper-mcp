@@ -212,6 +212,35 @@ async def test_a_retry_after_far_above_the_cap_is_clamped_but_retry_policy_is_no
 
 
 @respx.mock
+async def test_an_absurd_retry_after_gives_up_without_sleeping(clock: FakeClock, waits: list[float]) -> None:
+    """Pins where the clamp lives: in the pause, never in the parser.
+
+    A `Retry-After` of 100 000 s reaches the retry loop unclamped, so `give_up` sees a
+    delay no budget can hold and ends the request now — no retry sleep, no second call.
+    Had `_parse_retry_after` clamped it to the cap, the same request would have slept
+    the cap out and retried, quietly turning "give up now" into "retry after 60 s".
+    The client-wide pause, meanwhile, is bounded to the cap as before.
+    """
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
+    api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter, max_attempts=3, retry_budget=45.0)
+    await api.start()
+    route = respx.get(ACT_URL).mock(return_value=httpx.Response(429, headers={"Retry-After": "100000"}))
+    try:
+        with pytest.raises(SejmApiError):
+            await api.get_json(ACT_PATH)
+    finally:
+        await api.close()
+
+    assert route.call_count == 1
+    assert waits == []
+    assert clock.now == 0.0
+
+    await limiter.acquire()
+
+    assert clock.now == pytest.approx(60.0)
+
+
+@respx.mock
 async def test_heavy_downloads_cannot_starve_the_light_lane() -> None:
     """Criterion 13: two PDFs hold both heavy slots, a third waits, JSON still passes."""
     gate = asyncio.Event()

@@ -158,20 +158,26 @@ async def test_a_429_pauses_the_client_even_when_the_request_gives_up(
     assert paused == [pytest.approx(30.0)]
 
 
+async def test_the_server_pause_cap_reaches_the_limiter() -> None:
+    """`LAW_MCP_API_MAX_SERVER_PAUSE` is only a setting if the limiter ends up holding it."""
+    api = SejmApiClient(cache=TTLCache(max_entries=1), max_server_pause=120.0)
+
+    assert api._rate_limiter.max_pause == pytest.approx(120.0)
+
+
 @respx.mock
 async def test_a_retry_after_far_above_the_cap_is_clamped_but_retry_policy_is_not(
-    clock: FakeClock, waits: list[float], monkeypatch: pytest.MonkeyPatch
+    clock: FakeClock, waits: list[float]
 ) -> None:
     """An unbounded Retry-After would wedge every other caller for its full length.
 
-    The clamp lives only at the `pause_for` call site: `delay`/`give_up` still see the
-    real, unclamped header value, so this same oversized response still ends the
+    The clamp lives in the limiter, not in the retry loop: `delay`/`give_up` still see
+    the real, unclamped header value, so this same oversized response still ends the
     request immediately (max_attempts=1, no retry sleep) instead of the clamp
-    silently turning "give up now" into "retry after 60s".
+    silently turning "give up now" into "retry after 60s". The pause the limiter
+    actually holds is then measured through `acquire`, on the shared fake clock.
     """
-    paused: list[float] = []
-    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
-    monkeypatch.setattr(limiter, "pause_for", paused.append)
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
 
     api = SejmApiClient(cache=TTLCache(max_entries=100), rate_limiter=limiter, max_attempts=1)
     await api.start()
@@ -182,9 +188,12 @@ async def test_a_retry_after_far_above_the_cap_is_clamped_but_retry_policy_is_no
     finally:
         await api.close()
 
-    assert paused == [pytest.approx(client_module.MAX_SERVER_PAUSE)]
     assert route.call_count == 1
     assert waits == []
+
+    await limiter.acquire()
+
+    assert clock.now == pytest.approx(60.0)
 
 
 @respx.mock

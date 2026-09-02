@@ -57,6 +57,7 @@ LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://
 _EGRESS_BANDS = {
     "api_rate_per_second": "0.1-100",
     "api_rate_burst": "1-1000",
+    "api_max_server_pause": "0-600 (powyżej zera)",
 }
 
 
@@ -72,7 +73,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 7683
 
-    @field_validator("api_rate_per_second", "api_rate_burst", mode="wrap")
+    @field_validator("api_rate_per_second", "api_rate_burst", "api_max_server_pause", mode="wrap")
     @classmethod
     def _describe_egress_bounds(
         cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
@@ -228,6 +229,10 @@ class Settings(BaseSettings):
     # burst of a million tokens is a limiter that never engages.
     api_rate_per_second: float = Field(default=5.0, ge=0.1, le=100, allow_inf_nan=False)
     api_rate_burst: int = Field(default=10, ge=1, le=1000)
+    # Longest client-wide pause one `Retry-After` header may impose. The request that
+    # received the header has its own give-up check; this bounds what it costs every
+    # other caller. Ten minutes is already past what any MCP client waits.
+    api_max_server_pause: float = Field(default=60.0, gt=0, le=600, allow_inf_nan=False)
     # Bounded so that a misconfigured value degrades loudly at startup instead of
     # silently turning the retry loop into zero attempts.
     api_max_attempts: int = Field(default=3, ge=1)

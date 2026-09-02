@@ -27,13 +27,6 @@ logger = logging.getLogger(__name__)
 # `Settings.user_agent`, which derives both name and version from configuration.
 DEFAULT_USER_AGENT = "law-scrapper-mcp"
 
-# Bounds what a single Retry-After header can cost every other caller of this
-# client. The request that received it already has its own give-up check
-# (bounded by the retry budget) — this pause has none of its own and outlives
-# that one request, holding every other waiter's `acquire()` regardless of what
-# happens to the request that triggered it.
-MAX_SERVER_PAUSE = 60.0
-
 
 class RequestClass(StrEnum):
     """Traffic class deciding which concurrency budget a request draws on.
@@ -72,6 +65,7 @@ class SejmApiClient:
         max_concurrent_content: int = 2,
         rate_per_second: float = 5.0,
         rate_burst: int = 10,
+        max_server_pause: float = 60.0,
         rate_limiter: RateLimiter | None = None,
     ):
         self._client: httpx.AsyncClient | None = None
@@ -83,11 +77,13 @@ class SejmApiClient:
         self._timeout = timeout
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         # Prebuilt limiter accepted on the same terms as the breaker above: production
-        # passes rate and burst, tests pass a limiter with an injected clock. A limiter
-        # injected here MUST share the clock this class reads for deadlines (module-level
-        # `monotonic`), or the pacing bound silently fails open — the limiter compares a
-        # deadline it cannot interpret and simply never refuses.
-        self._rate_limiter = rate_limiter or RateLimiter(rate=rate_per_second, burst=rate_burst)
+        # passes rate, burst and the pause cap, tests pass a limiter with an injected
+        # clock. A limiter injected here MUST share the clock this class reads for
+        # deadlines (module-level `monotonic`), or the pacing bound silently fails open
+        # — the limiter compares a deadline it cannot interpret and simply never refuses.
+        self._rate_limiter = rate_limiter or RateLimiter(
+            rate=rate_per_second, burst=rate_burst, max_pause=max_server_pause
+        )
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
         self._user_agent = user_agent
@@ -130,10 +126,10 @@ class SejmApiClient:
         becomes a second concurrency limit.
 
         `deadline` is the operation's own time budget, forwarded to the limiter so that
-        pacing cannot outlive it. Without it the wait for a token — up to
-        `MAX_SERVER_PAUSE` after a server-requested pause — sits below the layer that
-        owns the budget and is invisible to it, so `api_retry_budget` stops bounding
-        anything on the success path.
+        pacing cannot outlive it. Without it the wait for a token — up to the limiter's
+        `max_pause` after a server-requested pause — sits below the layer that owns the
+        budget and is invisible to it, so `api_retry_budget` stops bounding anything on
+        the success path.
 
         Raises:
             httpx.HTTPError: Any transport or status error.
@@ -207,27 +203,14 @@ class SejmApiClient:
                     # asked for quiet. Applied before the give-up check on purpose: the
                     # signal outlives the request that happened to receive it.
                     #
-                    # Clamped here, not in `classify_failure`/`_parse_retry_after`:
+                    # Handed over unclamped on purpose: the limiter bounds the pause to
+                    # its own `max_pause`, and the clamp must not happen earlier — in
+                    # `classify_failure`/`_parse_retry_after` or here — because
                     # `verdict.retry_after` also drives `delay` and `give_up` below, and
-                    # clamping it there would silently turn "give up now" into "retry
-                    # after the clamp" for this one request. Only the client-wide pause
-                    # is bounded; this request's own retry policy sees the real header.
-                    pause = min(verdict.retry_after, MAX_SERVER_PAUSE)
-                    if verdict.retry_after > MAX_SERVER_PAUSE:
-                        logger.warning(
-                            "Retry-After=%.1fs exceeds the %.1fs cap; pausing egress for %.1fs instead.",
-                            verdict.retry_after,
-                            MAX_SERVER_PAUSE,
-                            pause,
-                        )
-                    elif pause > 0:
-                        # `Retry-After: 0` is legal and means "go ahead"; logging a
-                        # 0.0 s pause would announce a hold that never happens.
-                        logger.warning(
-                            "Pausing egress for %.1fs (server requested via Retry-After).",
-                            pause,
-                        )
-                    self._rate_limiter.pause_for(pause)
+                    # clamping it would silently turn "give up now" into "retry after
+                    # the clamp" for this one request. Only the client-wide pause is
+                    # bounded; this request's own retry policy sees the real header.
+                    self._rate_limiter.pause_for(verdict.retry_after)
                 if verdict.breaker_failure:
                     breaker_failure_seen = True
                 delay = verdict.retry_after if verdict.retry_after is not None else backoff(attempt)

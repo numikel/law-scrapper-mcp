@@ -154,6 +154,23 @@ class TestSettingsDefaults:
         assert settings.api_rate_burst == 4
         assert settings.api_max_concurrent_content == 1
 
+    def test_api_max_server_pause_defaults_to_the_former_constant(self):
+        """The cap used to be a module constant in `sejm_client`; the default keeps it."""
+        assert Settings().api_max_server_pause == pytest.approx(60.0)
+
+    def test_api_max_server_pause_comes_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_API_MAX_SERVER_PAUSE", "120")
+        assert Settings().api_max_server_pause == pytest.approx(120.0)
+
+    @pytest.mark.parametrize("value", ["0", "-1", "601", "inf"])
+    def test_api_max_server_pause_outside_the_band_is_rejected(self, monkeypatch, value):
+        """Zero would silence every server pause; ten minutes is already longer than any
+        MCP client waits, so anything above it only wedges callers for nothing."""
+        monkeypatch.setenv("LAW_MCP_API_MAX_SERVER_PAUSE", value)
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_MAX_SERVER_PAUSE" in str(rejected.value)
+
     @pytest.mark.parametrize("value", ["0", "-0.5"])
     def test_api_retry_budget_must_be_positive(self, monkeypatch, value):
         """A non-positive budget makes every planned wait exceed the deadline."""

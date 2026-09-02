@@ -172,6 +172,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         max_concurrent_content=settings.api_max_concurrent_content,
         rate_per_second=settings.api_rate_per_second,
         rate_burst=settings.api_rate_burst,
+        max_server_pause=settings.api_max_server_pause,
         circuit_breaker=circuit_breaker,
         max_attempts=settings.api_max_attempts,
         retry_budget=settings.api_retry_budget,

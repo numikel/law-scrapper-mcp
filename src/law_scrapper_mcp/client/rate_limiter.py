@@ -96,6 +96,10 @@ class RateLimiter:
         Clamped to `max_pause` here rather than by the caller: the pause outlives the
         request that received the header and holds every other waiter's `acquire()`,
         so the bound on what one signal can cost belongs to the object that applies it.
+        The log line lives here for the same reason — only this side knows the length
+        actually held. A non-positive request (`Retry-After: 0` is legal and means "go
+        ahead") is neither applied nor logged: announcing a 0.0 s hold would describe
+        a pause that never happens.
         """
         if seconds <= 0:
             return
@@ -107,6 +111,8 @@ class RateLimiter:
                 self._max_pause,
             )
             seconds = self._max_pause
+        else:
+            logger.warning("Pausing egress for %.1fs (server requested via Retry-After).", seconds)
         self._paused_until = max(self._paused_until, self._clock() + seconds)
         # Bank what has been earned up to now before moving the refill mark forward:
         # skipping this would forfeit the tokens accrued since the last `_refill`, which

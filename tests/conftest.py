@@ -13,6 +13,7 @@ from httpx import Response
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
 
@@ -69,9 +70,18 @@ def cache() -> TTLCache:
 async def mock_client(cache: TTLCache) -> AsyncGenerator[SejmApiClient]:
     """Create a SejmApiClient with mocked httpx.
 
+    The timeout and both concurrency lanes come from `Settings`, the same
+    values `server.py` hands the production client, so the suite cannot
+    drift to a wider or narrower budget than the one that ships.
+
     Note: Tests using this fixture should use respx to mock HTTP responses.
     """
-    client = SejmApiClient(cache=cache, timeout=30.0, max_concurrent=10)
+    client = SejmApiClient(
+        cache=cache,
+        timeout=settings.api_timeout,
+        max_concurrent=settings.api_max_concurrent,
+        max_concurrent_content=settings.api_max_concurrent_content,
+    )
     await client.start()
     yield client
     await client.close()

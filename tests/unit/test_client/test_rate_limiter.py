@@ -55,6 +55,39 @@ async def test_an_idle_bucket_never_overfills(clock: FakeClock, waits: list[floa
     assert waits == [pytest.approx(0.2)]
 
 
+@pytest.mark.timeout(5)
+@pytest.mark.parametrize("now", [0.0, 1e3, 1e7, 1e9])
+async def test_the_deficit_wait_is_exact_at_any_clock_magnitude(
+    clock: FakeClock, waits: list[float], now: float
+) -> None:
+    """Refill arithmetic must not depend on how far the monotonic clock has run.
+
+    `monotonic()` counts from boot, so on a long-lived host `now` is 1e7 and up, and
+    `now - self._updated` loses digits to the magnitude of `now` rather than to the
+    size of the deficit. The tolerance in `acquire` scales with `ulp(now) * rate` for
+    exactly that reason; a fixed epsilon covers the small-clock cases the rest of this
+    suite runs at and nothing else. At 1e7 a bare `1e-9` already falls short (`ulp(1e7)
+    * 5 = 9.3e-9`): the deficit wait leaves the bucket a rounding error under one
+    token, the limiter asks for a wait too small to move a clock of that magnitude,
+    and the loop never returns. The timeout turns that hang into a failure.
+
+    Five post-burst waits rather than one: a single wait can land on a friendly
+    rounding by luck (it does at 1e9), a run of them does not.
+    """
+    clock.now = now
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    for _ in range(10):
+        await limiter.acquire()
+
+    admitted: list[float] = []
+    for _ in range(5):
+        await limiter.acquire()
+        admitted.append(clock.now - now)
+
+    assert waits == [pytest.approx(0.2, abs=1e-6)] * 5
+    assert admitted == [pytest.approx(0.2 * n, abs=1e-6) for n in range(1, 6)]
+
+
 async def test_a_paused_limiter_holds_back_every_request(clock: FakeClock, waits: list[float]) -> None:
     """Criterion 4: the server asked for quiet, so nobody goes out before the window ends.
 

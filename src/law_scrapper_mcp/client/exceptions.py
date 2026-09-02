@@ -57,8 +57,13 @@ class ContentTooLargeError(LawScrapperError):
     rather than quoting a running total as the document's size.
     """
 
+    @staticmethod
+    def _measured(size_bytes: int, *, exact: bool) -> str:
+        """Render a size that may be a lower bound rather than a total."""
+        return f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+
     def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None, *, exact: bool = True):
-        measured = f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+        measured = self._measured(size_bytes, exact=exact)
         message = f"Treść aktu {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
         if pdf_url is not None:
             message += f" Pobierz plik źródłowy: {pdf_url}"
@@ -88,7 +93,7 @@ class ResponseTooLargeError(ContentTooLargeError):
     def __init__(self, url: str, size_bytes: int, limit_bytes: int, *, exact: bool):
         # The parent's message is shaped around an act; this one has only a URL,
         # so the base class is initialised directly with a message of its own.
-        measured = f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+        measured = self._measured(size_bytes, exact=exact)
         LawScrapperError.__init__(
             self,
             f"Odpowiedź z {url} ma {measured} i przekracza limit {limit_bytes} B, więc pobieranie przerwano.",
@@ -97,6 +102,12 @@ class ResponseTooLargeError(ContentTooLargeError):
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes
         self.exact = exact
+        # Every `ContentTooLargeError` promises these two, and being a subclass is the
+        # whole point of this class — a refusal that slips through untranslated must
+        # land in the same handler. They are present and empty, not absent, so that
+        # handler reads "no act context here" instead of raising `AttributeError`.
+        self.eli = ""
+        self.pdf_url = None
 
 
 class DocumentNotLoadedError(LawScrapperError):

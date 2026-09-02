@@ -40,9 +40,10 @@ parameter names or response shape; several fields and validations now behave as 
 
 ### Changed
 
-- `search_legal_acts` validates `limit` and `offset` like every other listing tool: a malformed
-  or non-positive `limit`, or a malformed or negative `offset`, is a tool error with a Polish
-  message instead of silently yielding page one. `limit` still has no upper clamp; its
+- `search_legal_acts` validates `year`, `limit` and `offset` like every other listing tool: a
+  malformed `year`, a malformed or non-positive `limit`, or a malformed or negative `offset`, is
+  a tool error with a Polish message instead of silently yielding page one — or, for `year`, a
+  search across the publisher's whole corpus. `limit` still has no upper clamp; its
   description now says why (#18, #19).
 - `track_legal_changes` sends `limit` and `offset` upstream and reads `totalCount`, so a date
   range wider than one API page is stored as a `page`-scoped set with a truthful

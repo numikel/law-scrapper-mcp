@@ -1,6 +1,5 @@
 """Search legal acts tool."""
 
-import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -139,17 +138,21 @@ def register(mcp: MCPServer[AppContext]) -> None:
         """
         search_service = get_app_context(ctx).search_service
 
-        year_int: int | None = None
-        if year is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                year_int = int(year)
-
         # Loud, like every other list tool (#18). Suppressing the parse turned
         # `offset="abc"` into page one and `limit="x"` into twenty with no signal that
-        # the call had been misread. `limit` keeps no upper clamp (P5, pinned by
+        # the call had been misread — and `year="abc"` into a search across the whole
+        # publisher, which is the same defect on the parameter that costs the most.
+        # `limit` keeps no upper clamp (P5, pinned by
         # `test_limit_above_the_shared_maximum_is_not_clamped`) but does need a floor:
         # the upstream request is the whole cost of this tool, and an empty page still
         # pays for one record.
+        year_int: int | None = None
+        if year is not None:
+            try:
+                year_int = int(year)
+            except (ValueError, TypeError) as e:
+                raise ValueError("Parametr 'year' musi być liczbą całkowitą.") from e
+
         limit_int: int | None = None
         if limit is not None:
             try:

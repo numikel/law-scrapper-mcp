@@ -1,8 +1,9 @@
 """`search_legal_acts` validates its page parameters instead of ignoring bad values (#18).
 
 `browse_acts` and every other list tool already fail loudly on a non-integer or negative
-`limit`/`offset`. `search_legal_acts` parsed both under `contextlib.suppress`, so
-`offset="abc"` quietly became page one and `limit="x"` quietly became twenty — the
+`limit`/`offset`. `search_legal_acts` parsed them under `contextlib.suppress`, so
+`offset="abc"` quietly became page one, `limit="x"` quietly became twenty, and
+`year="abc"` quietly widened the query to the publisher's whole corpus — the
 agent asked for one thing and got another with no signal that anything was wrong.
 """
 
@@ -45,6 +46,15 @@ class TestSearchPageParameterValidation:
         message = result.content[0].text
         assert "Parametr 'limit' musi być liczbą całkowitą." in message
         assert "invalid literal" not in message
+
+    async def test_a_non_integer_year_is_an_error(self, mcp_client) -> None:
+        """The same defect on the parameter that costs the most: a swallowed `year`
+        turned a one-year query into a search across the publisher's whole corpus."""
+        result = await mcp_client.call_tool("search_legal_acts", {"year": "abc"})
+
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert "Parametr 'year' musi być liczbą całkowitą." in result.content[0].text
 
     async def test_a_valid_page_still_works(self, mcp_client) -> None:
         """The guard must not catch the values it exists to protect."""

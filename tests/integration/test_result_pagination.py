@@ -1,10 +1,37 @@
 """Pagination contract tests for stored results and metadata."""
 
+from collections.abc import Callable
+from typing import Any
+
+import httpx
 import pytest
+import respx
+from httpx import Response
 
 from mcp_helpers import parse_tool_result
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+
+SEARCH_URL = "https://api.sejm.gov.pl/eli/acts/search"
+
+
+def _windowed(items: list[dict[str, Any]]) -> Callable[[httpx.Request], Response]:
+    """A search endpoint that honours `limit` and `offset`, the way `acts/search` does.
+
+    The shared `mock_api_responses` fixture answers every search with the same three
+    records whatever the query says. That was fine while `track_legal_changes`
+    downloaded a range whole and sliced locally; since #54 the window is built
+    upstream, so a mock that ignores the window would test nothing.
+    """
+
+    def respond(request: httpx.Request) -> Response:
+        params = request.url.params
+        start = int(params.get("offset", 0))
+        end = start + int(params.get("limit", 20))
+        page = items[start:end]
+        return Response(200, json={"count": len(page), "totalCount": len(items), "items": page})
+
+    return respond
 
 
 def _assert_page(
@@ -114,7 +141,8 @@ async def test_metadata_all_has_one_global_limit(mcp_client) -> None:
     ]
 
 
-async def test_changes_store_full_set_but_return_one_page(mcp_client) -> None:
+async def test_changes_store_the_fetched_window_and_report_the_range_size(mcp_client, search_results) -> None:
+    respx.get(SEARCH_URL).mock(side_effect=_windowed(search_results["items"]))
     result = await mcp_client.call_tool(
         "track_legal_changes",
         {"date_from": "2024-01-01", "date_to": "2024-12-31", "limit": 1},
@@ -128,7 +156,9 @@ async def test_changes_store_full_set_but_return_one_page(mcp_client) -> None:
 
     assert len(payload["data"]["changes"]) == 1
     assert payload["data"]["total_count"] == 3
-    assert len(stored_payload["data"]["results"]) == 3
+    assert payload["data"]["result_set_scope"]["scope"] == "page"
+    assert len(stored_payload["data"]["results"]) == 1
+    assert stored_payload["data"]["source_scope"]["scope"] == "page"
 
 
 async def test_filter_sort_before_slice_returns_second_sorted_item(mcp_client) -> None:
@@ -161,7 +191,7 @@ async def test_filter_sort_before_slice_returns_second_sorted_item(mcp_client) -
     assert page_payload["data"]["results"][0]["eli"] == globally_sorted[1]["eli"]
 
 
-async def test_result_tools_cover_every_page_boundary(mcp_client) -> None:
+async def test_result_tools_cover_every_page_boundary(mcp_client, search_results) -> None:
     search = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
     source_id = parse_tool_result(search)["data"]["result_set_id"]
     await _assert_tool_page_matrix(
@@ -175,6 +205,7 @@ async def test_result_tools_cover_every_page_boundary(mcp_client) -> None:
         "get_system_metadata",
         {"category": "all"},
     )
+    respx.get(SEARCH_URL).mock(side_effect=_windowed(search_results["items"]))
     await _assert_tool_page_matrix(
         mcp_client,
         "track_legal_changes",

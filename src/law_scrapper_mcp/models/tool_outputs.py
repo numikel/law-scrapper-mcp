@@ -169,8 +169,9 @@ class ChangesOutput(BaseModel):
     result_set_scope: ResultSetScope | None = Field(
         default=None,
         description=(
-            "Zasięg zapisanego zestawu zmian. Zawsze 'complete' dla niepustego wyniku — "
-            "to jedyne narzędzie, którego zestaw filter_results przeszukuje w całości."
+            "Zasięg zapisanego zestawu zmian: 'complete', gdy pierwsza strona mieści cały "
+            "zakres dat, albo 'page', gdy zakres jest szerszy niż jedna strona — wtedy "
+            "filter_results przeszukuje tylko to okno."
         ),
     )
     page_info: PageInfo

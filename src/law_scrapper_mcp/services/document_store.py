@@ -119,14 +119,18 @@ class DocumentStore:
 
     async def load(self, eli: str, markdown: str, sections: list[Section]) -> None:
         """Load a document into the store."""
-        doc_size = len(markdown.encode("utf-8"))
+        # Built before the lock and measured through the document itself: the size is
+        # `__post_init__`'s own product, so measuring it here as well would encode a
+        # 5 MiB act to UTF-8 twice per load. Construction touches nothing shared, so
+        # the critical section below stays as short as it was.
+        document = LoadedDocument(eli=eli, markdown=markdown, sections=sections)
         # `ActService` refuses an oversized act against this same limit before
         # it ever gets here, so this guards callers that skip that check. It
         # refuses rather than truncates: a legal act cut mid-clause is a loss
         # the model cannot detect, while a refusal is one it can act on. The
         # store does not know the source URL, so the error carries none.
-        if doc_size > self._max_size_bytes:
-            raise ContentTooLargeError(eli, doc_size, self._max_size_bytes)
+        if document.size_bytes > self._max_size_bytes:
+            raise ContentTooLargeError(eli, document.size_bytes, self._max_size_bytes)
 
         async with self._lock:
             self._evict_expired()
@@ -134,8 +138,8 @@ class DocumentStore:
             if len(self._store) >= self._max_documents and eli not in self._store:
                 self._evict_lru()
 
-            self._store[eli] = LoadedDocument(eli=eli, markdown=markdown, sections=sections)
-            logger.info(f"Loaded document {eli} ({doc_size} bytes, {len(sections)} sections)")
+            self._store[eli] = document
+            logger.info(f"Loaded document {eli} ({document.size_bytes} bytes, {len(sections)} sections)")
 
     async def get_section(self, eli: str, section_id: str) -> str | None:
         """Get content of a specific section."""

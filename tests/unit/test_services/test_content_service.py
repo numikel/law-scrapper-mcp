@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from law_scrapper_mcp.models.pagination import MAX_CONTEXT_CHARS, MAX_SECTION_CHAR_LIMIT
+from law_scrapper_mcp.models.pagination import MAX_CONTEXT_CHARS, MAX_ITEM_LIMIT, MAX_SECTION_CHAR_LIMIT
 from law_scrapper_mcp.services.content_processor import ContentProcessor, Section
 from law_scrapper_mcp.services.content_service import ContentService
 from law_scrapper_mcp.services.document_store import DocumentStore, SearchHit
@@ -17,7 +17,7 @@ def _store(**overrides: object) -> AsyncMock:
     store = AsyncMock()
     store.get_toc.return_value = []
     store.get_section.return_value = None
-    store.scan.return_value = []
+    store.scan_page.return_value = ([], 0)
     store.hydrate.return_value = []
     for name, value in overrides.items():
         getattr(store, name).return_value = value
@@ -95,9 +95,8 @@ class TestReadSection:
 
 class TestSearch:
     async def test_maps_hits_and_paginates(self) -> None:
-        spans = [(n, n + 3) for n in range(1, 4)]
         page_hits = [SearchHit(section_id="art_2", section_title="Art. 2", context="ctx", match_start=2, match_end=5)]
-        service = ContentService(_store(scan=spans, hydrate=page_hits))
+        service = ContentService(_store(scan_page=([(2, 5)], 3), hydrate=page_hits))
 
         output = await service.search("DU/2024/1", "podatek", limit=1, offset=1)
 
@@ -109,33 +108,50 @@ class TestSearch:
         assert output.page_info.next_offset == 2
 
     async def test_context_chars_is_clamped_before_reaching_the_store(self) -> None:
-        store = _store(scan=[(0, 3)], hydrate=[])
+        store = _store(scan_page=([(0, 3)], 1), hydrate=[])
         service = ContentService(store)
 
         await service.search("DU/2024/1", "podatek", context_chars=10**6)
 
         store.hydrate.assert_awaited_once_with("DU/2024/1", [(0, 3)], context_chars=MAX_CONTEXT_CHARS)
 
-    async def test_hydration_is_limited_to_the_requested_page(self) -> None:
-        spans = [(n, n + 3) for n in range(1_000)]
-        store = _store(scan=spans, hydrate=[])
+    async def test_the_page_window_is_pushed_down_to_the_store(self) -> None:
+        """The store bounds the span list; the service must not re-slice a
+        full match list, so it hands the (clamped) window to `scan_page` and
+        hydrates exactly what comes back."""
+        page = [(n, n + 3) for n in range(40, 60)]
+        store = _store(scan_page=(page, 1_000), hydrate=[])
         service = ContentService(store)
 
-        await service.search("DU/2024/1", "podatek", limit=20, offset=0)
+        await service.search("DU/2024/1", "podatek", limit=500, offset=40)
 
+        store.scan_page.assert_awaited_once_with("DU/2024/1", "podatek", limit=MAX_ITEM_LIMIT, offset=40)
         store.hydrate.assert_awaited_once()
-        hydrated_spans = store.hydrate.await_args.args[1]
-        assert len(hydrated_spans) == 20
-        assert hydrated_spans == spans[:20]
+        assert store.hydrate.await_args.args[1] == page
 
-    async def test_total_count_is_exact_regardless_of_the_page(self) -> None:
-        spans = [(n, n + 3) for n in range(1_000)]
-        service = ContentService(_store(scan=spans, hydrate=[]))
+    async def test_page_info_is_built_from_the_exact_total(self) -> None:
+        every = [(n, n + 3) for n in range(1_000)]
+        store = _store()
 
-        for limit, offset in ((1, 0), (20, 0), (5, 900), (100, 999)):
+        async def _scan_page(eli: str, query: str, *, limit: int, offset: int) -> tuple[list[tuple[int, int]], int]:
+            return every[offset : offset + limit], len(every)
+
+        store.scan_page.side_effect = _scan_page
+        service = ContentService(store)
+
+        for limit, offset, returned, truncated, next_offset in (
+            (1, 0, 1, True, 1),
+            (20, 0, 20, True, 20),
+            (5, 900, 5, True, 905),
+            (100, 999, 1, False, None),
+            (10, 1_500, 0, False, None),
+        ):
             output = await service.search("DU/2024/1", "podatek", limit=limit, offset=offset)
-            assert output.page_info.total_count == 1_000
-            assert output.total_matches == 1_000
+            assert output.total_matches == 1_000, (limit, offset)
+            assert output.page_info.total_count == 1_000, (limit, offset)
+            assert output.page_info.returned_count == returned, (limit, offset)
+            assert output.page_info.was_truncated is truncated, (limit, offset)
+            assert output.page_info.next_offset == next_offset, (limit, offset)
 
     async def test_non_integer_limit_is_reported_in_polish(self) -> None:
         store = _store()
@@ -144,7 +160,7 @@ class TestSearch:
         with pytest.raises(ValueError, match="Parametr 'limit' musi być liczbą całkowitą."):
             await service.search("DU/2024/1", "podatek", limit="abc")
 
-        store.scan.assert_not_awaited()
+        store.scan_page.assert_not_awaited()
 
     async def test_negative_offset_is_rejected(self) -> None:
         store = _store()
@@ -153,10 +169,10 @@ class TestSearch:
         with pytest.raises(ValueError, match="Parametr 'offset' nie może być ujemny."):
             await service.search("DU/2024/1", "podatek", offset=-1)
 
-        store.scan.assert_not_awaited()
+        store.scan_page.assert_not_awaited()
 
     async def test_oversized_context_chars_is_clamped_not_rejected(self) -> None:
-        service = ContentService(_store(scan=[(0, 3)], hydrate=[]))
+        service = ContentService(_store(scan_page=([(0, 3)], 1), hydrate=[]))
 
         output = await service.search("DU/2024/1", "podatek", context_chars=5000)
 
@@ -164,7 +180,7 @@ class TestSearch:
         assert output.context_chars_applied == MAX_CONTEXT_CHARS
 
     async def test_context_chars_within_the_limit_is_reported_unchanged(self) -> None:
-        service = ContentService(_store(scan=[(0, 3)], hydrate=[]))
+        service = ContentService(_store(scan_page=([(0, 3)], 1), hydrate=[]))
 
         output = await service.search("DU/2024/1", "podatek", context_chars=300)
 

@@ -91,16 +91,17 @@ class DocumentStore:
 
     Invariant, load-bearing: **no critical section of this class may contain an
     `await`**. Because none does, the lock is never held across a suspension
-    point, so an uncontended `Lock.acquire()` never yields and the scan/hydrate
-    sequence in `ContentService.search` is atomic with respect to the event
-    loop. That is the only reason `page_info.returned_count` cannot exceed the
-    number of hits actually returned.
+    point, so an uncontended `Lock.acquire()` never yields and the
+    scan_page/hydrate sequence in `ContentService.search` is atomic with
+    respect to the event loop. That is the only reason
+    `page_info.returned_count` cannot exceed the number of hits actually
+    returned.
 
     Adding a suspension point inside any critical section — moving the regex
     scan to `run_in_executor`, for instance — breaks that atomicity and makes
     it possible for `hydrate` to build context from a document that replaced
-    the one `scan` measured. The span filter guards ranges, not identity, so
-    such a mismatch would be returned silently. Pair any such change with a
+    the one `scan_page` measured. The span filter guards ranges, not identity,
+    so such a mismatch would be returned silently. Pair any such change with a
     document generation token checked in `hydrate`.
     """
 
@@ -158,8 +159,15 @@ class DocumentStore:
 
             return None
 
-    async def scan(self, eli: str, query: str) -> list[MatchSpan]:
-        """Return the positions of every literal match, without building context.
+    async def scan_page(self, eli: str, query: str, *, limit: int, offset: int) -> tuple[list[MatchSpan], int]:
+        """Return one page of literal-match positions and the exact match count.
+
+        The document is walked once. Only spans whose match index falls in
+        `[offset, offset + limit)` are kept, so memory is bounded by `limit`
+        rather than by how often the query occurs — a single space in a 1 MiB
+        act has over a hundred thousand matches, and a list of them all cost
+        about 15 MB per request. The total still counts every match, so the
+        caller's page metadata stays exact.
 
         The query is escaped before compilation, so Python's backtracking
         engine never receives client-supplied regex syntax. Replacing
@@ -180,7 +188,14 @@ class DocumentStore:
             markdown = doc.markdown
 
         pattern = re.compile(re.escape(query), re.IGNORECASE)
-        return [(match.start(), match.end()) for match in pattern.finditer(markdown)]
+        page_end = offset + limit
+        spans: list[MatchSpan] = []
+        total = 0
+        for index, match in enumerate(pattern.finditer(markdown)):
+            total = index + 1
+            if offset <= index < page_end:
+                spans.append((match.start(), match.end()))
+        return spans, total
 
     async def hydrate(
         self,
@@ -194,7 +209,7 @@ class DocumentStore:
         Cost is proportional to `len(spans)`, not to the number of matches in
         the document. The lock is released before any context extraction.
 
-        Spans must originate from a scan() of the same document. Today the
+        Spans must originate from a scan_page() of the same document. Today the
         store cannot change between the two calls — see the no-`await`
         invariant on the class — so the filter below is a guard against a
         future suspension point, not against a reachable state. Spans outside
@@ -212,7 +227,7 @@ class DocumentStore:
 
         document_length = len(markdown)
         # Filter out spans that are no longer valid for the current document.
-        # This happens if the store mutated between scan and hydrate.
+        # This happens if the store mutated between scan_page and hydrate.
         valid_spans = [(start, end) for start, end in spans if 0 <= start <= end <= document_length]
 
         return _build_hits(markdown, sections, section_starts, valid_spans, context_chars)

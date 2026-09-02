@@ -20,8 +20,9 @@ from law_scrapper_mcp.services.document_store import (
 
 
 async def _search(store: DocumentStore, eli: str, query: str, *, context_chars: int = 500) -> list[SearchHit]:
-    """Compose `scan` and `hydrate` the way `ContentService.search` does, unpaginated."""
-    spans = await store.scan(eli, query)
+    """Compose `scan_page` and `hydrate` the way `ContentService.search` does, on one page."""
+    spans, total = await store.scan_page(eli, query, limit=1_000, offset=0)
+    assert total == len(spans), "test documents must fit on a single page"
     return await store.hydrate(eli, spans, context_chars=context_chars)
 
 
@@ -636,20 +637,68 @@ def _document_with_two_hits() -> tuple[str, list[Section]]:
 
 @pytest.mark.asyncio
 class TestScanAndHydrate:
-    async def test_scan_returns_only_match_positions(self) -> None:
+    async def test_scan_page_returns_match_positions_and_the_exact_total(self) -> None:
         markdown, sections = _document_with_two_hits()
         store = DocumentStore()
         await store.load("DU/2024/1", markdown, sections)
 
-        spans = await store.scan("DU/2024/1", "podatek")
+        spans, total = await store.scan_page("DU/2024/1", "podatek", limit=20, offset=0)
 
         assert spans == [(7, 14), (39, 46)]
+        assert total == 2
 
-    async def test_scan_is_case_insensitive_and_escapes_the_query(self) -> None:
+    async def test_scan_page_is_case_insensitive_and_escapes_the_query(self) -> None:
         store = DocumentStore()
         await store.load("DU/2024/1", "Art. 1 (a+b) i A+B", [])
 
-        assert await store.scan("DU/2024/1", "a+b") == [(8, 11), (15, 18)]
+        assert await store.scan_page("DU/2024/1", "a+b", limit=20, offset=0) == ([(8, 11), (15, 18)], 2)
+
+    async def test_scan_page_windows_by_offset_and_limit(self) -> None:
+        """Every page reports the same exact total; only the window moves."""
+        store = DocumentStore()
+        await store.load("DU/2024/1", "x" * 10, [])
+        every = [(n, n + 1) for n in range(10)]
+
+        first = await store.scan_page("DU/2024/1", "x", limit=3, offset=0)
+        middle = await store.scan_page("DU/2024/1", "x", limit=3, offset=4)
+        last_partial = await store.scan_page("DU/2024/1", "x", limit=3, offset=9)
+        at_end = await store.scan_page("DU/2024/1", "x", limit=3, offset=10)
+        past_end = await store.scan_page("DU/2024/1", "x", limit=3, offset=50)
+        empty_page = await store.scan_page("DU/2024/1", "x", limit=0, offset=0)
+
+        assert first == (every[0:3], 10)
+        assert middle == (every[4:7], 10)
+        assert last_partial == (every[9:10], 10)
+        assert at_end == ([], 10)
+        assert past_end == ([], 10)
+        assert empty_page == ([], 10)
+
+    async def test_scan_page_never_materialises_more_than_one_page_of_spans(self) -> None:
+        """A frequent query on a large act must not build a list of every match.
+
+        Measured on this document (1 MiB, 131072 matches): the old unbounded
+        `scan` peaked at about 15.8 MB, a bounded loop at about 2 KB. The
+        bound below sits far under the former and well above the latter, so
+        it fails on the regression without being sensitive to interpreter
+        noise.
+        """
+        import tracemalloc
+
+        markdown = "podatek " * 131_072  # 1 MiB, one space per word
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, [])
+
+        tracemalloc.start()
+        try:
+            spans, total = await store.scan_page("DU/2024/1", " ", limit=20, offset=65_536)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert total == 131_072
+        assert len(spans) == 20
+        assert spans == [(8 * n + 7, 8 * n + 8) for n in range(65_536, 65_556)]
+        assert peak < 64 * 1024, f"scan_page allocated {peak} bytes; it must hold only one page of spans"
 
     async def test_hydrate_builds_hits_only_for_the_given_spans(self) -> None:
         markdown, sections = _document_with_two_hits()
@@ -695,7 +744,7 @@ class TestScanAndHydrate:
 
         assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
 
-    async def test_scan_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_scan_page_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import re as re_module
         from typing import Any
 
@@ -706,13 +755,13 @@ class TestScanAndHydrate:
 
         def _spy_compile(*args: Any, **kwargs: Any) -> Any:
             # Check if lock is held when re.compile is called.
-            # This happens after scan() has released the lock.
+            # This happens after scan_page() has released the lock.
             observed.append(store._lock.locked())
             return original_compile(*args, **kwargs)
 
         monkeypatch.setattr(re_module, "compile", _spy_compile)
 
-        await store.scan("DU/2024/1", "podatek")
+        await store.scan_page("DU/2024/1", "podatek", limit=20, offset=0)
 
         assert observed == [False], "the store lock must not be held during pattern compilation"
 

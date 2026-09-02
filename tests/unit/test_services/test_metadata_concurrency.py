@@ -78,12 +78,24 @@ async def test_concurrency_never_exceeds_the_client_semaphore() -> None:
 
 
 async def test_page_order_follows_metadata_order_not_arrival_order() -> None:
-    """The last category answers first; the page must still start with keywords."""
-    delays = dict(zip(ENDPOINTS, (0.05, 0.04, 0.03, 0.02, 0.01), strict=True))
+    """The last category answers first; the page must still start with keywords.
 
-    def _delayed(endpoint: str):  # type: ignore[no-untyped-def]
+    Arrival order is forced by a release chain rather than by timing: only
+    the last endpoint may answer at once, and each answer releases the one
+    before it, so the responses land in exactly reversed METADATA_ORDER on
+    every run and the test spends no wall-clock time waiting.
+    """
+    release = {endpoint: asyncio.Event() for endpoint in ENDPOINTS}
+    release[ENDPOINTS[-1]].set()
+    arrival_order: list[str] = []
+
+    def _chained(endpoint: str):  # type: ignore[no-untyped-def]
         async def _handler(request: httpx.Request) -> Response:
-            await asyncio.sleep(delays[endpoint])
+            await release[endpoint].wait()
+            arrival_order.append(endpoint)
+            position = ENDPOINTS.index(endpoint)
+            if position > 0:
+                release[ENDPOINTS[position - 1]].set()
             return Response(200, json=[f"{endpoint}-a", f"{endpoint}-b"])
 
         return _handler
@@ -92,12 +104,18 @@ async def test_page_order_follows_metadata_order_not_arrival_order() -> None:
     try:
         with respx.mock:
             for endpoint in ENDPOINTS:
-                respx.get(_url(endpoint)).mock(side_effect=_delayed(endpoint))
+                respx.get(_url(endpoint)).mock(side_effect=_chained(endpoint))
 
-            output = await MetadataService(client).get_metadata_page(MetadataCategory.ALL, limit=3, offset=0)
+            # The chain deadlocks unless all five requests are in flight together,
+            # so a hang here is a real finding, not a slow test.
+            output = await asyncio.wait_for(
+                MetadataService(client).get_metadata_page(MetadataCategory.ALL, limit=3, offset=0),
+                timeout=5.0,
+            )
     finally:
         await client.close()
 
+    assert arrival_order == list(reversed(ENDPOINTS))
     assert list(output.metadata) == list(CATEGORY_ORDER)
     assert output.metadata["keywords"] == ["keywords-a", "keywords-b"]
     assert output.metadata["publishers"] == ["acts-a"]

@@ -55,3 +55,34 @@ async def test_cleanup_survives_cancellation(monkeypatch) -> None:
     assert httpx_client.is_closed is True
     assert cleared == ["cache"]
     assert server_module._health_state.snapshot() == {"circuit_state": "unknown"}
+
+
+async def test_cleanup_finishes_when_closing_the_client_raises(monkeypatch) -> None:
+    """The `finally` must not stop halfway when `client.close()` raises (#31).
+
+    Ordering under test: the health handle is cleared first, so `/health`
+    cannot claim a live breaker after the lifespan has ended; the cache is
+    cleared even when closing the HTTP client fails, so a failed close does
+    not leave a populated cache behind in a process that is about to restart.
+    The exception itself still propagates — swallowing it would hide the
+    reason the shutdown was unclean.
+    """
+    cleared: list[str] = []
+    original_clear = cache_module.TTLCache.clear
+
+    async def spy_clear(self) -> None:
+        cleared.append("cache")
+        await original_clear(self)
+
+    async def failing_close(self) -> None:
+        raise RuntimeError("transport already gone")
+
+    monkeypatch.setattr(cache_module.TTLCache, "clear", spy_clear)
+    monkeypatch.setattr(server_module.SejmApiClient, "close", failing_close)
+
+    with pytest.raises(RuntimeError, match="transport already gone"):
+        async with lifespan(server_module.app):
+            pass
+
+    assert server_module._health_state.snapshot() == {"circuit_state": "unknown"}
+    assert cleared == ["cache"]

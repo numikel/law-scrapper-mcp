@@ -75,3 +75,23 @@ def test_health_reports_unknown_again_after_the_handle_is_cleared(client: TestCl
     server_module._health_state.clear()
 
     assert client.get("/health").json()["upstream"] == {"circuit_state": "unknown"}
+
+
+def test_health_reports_a_half_open_breaker(client: TestClient) -> None:
+    """The recovery probe state must be visible too, not only the two extremes (#31).
+
+    Reading `state` is side-effect free; the OPEN → HALF_OPEN transition is
+    performed by `try_acquire()` once `recovery_timeout` has elapsed, so with
+    `recovery_timeout=0` a single admission attempt is the tick.
+    """
+    breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0)
+    breaker.release_failure()
+    assert breaker.state is CircuitState.OPEN
+    assert breaker.try_acquire() is True
+    assert breaker.state is CircuitState.HALF_OPEN
+    server_module._health_state.set(breaker)
+
+    body = client.get("/health").json()
+
+    assert body["upstream"]["circuit_state"] == "half_open"
+    assert body["upstream"]["failure_count"] == 1

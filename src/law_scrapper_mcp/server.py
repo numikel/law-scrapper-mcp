@@ -222,8 +222,13 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         # Cleared first: if `client.close()` raised, a populated handle would
         # let `/health` claim a live breaker after the lifespan had ended.
         _health_state.clear()
-        await client.close()
-        await cache.clear()
+        try:
+            await client.close()
+        finally:
+            # Nested so a failed close still empties the cache (#31); the
+            # exception itself propagates — swallowing it would hide why the
+            # shutdown was unclean.
+            await cache.clear()
         logger.info("Law Scrapper MCP Server stopped")
 
 
@@ -319,9 +324,9 @@ def build_uvicorn_config() -> uvicorn.Config:
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level.lower(),
-        # uvicorn's knob is whole seconds; the setting is a float so that it
-        # reads like the other timeouts in `Settings`.
-        timeout_graceful_shutdown=int(settings.shutdown_grace),
+        # Whole seconds, validated as an int by `Settings` — no cast here, so
+        # a fractional value is refused at startup instead of truncated.
+        timeout_graceful_shutdown=settings.shutdown_grace,
         # Off unconditionally, against uvicorn's default of True.
         # ProxyHeadersMiddleware wraps the app from the outside and writes the
         # `X-Forwarded-For` value into `scope["client"]` *without validating it

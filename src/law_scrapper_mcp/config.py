@@ -105,10 +105,12 @@ class Settings(BaseSettings):
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed
     # and the share of requests allowed to finish is settled in favour of a fast
     # restart. Deployments that want it the other way round raise the value.
-    # Constrained to ≥1 so the downstream `int()` cast in the bootstrap layer
-    # never collapses the value to zero. The deployment contract is
-    # `stop_grace_period >= 2 * shutdown_grace` — see docker-compose.yml.
-    shutdown_grace: float = Field(default=15.0, ge=1)
+    # An int, because uvicorn's knob is whole seconds: a float here with an
+    # `int()` cast downstream silently truncated `2.5` to `2` (#31). Pydantic
+    # rejects a fractional value outright and `ge=1` keeps zero out. The
+    # deployment contract is `stop_grace_period >= 2 * shutdown_grace` — see
+    # docker-compose.yml.
+    shutdown_grace: int = Field(default=15, ge=1)
 
     # Network boundary (F18). The defaults reproduce, value for value, the
     # constant that used to be hardcoded in server.py:43-47 — introducing the
@@ -238,9 +240,25 @@ class Settings(BaseSettings):
     circuit_breaker_recovery_timeout: float = 60.0
     circuit_breaker_half_open_max_calls: int = 3
 
-    # Logging
-    log_level: str = "INFO"
+    # Logging. A closed set rather than `str`: `setup_logging` used to fall back
+    # to INFO for anything `logging` did not know, so `WARN` or `FATAL` quietly
+    # produced INFO output on both transports (#31).
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["text", "json"] = "text"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _normalise_log_level(cls, value: object) -> object:
+        """Accept `info` as well as `INFO`; anything else is left to the Literal."""
+        if isinstance(value, str):
+            upper = value.strip().upper()
+            if upper not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                raise ValueError(
+                    f"LAW_MCP_LOG_LEVEL={value!r} nie jest obsługiwanym poziomem. "
+                    "Dozwolone wartości: DEBUG, INFO, WARNING, ERROR, CRITICAL."
+                )
+            return upper
+        return value
 
     # Server info
     server_name: str = "law-scrapper-mcp"

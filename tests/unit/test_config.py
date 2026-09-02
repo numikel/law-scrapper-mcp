@@ -354,12 +354,22 @@ class TestShutdownGrace:
 
     def test_shutdown_grace_defaults_to_fifteen_seconds(self) -> None:
         """The audit's recommended window, adopted verbatim as the default."""
-        assert Settings().shutdown_grace == 15.0
+        assert Settings().shutdown_grace == 15
+        assert isinstance(Settings().shutdown_grace, int)
 
     def test_shutdown_grace_reads_the_environment(self, monkeypatch) -> None:
         monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "25")
 
-        assert Settings().shutdown_grace == 25.0
+        assert Settings().shutdown_grace == 25
+
+    def test_shutdown_grace_rejects_a_fractional_window(self, monkeypatch) -> None:
+        """uvicorn's `timeout_graceful_shutdown` is whole seconds (#31). A float
+        field with an `int()` cast downstream silently turned 2.5 into 2; the
+        field is an int now, so the operator sees the truncation as an error."""
+        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "2.5")
+
+        with pytest.raises(ValidationError):
+            Settings()
 
     @pytest.mark.parametrize("value", ["0", "-1"])
     def test_shutdown_grace_rejects_non_positive_values(self, monkeypatch, value) -> None:
@@ -371,3 +381,26 @@ class TestShutdownGrace:
 
         with pytest.raises(ValidationError):
             Settings()
+
+
+class TestLogLevel:
+    """`LAW_MCP_LOG_LEVEL` is a closed set, not free text (#31)."""
+
+    def test_lowercase_is_normalised(self) -> None:
+        assert Settings(log_level="info").log_level == "INFO"
+
+    def test_lowercase_from_the_environment_is_normalised(self, monkeypatch) -> None:
+        monkeypatch.setenv("LAW_MCP_LOG_LEVEL", "debug")
+
+        assert Settings().log_level == "DEBUG"
+
+    @pytest.mark.parametrize("value", ["WARN", "FATAL", "TRACE", "verbose"])
+    def test_unknown_level_is_rejected(self, monkeypatch, value: str) -> None:
+        """`setup_logging` used to fall back to INFO for anything `logging` did
+        not know, so `WARN` — the spelling every other tool accepts — quietly
+        produced INFO output on both transports."""
+        monkeypatch.setenv("LAW_MCP_LOG_LEVEL", value)
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings()
+        assert "LAW_MCP_LOG_LEVEL" in str(exc_info.value)

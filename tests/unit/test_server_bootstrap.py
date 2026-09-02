@@ -36,11 +36,11 @@ def test_uvicorn_config_carries_the_graceful_shutdown_window() -> None:
 
 
 def test_uvicorn_config_follows_the_configured_window(monkeypatch) -> None:
-    monkeypatch.setattr(server_module.settings, "shutdown_grace", 25.0)
+    monkeypatch.setattr(server_module.settings, "shutdown_grace", 25)
 
     config = server_module.build_uvicorn_config()
 
-    assert config.timeout_graceful_shutdown == 25.0
+    assert config.timeout_graceful_shutdown == 25
 
 
 def test_http_app_still_serves_the_health_route(monkeypatch: pytest.MonkeyPatch) -> None:

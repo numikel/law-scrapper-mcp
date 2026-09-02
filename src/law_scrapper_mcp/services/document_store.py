@@ -8,7 +8,7 @@ from bisect import bisect_right
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import LoadedDocumentInfo, LoadedDocumentListOutput
 from law_scrapper_mcp.services.content_processor import Section
@@ -102,19 +102,16 @@ class DocumentStore:
 
     async def load(self, eli: str, markdown: str, sections: list[Section]) -> None:
         """Load a document into the store."""
-        async with self._lock:
-            doc_size = len(markdown.encode("utf-8"))
-            # Unreachable from production since cluster 5: `ActService` refuses an
-            # oversized act against this same limit before it ever gets here, so
-            # silence in this log is not evidence that the limit is off. Kept as
-            # defence in depth for any future caller that skips that guard.
-            if doc_size > self._max_size_bytes:
-                logger.warning(f"Document {eli} exceeds max size ({doc_size} > {self._max_size_bytes}), truncating")
-                # Truncate to max size
-                markdown = markdown[: self._max_size_bytes]
-                # Re-index sections for truncated content
-                sections = [s for s in sections if s.start_pos < len(markdown)]
+        doc_size = len(markdown.encode("utf-8"))
+        # `ActService` refuses an oversized act against this same limit before
+        # it ever gets here, so this guards callers that skip that check. It
+        # refuses rather than truncates: a legal act cut mid-clause is a loss
+        # the model cannot detect, while a refusal is one it can act on. The
+        # store does not know the source URL, so the error carries none.
+        if doc_size > self._max_size_bytes:
+            raise ContentTooLargeError(eli, doc_size, self._max_size_bytes)
 
+        async with self._lock:
             self._evict_expired()
 
             if len(self._store) >= self._max_documents and eli not in self._store:

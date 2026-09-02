@@ -53,11 +53,13 @@ class ContentTooLargeError(LawScrapperError):
     act on. The message is Polish because the agent reads it.
     """
 
-    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str):
-        super().__init__(
-            f"Treść aktu {eli} ma {size_bytes} B i przekracza limit {limit_bytes} B, "
-            f"więc nie została przetworzona. Pobierz plik źródłowy: {pdf_url}"
+    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None):
+        message = (
+            f"Treść aktu {eli} ma {size_bytes} B i przekracza limit {limit_bytes} B, więc nie została przetworzona."
         )
+        if pdf_url is not None:
+            message = f"{message} Pobierz plik źródłowy: {pdf_url}"
+        super().__init__(message)
         self.eli = eli
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes

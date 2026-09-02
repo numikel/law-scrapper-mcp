@@ -8,7 +8,7 @@ from typing import overload
 
 import pytest
 
-from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
 from law_scrapper_mcp.services.document_store import (
     UNKNOWN_SECTION,
@@ -349,16 +349,27 @@ class TestLRUEviction:
 class TestDocumentSizeLimits:
     """Tests for document size limits."""
 
-    async def test_large_document_truncated(self):
-        """Test that documents exceeding max size are truncated."""
+    async def test_oversized_document_is_refused_not_truncated(self):
+        """An act cut mid-clause is a silent loss; the store must refuse it.
+
+        `ActService` already rejects oversized acts before they reach the
+        store, so this path guards future callers that skip that check. The
+        limit is measured in UTF-8 bytes, not characters, so a document that
+        fits by `len()` can still exceed it.
+        """
         store = DocumentStore(max_size_bytes=100)
-        large_content = "x" * 200  # 200 bytes
+        large_content = "ż" * 60  # 60 characters, 120 bytes in UTF-8
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
 
-        await store.load("DU/2024/1", large_content, sections)
+        with pytest.raises(ContentTooLargeError) as excinfo:
+            await store.load("DU/2024/1", large_content, sections)
 
-        # Document should be loaded but truncated
-        assert await store.is_loaded("DU/2024/1")
+        message = str(excinfo.value)
+        assert "DU/2024/1" in message
+        assert "przekracza limit 100 B" in message
+        assert excinfo.value.size_bytes == 120
+        assert excinfo.value.limit_bytes == 100
+        assert not await store.is_loaded("DU/2024/1")
 
     async def test_normal_size_document_not_truncated(self):
         """Test that documents within size limits are not truncated."""

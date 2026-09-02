@@ -115,23 +115,31 @@ class SejmApiClient:
     async def _receive_within(self, response: httpx.Response, max_bytes: int) -> httpx.Response:
         """Read a streamed body, giving up as soon as it is known to exceed `max_bytes`.
 
-        `Content-Length` settles it before a single byte is read; otherwise the body is
-        accumulated chunk by chunk and abandoned the moment the running total crosses
-        the budget, so memory is bounded by `max_bytes` plus one chunk rather than by
-        whatever the server chose to send. Error statuses are read in full (their
-        bodies are small and the translating layer quotes them) and left to
-        `raise_for_status`, so streaming changes nothing about how they are judged.
+        The budget is spent on *decoded* bytes, because that is what the document store
+        and the converter hold. `aiter_bytes()` applies the content codec as it goes, so
+        the running total is already in those units; `Content-Length`, which counts the
+        bytes on the wire, is only an exact answer when nothing was encoded, and is
+        therefore consulted only then. A compressed body is settled by the stream check
+        instead — one chunk later, never wrongly.
+
+        Every non-2xx status is read in full (their bodies are small and the translating
+        layer quotes them) and left to `raise_for_status`, exactly as the non-streaming
+        path does, so streaming changes nothing about how they are judged.
 
         The materialised body is handed back as a fresh `Response` built from the
         original headers, which is what keeps the charset-driven `.text` decoding
-        identical to the non-streaming path.
+        identical to the non-streaming path. `Content-Encoding` and the wire
+        `Content-Length` are dropped from that copy: the body handed over has already
+        been decoded, so carrying them would make `httpx` decode it a second time and
+        raise `DecodingError` on every compressed act.
         """
-        if response.is_error:
+        if not response.is_success:
             await response.aread()
             response.raise_for_status()
 
+        encoding = response.headers.get("content-encoding", "").strip().lower()
         declared = response.headers.get("content-length")
-        if declared is not None and declared.isdigit() and int(declared) > max_bytes:
+        if encoding in ("", "identity") and declared is not None and declared.isdigit() and int(declared) > max_bytes:
             raise ResponseTooLargeError(str(response.url), int(declared), max_bytes, exact=True)
 
         chunks: list[bytes] = []
@@ -142,9 +150,14 @@ class SejmApiClient:
                 raise ResponseTooLargeError(str(response.url), received, max_bytes, exact=False)
             chunks.append(chunk)
 
+        carried = [
+            (name, value)
+            for name, value in response.headers.raw
+            if name.lower() not in (b"content-encoding", b"content-length")
+        ]
         return httpx.Response(
             response.status_code,
-            headers=response.headers,
+            headers=carried,
             content=b"".join(chunks),
             request=response.request,
         )

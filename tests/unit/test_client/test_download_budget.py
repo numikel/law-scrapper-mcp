@@ -8,6 +8,7 @@ materialising" is asserted directly rather than inferred.
 
 from __future__ import annotations
 
+import gzip
 from collections.abc import AsyncGenerator, AsyncIterator
 
 import httpx
@@ -145,3 +146,62 @@ async def test_without_a_budget_the_whole_body_is_read(client: SejmApiClient) ->
 
     assert len(await client.get_bytes(PDF_PATH)) == 2048
     assert stream.pulled == 4
+
+
+@respx.mock
+async def test_a_compressed_body_is_decoded_once_not_twice(client: SejmApiClient) -> None:
+    """httpx already decoded the chunks, so the rebuilt response must not claim they are still gzipped.
+
+    Carrying `Content-Encoding` onto the materialised response made httpx run the
+    codec a second time over plain text and raise `DecodingError`, which the
+    translating layer turned into `SejmApiError` — every budgeted act download
+    failing against any upstream that compresses, which is every upstream httpx
+    advertises `Accept-Encoding` to.
+    """
+    text = "<p>Zażółć gęślą jaźń</p>"
+    body = gzip.compress(text.encode("utf-8"))
+    respx.get(HTML_URL).mock(
+        return_value=httpx.Response(
+            200,
+            stream=RecordingStream([body]),
+            headers={"Content-Encoding": "gzip", "Content-Type": "text/html; charset=utf-8"},
+        )
+    )
+
+    assert await client.get_text(HTML_PATH, max_bytes=LIMIT) == text
+
+
+@respx.mock
+async def test_a_compressed_declared_length_does_not_settle_the_budget(client: SejmApiClient) -> None:
+    """`Content-Length` counts wire bytes; the budget counts decoded ones.
+
+    A body that compresses to under the budget and expands past it must still be
+    refused, and by the stream check — the declared length cannot answer for it.
+    """
+    body = gzip.compress(b"x" * (LIMIT * 4))
+    assert len(body) < LIMIT, "the fixture only tests what it means to if the compressed body fits"
+    respx.get(PDF_URL).mock(
+        return_value=httpx.Response(
+            200,
+            stream=RecordingStream([body]),
+            headers={"Content-Encoding": "gzip", "Content-Length": str(len(body))},
+        )
+    )
+
+    with pytest.raises(ContentTooLargeError) as refused:
+        await client.get_bytes(PDF_PATH, max_bytes=LIMIT)
+
+    assert refused.value.exact is False
+
+
+@respx.mock
+async def test_a_redirect_without_a_location_is_refused_like_the_unbudgeted_path(client: SejmApiClient) -> None:
+    """`raise_for_status()` rejects every non-2xx, so the budgeted path must too.
+
+    Gating on `is_error` (4xx/5xx only) let a 3xx with nothing to follow through
+    to a caller as an empty act body instead of an error.
+    """
+    respx.get(HTML_URL).mock(return_value=httpx.Response(300, text=""))
+
+    with pytest.raises(SejmApiError):
+        await client.get_text(HTML_PATH, max_bytes=LIMIT)

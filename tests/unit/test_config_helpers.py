@@ -111,3 +111,21 @@ class TestIsLoopbackEntry:
         """Invalid IP strings should be treated as non-loopback."""
         assert not is_loopback_entry("not-an-ip")
         assert not is_loopback_entry("256.256.256.256")
+
+
+class TestPathSuffix:
+    """An allowlist entry is an authority; a path can never match a header."""
+
+    def test_trailing_slash_does_not_change_the_host(self) -> None:
+        assert _host_of("http://[::1]:8080/") == "::1"
+        assert _host_of("http://localhost:8080/") == "localhost"
+        assert _host_of("[::1]:*") == "::1"
+
+    def test_bracketed_loopback_with_trailing_slash_is_loopback(self) -> None:
+        """4.1.0 accepted this form; the bracket tightening must not refuse it."""
+        assert is_loopback_entry("http://[::1]:8080/")
+        assert is_loopback_entry("http://localhost:8080/")
+
+    def test_hostname_after_the_bracket_stays_remote_with_a_path(self) -> None:
+        assert not is_loopback_entry("[::1].evil.com/")
+        assert not is_loopback_entry("http://[::1].evil.com/x")

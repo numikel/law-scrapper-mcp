@@ -22,6 +22,11 @@ def _host_of(entry: str) -> str:
     value = entry.strip()
     if "://" in value:
         value = value.split("://", 1)[1]
+    # An allowlist entry is an authority. The SDK compares `Host`/`Origin` values
+    # verbatim and neither ever carries a path, so anything from the first `/`
+    # on can only be a trailing slash someone typed; drop it before classifying,
+    # for the bracketed and the hostname forms alike.
+    value = value.split("/", 1)[0]
     if value.startswith("["):
         if "]" not in value:
             return value[1:]

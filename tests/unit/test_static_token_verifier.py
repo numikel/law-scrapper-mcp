@@ -12,9 +12,8 @@ from law_scrapper_mcp.config import Settings
 
 TOKEN = "s" * 32
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_correct_token_is_accepted() -> None:
     verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
     access = await verifier.verify_token(TOKEN)
@@ -34,22 +33,26 @@ def test_empty_secret_is_refused_at_construction() -> None:
         StaticTokenVerifier(token="", scopes=[])
 
 
+@pytest.mark.asyncio
 async def test_wrong_token_is_rejected() -> None:
     verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
     assert await verifier.verify_token("t" * 32) is None
 
 
+@pytest.mark.asyncio
 async def test_empty_token_is_rejected() -> None:
     """An empty Authorization value must never satisfy the comparison."""
     verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
     assert await verifier.verify_token("") is None
 
 
+@pytest.mark.asyncio
 async def test_prefix_of_the_token_is_rejected() -> None:
     verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
     assert await verifier.verify_token(TOKEN[:-1]) is None
 
 
+@pytest.mark.asyncio
 async def test_configured_scopes_are_returned() -> None:
     """RequireAuthMiddleware enforces scopes against exactly this list."""
     verifier = StaticTokenVerifier(token=TOKEN, scopes=["mcp:read"])
@@ -58,6 +61,7 @@ async def test_configured_scopes_are_returned() -> None:
     assert access.scopes == ["mcp:read"]
 
 
+@pytest.mark.asyncio
 async def test_verify_token_uses_hmac_compare_digest(monkeypatch: pytest.MonkeyPatch) -> None:
     """Guards against a regression to a non-constant-time `==` comparison."""
     calls = []
@@ -73,6 +77,7 @@ async def test_verify_token_uses_hmac_compare_digest(monkeypatch: pytest.MonkeyP
     assert len(calls) == 1
 
 
+@pytest.mark.asyncio
 async def test_token_from_file_loses_its_trailing_newline(tmp_path: Path) -> None:
     """A secret file written by Docker or Kubernetes ends with a newline."""
     token_file = tmp_path / "token"

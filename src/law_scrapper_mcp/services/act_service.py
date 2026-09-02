@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import Any
 
-from law_scrapper_mcp.client.exceptions import ContentTooLargeError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, ResponseTooLargeError
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_inputs import parse_eli
@@ -92,8 +92,12 @@ class ActService:
         pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
         limit = settings.doc_store_max_size_bytes
         try:
+            # The same limit reaches the download itself (#19): the client aborts a
+            # body that runs past it while it is still streaming, so an oversized act
+            # never sits whole in memory. The post-hoc gates below stay as belt and
+            # braces — they bound what the converter sees, which streaming does not.
             if has_html:
-                html = await self._client.get_act_html(publisher, year, pos)
+                html = await self._client.get_act_html(publisher, year, pos, max_bytes=limit)
                 _reject_if_too_large(eli, len(html.encode("utf-8")), limit, pdf_url)
                 # markdownify, pdfplumber and the section regex are synchronous
                 # CPU-bound work. Left in the coroutine they hold the event loop
@@ -103,10 +107,12 @@ class ActService:
                 markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
             else:
                 # try/except/else, not a single try block: the fallback below is
-                # for an unreachable PDF, and it must not swallow a size refusal
-                # raised after the download succeeded.
+                # for an unreachable PDF, and it must not swallow a size refusal —
+                # neither one raised mid-download nor one raised after it succeeded.
                 try:
-                    pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf")
+                    pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)
+                except ResponseTooLargeError:
+                    raise
                 except Exception:
                     markdown = f"*No readable content available for {eli}. PDF URL: {pdf_url}*"
                 else:
@@ -128,6 +134,10 @@ class ActService:
             sections = await asyncio.to_thread(self._content_processor.index_sections, markdown)
             await self._doc_store.load(eli, markdown, sections)
             logger.info(f"Loaded content for {eli}: {len(sections)} sections")
+        except ResponseTooLargeError as exc:
+            # The client knows the URL and the budget, not the act; the refusal the
+            # agent reads has to name the act and the source file it can fetch instead.
+            raise ContentTooLargeError(eli, exc.size_bytes, limit, pdf_url, exact=exc.exact) from exc
         except ContentTooLargeError:
             # The only failure the agent can act on, so it is the only one that
             # reaches the tool layer instead of being logged and hidden.

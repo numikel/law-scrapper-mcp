@@ -51,19 +51,52 @@ class ContentTooLargeError(LawScrapperError):
     Refusal, not truncation: a legal act cut mid-clause is a silent loss the
     model cannot detect, while a refusal naming the source URL is one it can
     act on. The message is Polish because the agent reads it.
+
+    `exact=False` marks a size measured on a download aborted at the budget:
+    the body is known to be *at least* that large, and the message says so
+    rather than quoting a running total as the document's size.
     """
 
-    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None):
-        message = (
-            f"Treść aktu {eli} ma {size_bytes} B i przekracza limit {limit_bytes} B, więc nie została przetworzona."
-        )
+    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None, *, exact: bool = True):
+        measured = f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+        message = f"Treść aktu {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
         if pdf_url is not None:
-            message = f"{message} Pobierz plik źródłowy: {pdf_url}"
+            message += f" Pobierz plik źródłowy: {pdf_url}"
         super().__init__(message)
         self.eli = eli
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes
         self.pdf_url = pdf_url
+        self.exact = exact
+
+
+class ResponseTooLargeError(ContentTooLargeError):
+    """A response body ran past its byte budget while it was still streaming in.
+
+    Raised by the client, which knows the URL and the budget but neither the act
+    nor the source file an agent should fetch instead; `ActService` re-raises it
+    as a full `ContentTooLargeError` carrying that context. Subclassed so that a
+    refusal which slips through untranslated still lands in the same tool error
+    category as the post-hoc size gates, instead of falling through as an
+    internal error.
+
+    `exact` is `True` when the size came from `Content-Length` and the body was
+    never read, `False` when the download was aborted at `size_bytes` — the
+    body is then known only to be at least that large.
+    """
+
+    def __init__(self, url: str, size_bytes: int, limit_bytes: int, *, exact: bool):
+        # The parent's message is shaped around an act; this one has only a URL,
+        # so the base class is initialised directly with a message of its own.
+        measured = f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+        LawScrapperError.__init__(
+            self,
+            f"Odpowiedź z {url} ma {measured} i przekracza limit {limit_bytes} B, więc pobieranie przerwano.",
+        )
+        self.url = url
+        self.size_bytes = size_bytes
+        self.limit_bytes = limit_bytes
+        self.exact = exact
 
 
 class DocumentNotLoadedError(LawScrapperError):

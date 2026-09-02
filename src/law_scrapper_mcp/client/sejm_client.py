@@ -16,6 +16,7 @@ from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ApiUnavailableError,
+    ResponseTooLargeError,
     SejmApiError,
 )
 from law_scrapper_mcp.client.failure_policy import backoff, classify_failure
@@ -111,6 +112,43 @@ class SejmApiClient:
             await self._client.aclose()
             self._client = None
 
+    async def _receive_within(self, response: httpx.Response, max_bytes: int) -> httpx.Response:
+        """Read a streamed body, giving up as soon as it is known to exceed `max_bytes`.
+
+        `Content-Length` settles it before a single byte is read; otherwise the body is
+        accumulated chunk by chunk and abandoned the moment the running total crosses
+        the budget, so memory is bounded by `max_bytes` plus one chunk rather than by
+        whatever the server chose to send. Error statuses are read in full (their
+        bodies are small and the translating layer quotes them) and left to
+        `raise_for_status`, so streaming changes nothing about how they are judged.
+
+        The materialised body is handed back as a fresh `Response` built from the
+        original headers, which is what keeps the charset-driven `.text` decoding
+        identical to the non-streaming path.
+        """
+        if response.is_error:
+            await response.aread()
+            response.raise_for_status()
+
+        declared = response.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > max_bytes:
+            raise ResponseTooLargeError(str(response.url), int(declared), max_bytes, exact=True)
+
+        chunks: list[bytes] = []
+        received = 0
+        async for chunk in response.aiter_bytes():
+            received += len(chunk)
+            if received > max_bytes:
+                raise ResponseTooLargeError(str(response.url), received, max_bytes, exact=False)
+            chunks.append(chunk)
+
+        return httpx.Response(
+            response.status_code,
+            headers=response.headers,
+            content=b"".join(chunks),
+            request=response.request,
+        )
+
     async def _send(
         self,
         method: str,
@@ -118,13 +156,18 @@ class SejmApiClient:
         *,
         request_class: RequestClass = RequestClass.LIGHT,
         deadline: float | None = None,
+        max_bytes: int | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Send a single HTTP request.
 
         Lowest layer: builds the URL, waits its turn and guards the class semaphore. It
         neither retries nor translates errors, and every error it raises about the wire
-        is an `httpx` one — the single exception is its own pacing refusal below.
+        is an `httpx` one — the exceptions are its own pacing refusal below and the
+        byte-budget refusal, both of which are this client's policy, not the wire's.
+
+        `max_bytes` switches the request to a streamed read bounded by that budget
+        (see `_receive_within`); `None` reads the whole body as before.
 
         The token comes before the slot, and the order is load-bearing: a request
         waiting for a token must not hold a concurrency slot, or rate limiting quietly
@@ -141,6 +184,8 @@ class SejmApiClient:
             EgressPaceDeadlineError: Pacing alone would exhaust `deadline`. Deliberately
                 not an `httpx` error: it is our own policy speaking, not the wire, and
                 the retry loop must not reclassify it as an upstream failure.
+            ResponseTooLargeError: The body exceeds `max_bytes`. Not an `httpx` error
+                for the same reason — a retry would only download the same body again.
         """
         if self._client is None:
             await self.start()
@@ -152,9 +197,14 @@ class SejmApiClient:
         await self._rate_limiter.acquire(deadline=deadline)
 
         async with self._semaphores[request_class]:
-            response = await self._client.request(method, url, **kwargs)
-            response.raise_for_status()
-            return response
+            if max_bytes is None:
+                response = await self._client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response
+            # The stream is consumed inside the slot on purpose: a heavy download
+            # holds its class semaphore for as long as bytes are still arriving.
+            async with self._client.stream(method, url, **kwargs) as streamed:
+                return await self._receive_within(streamed, max_bytes)
 
     async def _execute_with_resilience(
         self,
@@ -162,6 +212,7 @@ class SejmApiClient:
         path: str,
         *,
         request_class: RequestClass = RequestClass.LIGHT,
+        max_bytes: int | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Run a request with retries, a time budget and breaker accounting.
@@ -178,6 +229,8 @@ class SejmApiClient:
             EgressPaceDeadlineError: When pacing alone would exhaust the budget. Passes
                 through untouched: `classify_failure` never sees it, so this loop cannot
                 mistake our own policy for an upstream failure.
+            ResponseTooLargeError: When the body exceeds `max_bytes`. Passes through on
+                the same terms: neither retried nor booked against the breaker.
             httpx.HTTPError: The last error once attempts or budget run out.
         """
         deadline = self._clock() + self._retry_budget
@@ -198,7 +251,9 @@ class SejmApiClient:
                 )
 
             try:
-                response = await self._send(method, path, request_class=request_class, deadline=deadline, **kwargs)
+                response = await self._send(
+                    method, path, request_class=request_class, deadline=deadline, max_bytes=max_bytes, **kwargs
+                )
             except httpx.HTTPError as exc:
                 verdict = classify_failure(exc)
                 if verdict.retry_after is not None:
@@ -262,6 +317,7 @@ class SejmApiClient:
         path: str,
         *,
         request_class: RequestClass = RequestClass.LIGHT,
+        max_bytes: int | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Run a request and translate `httpx` errors into domain exceptions.
@@ -272,6 +328,7 @@ class SejmApiClient:
         Args:
             method: HTTP method.
             path: Path relative to BASE_URL.
+            max_bytes: Byte budget for the body; `None` reads it whole.
             **kwargs: Additional httpx request parameters.
 
         Returns:
@@ -281,10 +338,14 @@ class SejmApiClient:
             ActNotFoundError: When the resource does not exist (404).
             ApiUnavailableError: When the API returned 5xx, transport failed,
                 or the circuit breaker is open.
+            ResponseTooLargeError: When the body exceeds `max_bytes`. Already a
+                domain exception, so it needs no translation here.
             SejmApiError: For the remaining request-side errors.
         """
         try:
-            return await self._execute_with_resilience(method, path, request_class=request_class, **kwargs)
+            return await self._execute_with_resilience(
+                method, path, request_class=request_class, max_bytes=max_bytes, **kwargs
+            )
         except EgressPaceDeadlineError as exc:
             # Reported as unavailability, which is what it is from the caller's side —
             # but the message says who is holding the traffic back, so an agent is not
@@ -352,36 +413,48 @@ class SejmApiClient:
 
         return data
 
-    async def get_text(self, path: str) -> str:
+    async def get_text(self, path: str, *, max_bytes: int | None = None) -> str:
         """Get text response from API.
 
         Args:
             path: URL path
+            max_bytes: Byte budget for the body, enforced while it streams in;
+                `None` reads it whole.
 
         Returns:
             Response text
+
+        Raises:
+            ResponseTooLargeError: The body exceeds `max_bytes`.
         """
         response = await self._request(
             "GET",
             path,
             request_class=RequestClass.HEAVY,
+            max_bytes=max_bytes,
             headers={"Accept": "text/html, text/plain, */*"},
         )
         return response.text
 
-    async def get_bytes(self, path: str) -> bytes:
+    async def get_bytes(self, path: str, *, max_bytes: int | None = None) -> bytes:
         """Get binary response from API.
 
         Args:
             path: URL path
+            max_bytes: Byte budget for the body, enforced while it streams in;
+                `None` reads it whole.
 
         Returns:
             Response bytes
+
+        Raises:
+            ResponseTooLargeError: The body exceeds `max_bytes`.
         """
         response = await self._request(
             "GET",
             path,
             request_class=RequestClass.HEAVY,
+            max_bytes=max_bytes,
             headers={"Accept": "application/pdf, application/octet-stream, */*"},
         )
         return response.content
@@ -439,19 +512,20 @@ class SejmApiClient:
         path = f"acts/{publisher}/{year}/{pos}/references"
         return await self.get_json(path)
 
-    async def get_act_html(self, publisher: str, year: int, pos: int) -> str:
+    async def get_act_html(self, publisher: str, year: int, pos: int, *, max_bytes: int | None = None) -> str:
         """Get act HTML content.
 
         Args:
             publisher: Publisher code
             year: Year
             pos: Position number
+            max_bytes: Byte budget for the body; `None` reads it whole.
 
         Returns:
             HTML content
         """
         path = f"acts/{publisher}/{year}/{pos}/text.html"
-        return await self.get_text(path)
+        return await self.get_text(path, max_bytes=max_bytes)
 
     async def get_act_pdf_url(self, publisher: str, year: int, pos: int) -> str:
         """Get act PDF URL.

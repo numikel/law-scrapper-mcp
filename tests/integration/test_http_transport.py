@@ -416,7 +416,7 @@ async def test_health_answers_while_a_document_is_converting(
             raise RuntimeError("no structure for this act")
         return act_detail
 
-    async def fake_get_act_html(publisher: str, year: int, pos: int) -> str:
+    async def fake_get_act_html(publisher: str, year: int, pos: int, *, max_bytes: int | None = None) -> str:
         return "<html><body><h1>Ustawa</h1></body></html>"
 
     monkeypatch.setattr(mock_client, "get_json", fake_get_json)

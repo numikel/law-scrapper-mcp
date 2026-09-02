@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-09-02
+
+See [docs/changelogs/v4.1.0.md](docs/changelogs/v4.1.0.md) for details.
+
+Result-set scope as first-class contract — a single new field disambiguates complete result sets from windows into larger match sets, closing two categories of false inference over stored results.
+
 ### Added
 
 - Result-set scope (`result_set_scope`, and `scope` in `list_result_sets`) telling the caller

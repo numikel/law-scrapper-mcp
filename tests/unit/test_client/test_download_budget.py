@@ -9,6 +9,7 @@ materialising" is asserted directly rather than inferred.
 from __future__ import annotations
 
 import gzip
+import random
 from collections.abc import AsyncGenerator, AsyncIterator
 
 import httpx
@@ -205,3 +206,27 @@ async def test_a_redirect_without_a_location_is_refused_like_the_unbudgeted_path
 
     with pytest.raises(SejmApiError):
         await client.get_text(HTML_PATH, max_bytes=LIMIT)
+
+
+@respx.mock
+async def test_a_compressed_wire_length_over_the_budget_does_not_refuse_a_body_that_fits(
+    client: SejmApiClient,
+) -> None:
+    """The declared length counts wire bytes, so it cannot refuse on the store's behalf.
+
+    Incompressible content encodes to slightly more than it decodes to. Reading
+    `Content-Length` as the document's size then refused a body that fits the
+    budget the store actually enforces — and quoted the wire figure as `exact`.
+    """
+    payload = random.Random(0).randbytes(LIMIT)
+    body = gzip.compress(payload)
+    assert len(payload) <= LIMIT < len(body), "the fixture only tests what it means to if encoding grows the body"
+    respx.get(PDF_URL).mock(
+        return_value=httpx.Response(
+            200,
+            stream=RecordingStream([body]),
+            headers={"Content-Encoding": "gzip", "Content-Length": str(len(body))},
+        )
+    )
+
+    assert await client.get_bytes(PDF_PATH, max_bytes=LIMIT) == payload

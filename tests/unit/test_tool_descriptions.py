@@ -80,12 +80,18 @@ class TestToolInputSchemaDescriptions:
         `browse_acts` used to be the second exception and no longer is — see
         `test_browse_limit_is_documented_as_clamped` below for why the premise
         under P5 changed for that tool specifically.
+
+        Issue #19: stating the asymmetry is not enough — the schema also has to say
+        *why* it exists (the value goes straight to a public institution's API) and
+        what that asks of the caller (the smallest value that will do).
         """
         tool = await _get_tool(mcp_client, "search_legal_acts")
         description = tool.input_schema["properties"]["limit"]["description"]
 
         assert "100" in description
-        assert "bez górnej granicy" in description.lower()
+        assert "nie jest przycinana" in description.lower()
+        assert "api.sejm.gov.pl" in description
+        assert "najmniejszą" in description.lower()
 
     async def test_browse_limit_is_documented_as_clamped(self, mcp_client) -> None:
         """`browse_acts` left P5's exception when the endpoint under it changed.
@@ -102,6 +108,7 @@ class TestToolInputSchemaDescriptions:
 
         assert "100" in description
         assert "bez górnej granicy" not in description.lower()
+        assert "najmniejszą" in description.lower()
 
     async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(self, mcp_client) -> None:
         tools = (await mcp_client.list_tools()).tools

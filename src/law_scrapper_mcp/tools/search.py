@@ -95,8 +95,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. "
-                    "Przydatne do ograniczenia dużych zbiorów. Bez górnej granicy — "
-                    "w odróżnieniu od pozostałych narzędzi listujących, gdzie limit jest przycinany do 100."
+                    "Przydatne do ograniczenia dużych zbiorów. Nie jest przycinana do 100 jak w "
+                    "pozostałych narzędziach listujących, ponieważ trafia wprost do zapytania do "
+                    "api.sejm.gov.pl — publicznej usługi instytucji państwowej. "
+                    "Podawaj najmniejszą wystarczającą wartość."
                 ),
             ),
         ] = None,

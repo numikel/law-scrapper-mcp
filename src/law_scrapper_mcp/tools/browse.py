@@ -45,7 +45,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Maksymalna liczba wyników do zwrócenia. Domyślnie 20, maksymalnie 100 — "
-                    "wartości powyżej są przycinane, tak samo jak w pozostałych narzędziach listujących."
+                    "wartości powyżej są przycinane, tak samo jak w pozostałych narzędziach listujących. "
+                    "Podawaj najmniejszą wystarczającą wartość."
                 ),
             ),
         ] = None,

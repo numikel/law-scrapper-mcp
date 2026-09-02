@@ -5,8 +5,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Copy dependency files first for better caching
-COPY pyproject.toml uv.lock* ./
+# Copy dependency files first for better caching. README.md is not an
+# afterthought: `uv sync --no-editable` builds the project wheel, and hatchling
+# refuses to build without every file the package metadata names.
+COPY pyproject.toml uv.lock* README.md ./
 COPY src/ src/
 
 # Install dependencies

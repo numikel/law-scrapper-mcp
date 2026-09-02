@@ -414,7 +414,7 @@ class SejmApiClient:
         cache_key = None
         if cache_ttl is not None:
             cache_key = f"json:{path}:{params or {}}"
-            cached = await self._cache.get(cache_key)
+            cached = await self._cache.get(cache_key, max_age=cache_ttl)
             if cached is not None:
                 return cached
 

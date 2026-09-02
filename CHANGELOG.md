@@ -76,6 +76,10 @@ parameter names or response shape; several fields and validations now behave as 
 - A bracketed IPv6 allowlist entry with a trailing slash (`http://[::1]:8080/`) was classified as
   remote after the `[::1].evil.com` tightening, so a value 4.1.0 accepted refused startup under
   `auth_mode=none`; the host parser now drops any path suffix before classifying, for every form.
+- A cache entry for `acts/search` is shared by `search_legal_acts`, `browse_acts` and
+  `track_legal_changes` whenever their parameters coincide, and the first writer's TTL used to
+  decide freshness for all three. Each read is now bounded by its own caller's TTL, so a call
+  documented as 300 s is never served a 600 s entry.
 - The Docker image did not build: the builder stage ran `uv sync --no-editable`, which builds
   the project wheel, without `README.md` in the build context, and hatchling refuses to build
   a package whose declared readme is missing. Broken since the `readme` field was added on

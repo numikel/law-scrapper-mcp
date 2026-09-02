@@ -184,11 +184,12 @@ class SearchService:
         whenever the parameters match exactly. That is deliberate (D8), not an
         oversight: both calls ask the API the same question and get the same answer,
         and giving `browse` its own key prefix would fetch the same year twice — more
-        outbound traffic, which is what this whole change exists to reduce. Because
-        the cache key does not include TTL (`cache_search_ttl=600` vs
-        `cache_browse_ttl=3600`), whichever call stores the entry first decides
-        freshness for both — the 6× TTL difference stops applying to whichever method
-        writes the cache entry second.
+        outbound traffic, which is what this whole change exists to reduce. The cache
+        key does not include TTL (`cache_search_ttl=600` vs `cache_browse_ttl=3600`),
+        but each read is bounded by its own caller's TTL (`TTLCache.get(max_age=...)`):
+        a `search()` call refuses an entry `browse()` wrote more than 600 s ago and
+        refetches, while `browse()` keeps reading the shared entry for its full hour.
+        `track_legal_changes` joins the same key space since it sends `limit` (#54).
 
         `limit` is clamped by the calling tool, not here, and that clamp is load-bearing
         now rather than cosmetic: `acts/search` honours `limit`, so it decides how wide a

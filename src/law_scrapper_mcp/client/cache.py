@@ -27,15 +27,25 @@ class TTLCache:
         self._max_entries = max_entries
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Any | None:
-        """Get value from cache if not expired."""
+    async def get(self, key: str, max_age: float | None = None) -> Any | None:
+        """Get value from cache if not expired.
+
+        `max_age` bounds freshness for this read: an entry older than it is a miss
+        for the caller even though it stays valid for callers with a longer TTL.
+        Entries are keyed by request, not by caller, so two services asking the
+        same question share one entry (D8) — this keeps the sharing while letting
+        the shorter TTL still mean what its setting says.
+        """
         async with self._lock:
             entry = self._cache.get(key)
             if entry is None:
                 return None
 
-            if time.time() > entry.expires_at:
+            now = time.time()
+            if now > entry.expires_at:
                 del self._cache[key]
+                return None
+            if max_age is not None and now - entry.created_at > max_age:
                 return None
 
             return entry.value

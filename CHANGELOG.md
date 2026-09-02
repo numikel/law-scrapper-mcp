@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search_legal_acts` reported the size of the returned page as `total_count`, so a search
   matching 1984 acts answered `20` with `was_truncated=false` and no pagination hint at all.
   It now reads `totalCount` and falls back to `count` for responses that omit it (F31).
+  Clients that relied on `total_count` carrying the page size will see a different value.
+  This is shipped as a fix in a MINOR release, not as a breaking change in a MAJOR one:
+  the field always declared the size of the match set and no documentation ever promised
+  the page size, so the previous value was a defect rather than a contract.
 - The pagination hint from `browse_acts` pointed at `search_legal_acts`, sending the model to
   a different tool than the one it had called (F48).
 

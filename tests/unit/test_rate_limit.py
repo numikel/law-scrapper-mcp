@@ -9,6 +9,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
+from starlette.types import Scope
 
 from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 
@@ -119,7 +120,8 @@ def test_xff_from_untrusted_peer_is_ignored() -> None:
 
 
 def test_xff_from_trusted_peer_splits_the_buckets() -> None:
-    """TestClient presents itself as testclient/127.0.0.1."""
+    """`build_client` pins the peer to 127.0.0.1, inside the trusted range, so
+    the forwarded address becomes the key and each client gets its own bucket."""
     client = build_client(burst=1, trusted_proxies=["127.0.0.0/8"])
     assert client.get("/mcp", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 200
     assert client.get("/mcp", headers={"X-Forwarded-For": "5.6.7.8"}).status_code == 200
@@ -152,10 +154,37 @@ def test_idle_buckets_are_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_non_http_scope_passes_through() -> None:
-    """Lifespan and websocket scopes carry no client address."""
-    client = build_client()
-    with client:  # entering the context manager runs the lifespan scope
-        assert client.get("/mcp").status_code == 200
+    """Lifespan scopes carry no client address and must not be metered.
+
+    The middleware is driven with the scope directly: the earlier version
+    entered a `TestClient` context and then asserted an unrelated `GET`
+    succeeded, which passed even when the lifespan scope was consumed as a
+    request. What matters is that the inner app receives the very same scope
+    object and that no bucket is created for it.
+    """
+    received: list[Scope] = []
+
+    async def inner(scope: Scope, receive, send) -> None:
+        received.append(scope)
+
+    middleware = RateLimitMiddleware(inner, requests=1, window=60.0, burst=1, trusted_proxies=[])
+    lifespan_scope: Scope = {"type": "lifespan"}
+
+    async def receive():
+        return {"type": "lifespan.startup"}
+
+    async def send(message) -> None:
+        return None
+
+    async def drive() -> None:
+        for _ in range(3):  # more than the burst — a metered scope would be refused
+            await middleware(lifespan_scope, receive, send)
+
+    asyncio.run(drive())
+
+    assert received == [lifespan_scope, lifespan_scope, lifespan_scope]
+    assert all(scope is lifespan_scope for scope in received)
+    assert middleware._buckets == {}
 
 
 def build_header_spy_client(**overrides) -> tuple[TestClient, list[list[str]]]:

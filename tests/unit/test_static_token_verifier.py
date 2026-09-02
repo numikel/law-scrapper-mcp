@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from law_scrapper_mcp.auth.static_token import STATIC_CLIENT_ID, StaticTokenVerifier
+from law_scrapper_mcp.config import Settings
 
 TOKEN = "s" * 32
 
@@ -74,8 +75,6 @@ async def test_verify_token_uses_hmac_compare_digest(monkeypatch: pytest.MonkeyP
 
 async def test_token_from_file_loses_its_trailing_newline(tmp_path: Path) -> None:
     """A secret file written by Docker or Kubernetes ends with a newline."""
-    from law_scrapper_mcp.config import Settings
-
     token_file = tmp_path / "token"
     token_file.write_text(f"{TOKEN}\n", encoding="utf-8")
     current = Settings(auth_mode="bearer", auth_token_file=token_file)

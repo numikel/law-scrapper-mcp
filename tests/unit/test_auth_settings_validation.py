@@ -160,8 +160,15 @@ def test_oauth_without_issuer_is_rejected() -> None:
             auth_resource_server_url="https://mcp.example.com/mcp",
         )
     message = str(exc_info.value)
-    assert "LAW_MCP_AUTH_ISSUER" in message
-    assert "bearer" not in message.lower().replace("law_mcp_auth_mode", "")
+    assert (
+        "Tryb 'oauth' wymaga zmiennych: LAW_MCP_AUTH_ISSUER. Serwer nie uruchomi się z niepełną konfiguracją OAuth."
+    ) in message
+    # The old assertion stripped `law_mcp_auth_mode` before searching for
+    # `bearer`, which is a no-op because the message never contains either —
+    # it read as a downgrade check and checked nothing. The full sentence
+    # above is the actual guarantee: the missing variable is named and no
+    # fallback mode is offered.
+    assert "bearer" not in message
 
 
 def test_oauth_with_full_configuration_is_accepted() -> None:

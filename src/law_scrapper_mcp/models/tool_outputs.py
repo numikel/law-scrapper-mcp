@@ -7,7 +7,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
-from law_scrapper_mcp.models.pagination import PageInfo
+from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, PageInfo
 
 T = TypeVar("T")
 
@@ -134,8 +134,8 @@ class SearchInActOutput(BaseModel):
     matches: list[dict[str, Any]]
     total_matches: int
     page_info: PageInfo
-    context_chars_requested: int = 500
-    context_chars_applied: int = 500
+    context_chars_requested: int = DEFAULT_CONTEXT_CHARS
+    context_chars_applied: int = DEFAULT_CONTEXT_CHARS
 
 
 class MetadataOutput(BaseModel):

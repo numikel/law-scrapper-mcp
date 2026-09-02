@@ -10,6 +10,7 @@ from law_scrapper_mcp.models.enums import (
     Publisher,
     RelationshipType,
 )
+from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, MAX_CONTEXT_CHARS
 
 
 class SearchRequest(BaseModel):
@@ -69,8 +70,10 @@ class SearchInActRequest(BaseModel):
     eli: str = Field(description="ELI identifier of the act")
     query: str = Field(description="Search query text")
     context_chars: int = Field(
-        default=500,
-        description="Characters of context around matches; values above 2000 are clamped to 2000",
+        default=DEFAULT_CONTEXT_CHARS,
+        description=(
+            f"Characters of context around matches; values above {MAX_CONTEXT_CHARS} are clamped to {MAX_CONTEXT_CHARS}"
+        ),
     )
     limit: int = Field(default=20, description="Maximum matches returned")
     offset: int = Field(default=0, description="Non-negative match offset")

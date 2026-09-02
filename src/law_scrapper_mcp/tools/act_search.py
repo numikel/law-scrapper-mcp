@@ -8,6 +8,7 @@ from mcp.server.mcpserver import Context
 from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
+from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, MAX_CONTEXT_CHARS
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchInActOutput
 from law_scrapper_mcp.services.response_enrichment import search_in_act_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
@@ -46,12 +47,12 @@ def register(mcp: MCPServer[AppContext]) -> None:
             str | int,
             Field(
                 description=(
-                    "Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie 500. "
-                    "Maksymalnie 2000 — wartości większe są przycinane do 2000, "
+                    f"Liczba znaków kontekstu przed i po każdym trafieniu. Domyślnie {DEFAULT_CONTEXT_CHARS}. "
+                    f"Maksymalnie {MAX_CONTEXT_CHARS} — wartości większe są przycinane do {MAX_CONTEXT_CHARS}, "
                     "a odpowiedź zawiera wtedy wskazówkę o przycięciu. Wywołanie nie kończy się błędem."
                 ),
             ),
-        ] = 500,
+        ] = DEFAULT_CONTEXT_CHARS,
         limit: Annotated[
             str | int,
             Field(description="Maksymalna liczba trafień na stronie. Domyślnie 20, maksimum 100."),

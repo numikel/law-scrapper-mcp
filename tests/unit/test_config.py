@@ -213,7 +213,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "4.1.0"
+        assert settings.server_version == "4.2.0"
 
 
 class TestSettingsFromEnvironment:

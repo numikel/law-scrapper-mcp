@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-09-02
+
+See [docs/changelogs/v4.2.0.md](docs/changelogs/v4.2.0.md) for details.
+
 Sweep of the deferred review findings from clusters 2–9 (GitHub issues #14, #16, #18–#21, #27,
 #31, #32, #34, #38–#41, #45–#47, #49, #50, #52, #54, #55). No MCP tool changes its name,
 parameter names or response shape; several fields and validations now behave as documented.
+
+- **Egress and download restraint** — `LAW_MCP_API_MAX_SERVER_PAUSE` replaces a fixed constant, the rate settings are bounded (no more `inf`), the pacing deadline and limiter share one clock, and HTML/PDF downloads are aborted mid-stream once they pass the size limit instead of being materialised first.
+- **Truthful results** — `effective_date` is populated from `entryIntoForce` after always being `null`; `track_legal_changes` pages upstream and reports its real corpus size instead of labelling a truncated page `complete`; `search_legal_acts` validates `limit`/`offset` and no longer forwards a negative offset upstream.
+- **Hardening and hygiene** — bearer mode rejects inert scopes, `[::1].evil.com` no longer passes as loopback, `/health` is metered for non-loopback peers, `httpx` request URLs stay off INFO, `log_level`/`shutdown_grace` fail loudly on bad values, and CI runs the MCP conformance suite for real on the alpha that supports protocol `2026-07-28`.
 
 ### Added
 
@@ -84,7 +92,7 @@ parameter names or response shape; several fields and validations now behave as 
 - A section with `end_pos == 0` was treated as open-ended by `section_for_position`;
   overlapping sections are now rejected when a document is loaded (#20).
 
-## [4.1.0] - 2026-09-02
+## [4.1.0] - 2026-09-02 - 2026-09-02
 
 See [docs/changelogs/v4.1.0.md](docs/changelogs/v4.1.0.md) for details.
 

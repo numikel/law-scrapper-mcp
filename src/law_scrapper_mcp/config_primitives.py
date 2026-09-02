@@ -23,7 +23,17 @@ def _host_of(entry: str) -> str:
     if "://" in value:
         value = value.split("://", 1)[1]
     if value.startswith("["):
-        return value[1 : value.index("]")] if "]" in value else value[1:]
+        if "]" not in value:
+            return value[1:]
+        inner, _, suffix = value[1:].partition("]")
+        # After the closing bracket only a port (`:8080`), the SDK's wildcard
+        # port (`:*`) or nothing may follow. `[::1].evil.com` is a hostname
+        # the SDK compares verbatim, so it must never resolve to the loopback
+        # literal inside the brackets — return it raw and let `ip_address`
+        # reject it.
+        if suffix == "" or suffix == ":*" or (suffix.startswith(":") and suffix[1:].isdigit()):
+            return inner
+        return value
     # Bare IPv6 (contains multiple colons but no brackets): return unchanged
     if value.count(":") > 1:
         return value

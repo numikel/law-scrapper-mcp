@@ -21,6 +21,18 @@ async def test_correct_token_is_accepted() -> None:
     assert access.client_id == STATIC_CLIENT_ID
 
 
+def test_empty_secret_is_refused_at_construction() -> None:
+    """Defence in depth behind `Settings`' length check.
+
+    `Settings` already refuses a short token, but this class is constructed
+    directly by `build_auth()` and by tests, and `hmac.compare_digest(b"", b"")`
+    is `True` — an empty secret would accept an empty `Authorization` value.
+    The guard belongs where the comparison lives, not only upstream of it.
+    """
+    with pytest.raises(ValueError, match="pusty"):
+        StaticTokenVerifier(token="", scopes=[])
+
+
 async def test_wrong_token_is_rejected() -> None:
     verifier = StaticTokenVerifier(token=TOKEN, scopes=[])
     assert await verifier.verify_token("t" * 32) is None

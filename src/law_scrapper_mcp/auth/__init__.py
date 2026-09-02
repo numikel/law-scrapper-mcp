@@ -30,8 +30,6 @@ def build_auth(current: Settings) -> tuple[AuthSettings | None, TokenVerifier | 
     if current.auth_mode == "none":
         return None, None
 
-    scopes = current.auth_required_scopes or None
-
     if current.auth_mode == "bearer":
         # The SDK requires an issuer even for a static secret, so the server
         # names itself as one (D16) instead of borrowing a stranger's URL.
@@ -39,9 +37,13 @@ def build_auth(current: Settings) -> tuple[AuthSettings | None, TokenVerifier | 
         # (`http://::1:port` is not parseable; `http://[::1]:port` is).
         literal_host = current.host if ":" not in current.host or current.host.startswith("[") else f"[{current.host}]"
         issuer = current.auth_resource_server_url or AnyHttpUrl(f"http://{literal_host}:{current.port}")
+        # No scopes in either direction: `Settings` refuses a non-empty
+        # `auth_required_scopes` under `bearer` (config_validation.py), because
+        # the static verifier would grant exactly that list to every holder of
+        # the token and the requirement would be satisfied by construction.
         return (
-            AuthSettings(issuer_url=issuer, resource_server_url=None, required_scopes=scopes),
-            StaticTokenVerifier(token=current.resolve_auth_token(), scopes=current.auth_required_scopes),
+            AuthSettings(issuer_url=issuer, resource_server_url=None, required_scopes=None),
+            StaticTokenVerifier(token=current.resolve_auth_token(), scopes=[]),
         )
 
     assert current.auth_issuer is not None  # guaranteed by Settings validation
@@ -50,7 +52,7 @@ def build_auth(current: Settings) -> tuple[AuthSettings | None, TokenVerifier | 
         AuthSettings(
             issuer_url=current.auth_issuer,
             resource_server_url=current.auth_resource_server_url,
-            required_scopes=scopes,
+            required_scopes=current.auth_required_scopes or None,
         ),
         JwtTokenVerifier(
             issuer=str(current.auth_issuer),

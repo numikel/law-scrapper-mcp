@@ -133,6 +133,24 @@ def test_valid_trusted_proxy_cidr_is_accepted() -> None:
     assert current.trusted_proxies == ["10.0.0.0/8", "192.168.1.1"]
 
 
+def test_bearer_with_required_scopes_is_rejected() -> None:
+    """Scopes under `bearer` are tautological: the static verifier grants exactly
+    the configured list to every holder of the token, so `RequireAuthMiddleware`
+    is satisfied by construction and the setting confers no authorization. An
+    operator who set it believed otherwise — fail loudly instead of pretending."""
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(auth_mode="bearer", auth_token=VALID_TOKEN, auth_required_scopes=["mcp:read"])
+    message = str(exc_info.value)
+    assert "LAW_MCP_AUTH_REQUIRED_SCOPES" in message
+    assert "oauth" in message
+
+
+def test_bearer_with_empty_scopes_is_accepted() -> None:
+    """The default (no scopes) must keep working — only a non-empty list is refused."""
+    current = Settings(auth_mode="bearer", auth_token=VALID_TOKEN, auth_required_scopes=[])
+    assert current.auth_required_scopes == []
+
+
 def test_oauth_without_issuer_is_rejected() -> None:
     """Criterion 5 (D2, A5): no silent downgrade to the shared-secret mode."""
     with pytest.raises(ValidationError) as exc_info:

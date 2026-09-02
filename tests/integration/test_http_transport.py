@@ -285,6 +285,11 @@ def live_http_server(tmp_path: Path):
             # Required since Task 1: a non-loopback bind is refused under auth_mode="none".
             "LAW_MCP_AUTH_MODE": "bearer",
             "LAW_MCP_AUTH_TOKEN": LIVE_SERVER_TOKEN,
+            # These tests gate protocol behaviour, not throttling, and every request
+            # in a test comes from the same loopback peer. Leaving the per-client
+            # bucket on (burst 10) would turn a future extra call into a 429 that
+            # reads like a transport failure; throttling keeps its own unit tests.
+            "LAW_MCP_RATE_LIMIT_ENABLED": "false",
         }
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(

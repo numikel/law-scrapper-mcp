@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Sweep of the deferred review findings from clusters 2–9 (GitHub issues #14, #16, #18–#21, #27,
+#31, #32, #34, #38–#41, #45–#47, #49, #50, #52, #54, #55). No MCP tool changes its name,
+parameter names or response shape; several fields and validations now behave as documented.
+
+### Added
+
+- `LAW_MCP_API_MAX_SERVER_PAUSE` (default `60`, at most `600`): the cap on how long a
+  server-sent `Retry-After` may hold all outbound traffic, previously a fixed constant. The
+  clamp now lives in the rate limiter itself, so every caller of `pause_for()` inherits it (#46,
+  #47).
+- Document downloads are budgeted while streaming: the client aborts a HTML or PDF body as
+  soon as it passes `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` (or earlier, from `Content-Length`),
+  raising the same Polish `ContentTooLargeError` the conversion step already used. The whole
+  body is no longer materialised before the size check (#19).
+- `search_in_act` builds only the requested page of match positions (`DocumentStore.scan_page`)
+  instead of every match in the document; memory is bounded by `limit`, `total_count` stays
+  exact (#16).
+- CI runs the MCP conformance suite for real again, on `@modelcontextprotocol/conformance`
+  `0.2.0-alpha.11` — the first line that accepts the SDK's protocol era `2026-07-28` — with the
+  baseline in `conformance-baseline.yml` (#14).
+
+### Changed
+
+- `search_legal_acts` validates `limit` and `offset` like every other listing tool: a malformed
+  or non-positive `limit`, or a malformed or negative `offset`, is a tool error with a Polish
+  message instead of silently yielding page one. `limit` still has no upper clamp; its
+  description now says why (#18, #19).
+- `track_legal_changes` sends `limit` and `offset` upstream and reads `totalCount`, so a date
+  range wider than one API page is stored as a `page`-scoped set with a truthful
+  `corpus_count` instead of being labelled `complete` after silent upstream truncation (#54).
+- `DocumentStore.load` refuses a document over the size limit instead of truncating it (the
+  branch was unreachable from production since 4.0.0, and its character slice against a byte
+  budget was wrong for Polish text) (#32, #21).
+- `LAW_MCP_LOG_LEVEL` accepts exactly `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+  (case-insensitive); `WARN`-style aliases that used to work on STDIO and crash on
+  streamable-http are rejected at startup on both. `LAW_MCP_SHUTDOWN_GRACE` is an integer
+  (#31).
+- `LAW_MCP_AUTH_REQUIRED_SCOPES` with `LAW_MCP_AUTH_MODE=bearer` is rejected at startup: a
+  shared secret has no scope semantics, so the setting could never restrict anything. Remove
+  the variable or switch to `oauth` (#38).
+- `LAW_MCP_API_RATE_PER_SECOND` is bounded to `0.1`–`100` and rejects non-finite values;
+  `LAW_MCP_API_RATE_BURST` to `1`–`1000`; `LAW_MCP_API_MAX_ATTEMPTS` to `1`–`20` (#47, #27).
+- `/health` is exempt from the per-client rate limiter only for loopback peers; a probe from
+  another host is metered like any other request (#39).
+- JWKS discovery no longer runs while holding the verifier's lock, so concurrent requests
+  during a slow identity-provider response are not serialised behind it (#39).
+- `build_http_app()` derives the auth settings and token verifier from the live `settings`
+  object, the same place it already reads host and rate-limit settings (#41).
+- `uvicorn` is a declared dependency rather than a transitive one (#31).
+- Removed two internal methods without production callers: `DocumentStore.search()` and
+  `MetadataService.get_metadata()`; `ContentTooLargeError` is exported from the client
+  facade (#20, #31).
+
+### Fixed
+
+- `effective_date` in `search_legal_acts`, `browse_acts` and `track_legal_changes` was always
+  `null`: the code read a `dateEffect` key that neither list endpoint returns. It now reads
+  `entryIntoForce`, the field the API does return, so the `effective_date` filter and sort in
+  `filter_results` operate on data (#52).
+- A negative `offset` passed to `search_legal_acts` reached `api.sejm.gov.pl` verbatim (#18).
+- `httpx`'s request log line carried the full search URL — keywords and title included — at
+  INFO, the path the F13 audit finding never covered. The `httpx` and `httpcore` loggers are now
+  held at `WARNING` or above (#34).
+- `[::1].evil.com` in `LAW_MCP_ALLOWED_HOSTS` was classified as loopback because the bracket
+  parser ignored everything after `]`; trailing content other than a port or `:*` now disables
+  the loopback match (#38).
+- `backoff()` raised `OverflowError` for a large attempt number and returned sub-`base` delays
+  for attempts below 1; the exponent is now bounded and computed in floating point (#27).
+- `LAW_MCP_API_RATE_PER_SECOND=inf` was accepted and silently disabled pacing (#47).
+- The pacing deadline and the rate limiter measured time on different clocks when a limiter
+  was injected, which made the deadline bound fail open; both now share the limiter's clock
+  (#45).
+- `StaticTokenVerifier` accepts no empty secret, so an empty `Authorization` value can never
+  match one (#38).
+- A section with `end_pos == 0` was treated as open-ended by `section_for_position`;
+  overlapping sections are now rejected when a document is loaded (#20).
+
 ## [4.1.0] - 2026-09-02
 
 See [docs/changelogs/v4.1.0.md](docs/changelogs/v4.1.0.md) for details.

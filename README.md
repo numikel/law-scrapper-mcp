@@ -170,13 +170,14 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable-http` |
 | `LAW_MCP_HOST` | `127.0.0.1` | HTTP server host (when using streamable-http). Binding beyond loopback requires `LAW_MCP_AUTH_MODE` — see "Authenticated remote deployment" |
 | `LAW_MCP_PORT` | `7683` | HTTP server port (when using streamable-http) |
-| `LAW_MCP_SHUTDOWN_GRACE` | `15` | Graceful shutdown window in seconds for the HTTP server. Keep `stop_grace_period` in `docker-compose.yml` at or above twice this value — nothing in the code enforces the relation. |
+| `LAW_MCP_SHUTDOWN_GRACE` | `15` | Graceful shutdown window in whole seconds for the HTTP server (a fractional value is rejected at startup rather than silently rounded). Keep `stop_grace_period` in `docker-compose.yml` at or above twice this value — nothing in the code enforces the relation. |
 | `LAW_MCP_API_TIMEOUT` | `30.0` | HTTP request timeout in seconds |
 | `LAW_MCP_API_MAX_CONCURRENT` | `8` | Concurrent light API requests (JSON metadata and search) |
 | `LAW_MCP_API_MAX_CONCURRENT_CONTENT` | `2` | Concurrent heavy API requests (act HTML and PDF downloads) |
-| `LAW_MCP_API_RATE_PER_SECOND` | `5.0` | Sustained outbound request rate towards the Sejm API |
-| `LAW_MCP_API_RATE_BURST` | `10` | Requests allowed back-to-back before the rate applies |
-| `LAW_MCP_API_MAX_ATTEMPTS` | `3` | Attempts per operation, retries included |
+| `LAW_MCP_API_RATE_PER_SECOND` | `5.0` | Sustained outbound request rate towards the Sejm API; accepted range `0.1`–`100`, non-finite values rejected |
+| `LAW_MCP_API_RATE_BURST` | `10` | Requests allowed back-to-back before the rate applies; accepted range `1`–`1000` |
+| `LAW_MCP_API_MAX_SERVER_PAUSE` | `60.0` | Longest pause, in seconds, that a `Retry-After` sent by the Sejm API may hold all outbound traffic; a larger header value is clamped to this and logged. Accepted range above `0` up to `600` |
+| `LAW_MCP_API_MAX_ATTEMPTS` | `3` | Attempts per operation, retries included; accepted range `1`–`20` |
 | `LAW_MCP_API_RETRY_BUDGET` | `45.0` | Seconds the retry sequence of one operation may plan to wait |
 | `LAW_MCP_CACHE_METADATA_TTL` | `86400` | Metadata cache TTL (24 hours) |
 | `LAW_MCP_CACHE_SEARCH_TTL` | `600` | Search results cache TTL (10 minutes) |
@@ -185,7 +186,7 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_CACHE_CHANGES_TTL` | `300` | Changes tracking cache TTL (5 minutes) |
 | `LAW_MCP_CACHE_MAX_ENTRIES` | `1000` | Maximum cache entries |
 | `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` | `10` | Maximum documents in Document Store |
-| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB). Also the conversion threshold: content whose fetched HTML or PDF payload exceeds it is refused before conversion, with an error naming the source PDF URL. |
+| `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` | `5242880` | Maximum Document Store size (5 MB). Also the conversion threshold: content whose HTML or PDF payload exceeds it is refused with an error naming the source PDF URL — the download is aborted as soon as the body passes the limit (or earlier, from `Content-Length`), so the server never holds a larger body in memory. |
 | `LAW_MCP_DOC_STORE_TTL` | `7200` | Document Store TTL (2 hours) |
 | `LAW_MCP_CIRCUIT_BREAKER_THRESHOLD` | `5` | Failures before circuit breaker opens |
 | `LAW_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `60.0` | Seconds before trying recovery |
@@ -195,14 +196,14 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_ALLOWED_HOSTS` | `127.0.0.1:*, localhost:*, [::1]:*` | `Host` header allowlist for streamable-http (DNS-rebinding protection). Widening beyond loopback requires an auth mode — see "Authenticated remote deployment" |
 | `LAW_MCP_ALLOWED_ORIGINS` | `http://127.0.0.1:*, http://localhost:*, http://[::1]:*` | `Origin` header allowlist for streamable-http. Same auth-mode requirement as `LAW_MCP_ALLOWED_HOSTS` |
 | `LAW_MCP_AUTH_JWKS_URI` | unset | Override the JWKS URI discovered from `LAW_MCP_AUTH_ISSUER`'s OIDC discovery document; needed only when a provider's discovery document omits or misreports it |
-| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. Meaningful in `oauth` mode only: under `bearer` the static verifier grants exactly these scopes to every holder of the token, so the check is satisfied by construction and confers no authorization |
+| `LAW_MCP_AUTH_REQUIRED_SCOPES` | `[]` (none) | Scopes a presented token must carry, checked by `RequireAuthMiddleware`. Meaningful in `oauth` mode only: under `bearer` the static verifier would grant exactly these scopes to every holder of the token, so the check could never restrict anything — a non-empty value with `LAW_MCP_AUTH_MODE=bearer` is therefore rejected at startup |
 | `LAW_MCP_AUTH_ALGORITHMS` | `RS256, ES256` | JWT signature algorithm allowlist passed to the decoder; never read from the token header |
 | `LAW_MCP_AUTH_JWKS_CACHE_TTL` | `3600` | Seconds a fetched JWKS key set is cached before re-fetching |
-| `LAW_MCP_RATE_LIMIT_ENABLED` | `true` | Whether the per-client rate limiter wraps the HTTP app |
+| `LAW_MCP_RATE_LIMIT_ENABLED` | `true` | Whether the per-client rate limiter wraps the HTTP app. `/health` is exempt only when the caller is a loopback peer (container healthchecks); any other peer is metered like every other request |
 | `LAW_MCP_RATE_LIMIT_REQUESTS` | `60` | Requests allowed per `LAW_MCP_RATE_LIMIT_WINDOW` before throttling |
 | `LAW_MCP_RATE_LIMIT_WINDOW` | `60.0` | Rate limit window in seconds |
 | `LAW_MCP_RATE_LIMIT_BURST` | `10` | Token bucket capacity — how many requests can arrive back-to-back before `429` |
-| `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
+| `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` (case-insensitive). Aliases such as `WARN` are rejected at startup on both transports instead of working on one and crashing the other. `httpx`'s own request lines, which carry the full query URL, never go below `WARNING` regardless of this setting |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 
 Logs go to stderr (stdout carries the MCP protocol on the STDIO transport). Every record carries a `request_id` correlating it with a single tool call — `lifespan` for records emitted outside one:
@@ -283,7 +284,9 @@ LAW_MCP_ALLOWED_ORIGINS='https://mcp.example.com' \
 Providers issuing opaque tokens (GitHub) are not supported — they would require
 RFC 7662 introspection. TLS termination stays with the reverse proxy.
 `/health` is intentionally unauthenticated so container healthchecks work; it
-exposes the server version and circuit-breaker state.
+exposes the server version and circuit-breaker state. It is exempt from the
+rate limiter only for loopback peers — a probe arriving from another host is
+metered like any other request.
 
 Rate limiting is always on for HTTP: `60` requests per `60 s`, burst `10`.
 Behind a proxy, set `LAW_MCP_TRUSTED_PROXIES` (addresses or CIDRs) — otherwise

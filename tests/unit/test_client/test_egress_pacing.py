@@ -1,8 +1,9 @@
 """Pace and fairness of outbound traffic as wired into the client (F27, F55).
 
 Runs offline on respx. Waiting is injected in both places that wait — the limiter's
-`_wait` and the retry loop's `_delay` — and both advance the same fake clock, so no
-test measures real elapsed time (design constraint 3).
+`_wait` and the retry loop's `_delay` — by the `waits` fixture in `conftest.py`, and
+both advance the same fake clock, so no test measures real elapsed time (design
+constraint 3).
 """
 
 from __future__ import annotations
@@ -16,13 +17,12 @@ import pytest
 import pytest_asyncio
 import respx
 
-from law_scrapper_mcp.client import rate_limiter as limiter_module
-from law_scrapper_mcp.client import sejm_client as client_module
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.exceptions import ApiUnavailableError, SejmApiError
 from law_scrapper_mcp.client.rate_limiter import RateLimiter
 from law_scrapper_mcp.client.sejm_client import RequestClass, SejmApiClient
 from law_scrapper_mcp.config import Settings
+from test_client.conftest import FakeClock
 
 pytestmark = pytest.mark.asyncio
 
@@ -30,33 +30,6 @@ ACT_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1"
 ACT_PATH = "acts/DU/2024/1"
 PDF_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
 PDF_PATH = "acts/DU/2024/1/text.pdf"
-
-
-class FakeClock:
-    def __init__(self) -> None:
-        self.now = 0.0
-
-    def __call__(self) -> float:
-        return self.now
-
-
-@pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
-
-
-@pytest.fixture
-def waits(clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Both waiting points advance one shared fake clock."""
-    recorded: list[float] = []
-
-    async def fake_wait(seconds: float) -> None:
-        recorded.append(seconds)
-        clock.now += seconds
-
-    monkeypatch.setattr(limiter_module, "_wait", fake_wait)
-    monkeypatch.setattr(client_module, "_delay", fake_wait)
-    return recorded
 
 
 @pytest_asyncio.fixture

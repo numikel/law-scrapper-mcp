@@ -3,7 +3,8 @@
 Not to be confused with `tests/unit/test_rate_limit.py`, which covers the inbound
 limiter in `http/rate_limit.py`. This one is about traffic we send.
 
-Every test drives an injected clock; none sits out a real delay (design constraint 3).
+Every test drives the injected clock from `conftest.py`; none sits out a real delay
+(design constraint 3).
 """
 
 from __future__ import annotations
@@ -13,43 +14,10 @@ import logging
 
 import pytest
 
-from law_scrapper_mcp.client import rate_limiter as limiter_module
 from law_scrapper_mcp.client.rate_limiter import EgressPaceDeadlineError, RateLimiter
+from test_client.conftest import FakeClock
 
 pytestmark = pytest.mark.asyncio
-
-
-class FakeClock:
-    """A monotonic clock that only moves when the limiter waits."""
-
-    def __init__(self) -> None:
-        self.now = 0.0
-
-    def __call__(self) -> float:
-        return self.now
-
-
-@pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
-
-
-@pytest.fixture
-def waits(clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Record requested waits and advance the fake clock by each one.
-
-    Yields to the event loop to allow other tasks to run (necessary for testing
-    concurrent wait serialisation).
-    """
-    recorded: list[float] = []
-
-    async def fake_wait(seconds: float) -> None:
-        recorded.append(seconds)
-        clock.now += seconds
-        await asyncio.sleep(0)
-
-    monkeypatch.setattr(limiter_module, "_wait", fake_wait)
-    return recorded
 
 
 async def test_a_full_bucket_admits_the_whole_burst_without_waiting(clock: FakeClock, waits: list[float]) -> None:

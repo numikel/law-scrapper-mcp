@@ -9,7 +9,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput, ResultSetInfo, ResultSetListOutput
+from law_scrapper_mcp.models.tool_outputs import (
+    ActSummaryOutput,
+    FilterOutput,
+    ResultSetInfo,
+    ResultSetListOutput,
+    ResultSetScope,
+    SetScope,
+)
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
@@ -24,8 +31,20 @@ class StoredResultSet:
     results: list[ActSummaryOutput]
     query_summary: str
     total_count: int
+    scope: SetScope = SetScope.COMPLETE
+    window_offset: int = 0
+    corpus_count: int | None = None
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
+
+    def scope_view(self) -> ResultSetScope:
+        """Describe this set's reach for the tool contract."""
+        return ResultSetScope(
+            scope=self.scope,
+            stored_count=len(self.results),
+            window_offset=self.window_offset,
+            corpus_count=self.corpus_count,
+        )
 
 
 @dataclass
@@ -63,8 +82,36 @@ class ResultStore:
         results: list[ActSummaryOutput],
         query_summary: str,
         total_count: int,
-    ) -> str:
-        """Store a result set and return its ID."""
+        *,
+        window_offset: int = 0,
+        scope: SetScope | None = None,
+    ) -> tuple[str, ResultSetScope]:
+        """Store a result set and return its ID together with its reach.
+
+        Returns both because the caller needs both, and reading the reach back
+        through `get()` would refresh `last_accessed` and corrupt the LRU order.
+
+        `scope=None` means "derive it": a set is complete exactly when it starts at
+        the corpus origin and holds as many records as the corpus has. A caller
+        passes `scope` explicitly only to *inherit* a reach it already knows —
+        `filter_and_store` does, because a filtered subset of a window is complete
+        with respect to the window and to nothing else.
+
+        `corpus_count` follows from that same distinction and is deliberately not a
+        parameter. When the reach is derived, `total_count` IS the corpus size. When
+        it is inherited as PAGE, `total_count` describes the derived set and the
+        corpus count is genuinely unknown: how many corpus records would have matched
+        was never computed. Do not "fix" that None by filling in the source set's
+        corpus size — it answers a question nobody asked and states it as fact.
+        """
+        corpus_count: int | None
+        if scope is None:
+            resolved = SetScope.COMPLETE if window_offset == 0 and len(results) == total_count else SetScope.PAGE
+            corpus_count = total_count
+        else:
+            resolved = scope
+            corpus_count = total_count if resolved is SetScope.COMPLETE else None
+
         async with self._lock:
             self._evict_expired()
 
@@ -74,17 +121,27 @@ class ResultStore:
             self._counter += 1
             result_set_id = f"rs_{self._counter}"
 
-            self._store[result_set_id] = StoredResultSet(
+            stored = StoredResultSet(
                 result_set_id=result_set_id,
                 results=results,
                 query_summary=query_summary,
                 total_count=total_count,
+                scope=resolved,
+                window_offset=window_offset,
+                corpus_count=corpus_count,
             )
-            logger.info("Stored result set %s: %d results (total %d)", result_set_id, len(results), total_count)
+            self._store[result_set_id] = stored
+            logger.info(
+                "Stored result set %s: %d results (total %d, scope %s)",
+                result_set_id,
+                len(results),
+                total_count,
+                resolved,
+            )
             # The query text can be sensitive on its own; keep it recoverable
             # but off the default production level.
             logger.debug("Result set %s query: %s", result_set_id, query_summary)
-            return result_set_id
+            return result_set_id, stored.scope_view()
 
     async def get(self, result_set_id: str) -> StoredResultSet | None:
         """Get a stored result set by ID."""
@@ -108,6 +165,7 @@ class ResultStore:
                     "query_summary": rs.query_summary,
                     "result_count": len(rs.results),
                     "total_count": rs.total_count,
+                    "scope": rs.scope,
                     "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rs.created_at)),
                 }
                 for rs in self._store.values()
@@ -131,9 +189,23 @@ class ResultStore:
             page_info=page_info,
         )
 
-    async def filter_results(
+    async def _require(self, result_set_id: str) -> StoredResultSet:
+        """Fetch a set for filtering, or explain why it cannot be filtered.
+
+        Split out so `filter_and_store` reads the set exactly once. Calling `get()`
+        a second time to recover the source reach would refresh `last_accessed` and
+        move the set to the front of the LRU order as a side effect of describing it.
+        """
+        rs = await self.get(result_set_id)
+        if rs is None:
+            raise ResultSetNotFoundError(result_set_id)
+        if len(rs.results) > self.max_records:
+            raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
+        return rs
+
+    def _apply_filters(
         self,
-        result_set_id: str,
+        rs: StoredResultSet,
         *,
         pattern: str | None = None,
         field: str = "title",
@@ -146,14 +218,7 @@ class ResultStore:
         sort_by: str | None = None,
         sort_desc: bool = False,
     ) -> tuple[list[ActSummaryOutput], int]:
-        """Filter a stored result set. Returns (filtered_results, original_count)."""
-        rs = await self.get(result_set_id)
-        if rs is None:
-            raise ResultSetNotFoundError(result_set_id)
-
-        if len(rs.results) > self.max_records:
-            raise ResultSetTooLargeError(result_set_id, len(rs.results), self.max_records)
-
+        """Apply every filter in memory. Returns (filtered_results, original_count)."""
         filtered = list(rs.results)
         original_count = len(filtered)
 
@@ -186,6 +251,37 @@ class ResultStore:
 
         return filtered, original_count
 
+    async def filter_results(
+        self,
+        result_set_id: str,
+        *,
+        pattern: str | None = None,
+        field: str = "title",
+        type_equals: str | None = None,
+        status_equals: str | None = None,
+        year_equals: int | None = None,
+        date_field: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort_by: str | None = None,
+        sort_desc: bool = False,
+    ) -> tuple[list[ActSummaryOutput], int]:
+        """Filter a stored result set. Returns (filtered_results, original_count)."""
+        rs = await self._require(result_set_id)
+        return self._apply_filters(
+            rs,
+            pattern=pattern,
+            field=field,
+            type_equals=type_equals,
+            status_equals=status_equals,
+            year_equals=year_equals,
+            date_field=date_field,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
+
     async def filter_and_store(
         self,
         result_set_id: str,
@@ -204,8 +300,10 @@ class ResultStore:
         offset: int = 0,
     ) -> FilterOutput:
         """Filter one set, persist the result, and build its public output."""
-        filtered, original_count = await self.filter_results(
-            result_set_id,
+        rs = await self._require(result_set_id)
+        source_scope = rs.scope_view()
+        filtered, original_count = self._apply_filters(
+            rs,
             pattern=pattern,
             field=field,
             type_equals=type_equals,
@@ -235,7 +333,8 @@ class ResultStore:
         if sort_by:
             filters_applied.update(sort_by=sort_by, sort_desc=sort_desc)
 
-        new_set_id = None
+        new_set_id: str | None = None
+        new_scope: ResultSetScope | None = None
         if filtered:
             description = _build_filters_description(
                 pattern=pattern,
@@ -247,10 +346,15 @@ class ResultStore:
                 date_from=date_from,
                 date_to=date_to,
             )
-            new_set_id = await self.store(
+            # Inherited, not derived: a subset of a window is complete with respect
+            # to the window only. Letting `store()` derive the reach here would call
+            # it COMPLETE — every filtered set starts at index 0 and holds exactly as
+            # many records as it holds — and that would be false.
+            new_set_id, new_scope = await self.store(
                 filtered,
                 f"filtered({result_set_id}): {description}",
                 len(filtered),
+                scope=source_scope.scope,
             )
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
@@ -266,6 +370,12 @@ class ResultStore:
             original_count=original_count,
             filtered_count=len(filtered),
             filters_applied=filters_applied,
+            source_scope=source_scope,
+            result_set_scope=new_scope,
+            # Both conditions matter. Without the window check the flag would be
+            # wrong; without the empty check it would fire on every window filter
+            # and stop being read.
+            no_match_is_inconclusive=source_scope.scope is SetScope.PAGE and not filtered,
             page_info=page_info,
         )
 
@@ -310,8 +420,10 @@ class ResultSetTooLargeError(Exception):
             f"limit={limit}, węższe kryteria w browse_acts, albo — dla "
             f"track_legal_changes, które nie ma parametru limit — zawęź "
             f"date_from/date_to lub dodaj keywords. Wynik częściowy nie jest "
-            f"zwracany, aby brak dopasowania zawsze oznaczał przeszukanie "
-            f"całego zestawu."
+            f"zwracany, aby brak dopasowania zawsze oznaczał "
+            f"przeszukanie całego ZESTAWU. Uwaga: to gwarancja o zestawie, nie o zbiorze "
+            f"— jeśli zestaw jest oknem (pole result_set_scope w odpowiedzi ma wartość 'page'), "
+            f"brak dopasowania nadal nie dowodzi, że akt nie istnieje."
         )
 
 

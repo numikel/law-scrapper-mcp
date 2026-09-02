@@ -23,8 +23,10 @@ from law_scrapper_mcp.models.tool_outputs import (
     FilterOutput,
     Hint,
     MetadataOutput,
+    ResultSetScope,
     SearchInActOutput,
     SearchOutput,
+    SetScope,
 )
 from law_scrapper_mcp.services.pagination import paginate_items
 
@@ -299,6 +301,12 @@ class TestPaginationModels:
                 results=[],
                 original_count=0,
                 filtered_count=0,
+                source_scope=ResultSetScope(
+                    scope=SetScope.COMPLETE,
+                    stored_count=0,
+                    window_offset=0,
+                    corpus_count=0,
+                ),
                 page_info=page_info,
             ).page_info
             == page_info

@@ -194,3 +194,24 @@ class TestChangesService:
         assert output.changes[0].eli == "DU/2024/1"
         assert output.changes[0].type is None
         assert output.changes[0].promulgation_date is None
+
+    @respx.mock
+    async def test_tracked_changes_are_a_complete_set(self, service: ChangesService, search_results: dict):
+        """Criterion 4 (D6). The one tool whose set filter_results searches whole.
+
+        No behaviour changes here — `ChangesService` already stored the full fetched
+        list. The cluster only gives that fact a name in the contract.
+        """
+        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
+
+        output = await service.track_changes(
+            publisher="DU",
+            date_from="2024-01-01",
+            date_to="2024-12-31",
+        )
+
+        assert output.result_set_id is not None
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope == "complete"
+        assert output.result_set_scope.window_offset == 0
+        assert output.result_set_scope.corpus_count == output.total_count

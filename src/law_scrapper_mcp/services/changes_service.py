@@ -6,7 +6,7 @@ from datetime import datetime
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ChangesOutput
+from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ChangesOutput, ResultSetScope
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -33,7 +33,18 @@ class ChangesService:
         query_summary = f"changes: {date_range} | publisher={publisher}"
         if keywords:
             query_summary += f" | keywords={','.join(keywords)}"
-        result_set_id = await self._result_store.store(results, query_summary, len(results)) if results else None
+        result_set_id: str | None = None
+        result_set_scope: ResultSetScope | None = None
+        if results:
+            # The full fetched list, stored whole and starting at the corpus origin, so the
+            # rule in `store()` derives COMPLETE without being told (D6). This has always
+            # been the behaviour; the cluster only makes it visible in the contract.
+            result_set_id, result_set_scope = await self._result_store.store(
+                results,
+                query_summary,
+                len(results),
+                window_offset=0,
+            )
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
         changes, page_info = paginate_items(results, limit=page_limit, offset=page_offset)
@@ -44,6 +55,7 @@ class ChangesService:
             changes=changes,
             total_count=len(results),
             result_set_id=result_set_id,
+            result_set_scope=result_set_scope,
             page_info=page_info,
         )
 

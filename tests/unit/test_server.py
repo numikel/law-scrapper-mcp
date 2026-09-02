@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 from mcp import Client
@@ -58,6 +60,33 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
         assert tool.output_schema is not None
         assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
         assert set(tool.output_schema["properties"]) != {"result"}
+
+
+async def test_scope_fields_reach_the_output_schemas() -> None:
+    """Criterion 20: the new contract is visible to clients, and nothing was dropped."""
+    expected_new = {
+        "search_legal_acts": "result_set_scope",
+        "browse_acts": "result_set_scope",
+        "track_legal_changes": "result_set_scope",
+        "filter_results": "no_match_is_inconclusive",
+        "list_result_sets": "scope",
+    }
+    expected_kept = {
+        "search_legal_acts": "total_count",
+        "browse_acts": "result_set_id",
+        "track_legal_changes": "date_range",
+        "filter_results": "filtered_count",
+        "list_result_sets": "result_count",
+    }
+
+    async with Client(app) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name, field in expected_new.items():
+        assert tools[name].output_schema is not None
+        assert field in json.dumps(tools[name].output_schema), f"{name} lost {field}"
+    for name, field in expected_kept.items():
+        assert field in json.dumps(tools[name].output_schema), f"{name} dropped {field}"
 
 
 async def test_lifespan_yields_services() -> None:

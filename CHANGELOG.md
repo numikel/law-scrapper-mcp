@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Result-set scope (`result_set_scope`, and `scope` in `list_result_sets`) telling the caller
+  whether a stored set is the complete answer to its query or a window cut from a larger
+  corpus. `filter_results` inherits the reach of the set it filtered rather than deriving a
+  new one, and reports `source_scope` alongside it.
+- `no_match_is_inconclusive` on `filter_results`: set when a filter over a windowed set
+  matched nothing, so an empty result is not read as proof that no such act exists.
+- Pagination hints now carry the full next call — the tool that produced them plus every
+  source criterion, `limit` and `offset` — instead of an unparameterised suggestion.
+
+### Fixed
+
+- `search_legal_acts` reported the size of the returned page as `total_count`, so a search
+  matching 1984 acts answered `20` with `was_truncated=false` and no pagination hint at all.
+  It now reads `totalCount` and falls back to `count` for responses that omit it (F31).
+  Clients that relied on `total_count` carrying the page size will see a different value.
+  This is shipped as a fix in a MINOR release, not as a breaking change in a MAJOR one:
+  the field always declared the size of the match set and no documentation ever promised
+  the page size, so the previous value was a defect rather than a contract.
+- The pagination hint from `browse_acts` pointed at `search_legal_acts`, sending the model to
+  a different tool than the one it had called (F48).
+
+### Changed
+
+- `search_legal_acts` now sends `limit` upstream even when the caller does not supply one
+  (default 20). Without it the API built a page of its own choosing — a measured 709 437 B
+  and 500 records for `DU/2024` — of which twenty-four out of twenty-five records were
+  discarded locally. An explicit `limit` is still not clamped.
+- Large searches now return `was_truncated=true` together with a pagination hint, which is a
+  consequence of the `total_count` fix rather than a separate behaviour change.
+
 ## [4.0.2] - 2026-09-01
 
 See [docs/changelogs/v4.0.2.md](docs/changelogs/v4.0.2.md) for details.

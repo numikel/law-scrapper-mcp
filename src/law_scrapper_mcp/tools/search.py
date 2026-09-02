@@ -2,12 +2,13 @@
 
 import contextlib
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
 from pydantic import Field
 
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
@@ -178,6 +179,31 @@ def register(mcp: MCPServer[AppContext]) -> None:
         effective_limit = limit_int if limit_int is not None else DEFAULT_SEARCH_LIMIT
         first_eli = output.results[0].eli if output.results else None
 
+        # Only this tool knows which parameters it accepts, so it builds the next call
+        # itself (D8). Values are the parsed ones, not the raw string inputs, so the hint
+        # round-trips: what the model copies back is what this call actually used.
+        next_call_params: dict[str, Any] = {"publisher": publisher}
+        if year_int is not None:
+            next_call_params["year"] = year_int
+        if keywords:
+            next_call_params["keywords"] = keywords
+        if date_from:
+            next_call_params["date_from"] = date_from
+        if date_to:
+            next_call_params["date_to"] = date_to
+        if title:
+            next_call_params["title"] = title
+        if act_type:
+            next_call_params["act_type"] = act_type
+        if pub_date_from:
+            next_call_params["pub_date_from"] = pub_date_from
+        if pub_date_to:
+            next_call_params["pub_date_to"] = pub_date_to
+        if in_force_bool is not None:
+            next_call_params["in_force"] = in_force_bool
+        if detail_enum is not DetailLevel.STANDARD:
+            next_call_params["detail_level"] = detail_enum.value
+
         return EnrichedResponse[SearchOutput](
             data=output,
             hints=search_hints(
@@ -185,6 +211,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 output.returned_count > 0,
                 first_eli,
                 output.result_set_id,
+                tool_name="search_legal_acts",
+                next_call_params=next_call_params,
+                filter_max_records=settings.effective_filter_max_records,
+                scope=output.result_set_scope,
                 offset=offset_int or 0,
                 returned_count=output.returned_count,
                 applied_limit=effective_limit,

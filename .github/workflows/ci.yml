@@ -124,6 +124,11 @@ jobs:
           export LAW_MCP_TRANSPORT=streamable-http
           export LAW_MCP_HOST=127.0.0.1
           export LAW_MCP_PORT=7683
+          # The conformance runner drives every scenario from one loopback peer; the
+          # per-client bucket (burst 10) would answer the sweep with 429s that read
+          # like protocol failures. Throttling has its own tests; this step gates
+          # protocol conformance only.
+          export LAW_MCP_RATE_LIMIT_ENABLED=false
           uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
@@ -141,13 +146,17 @@ jobs:
             cat server.stdout.log || true
             exit 1
           fi
+          # Pinned exactly: the 0.2.0 alpha line is the first to accept the SDK's protocol
+          # era (2026-07-28); @latest (0.1.x) still rejects it. A floating @alpha tag
+          # would make CI results irreproducible between runs.
+          CONFORMANCE_PKG="@modelcontextprotocol/conformance@0.2.0-alpha.11"
           SDK_SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
           PROBE_LOG="$(mktemp)"
           set +e
-          npx --yes @modelcontextprotocol/conformance@latest server \
+          npx --yes "$CONFORMANCE_PKG" server \
             --url http://127.0.0.1:7683/mcp \
             --spec-version "$SDK_SPEC_VERSION" \
-            --scenario server-initialize \
+            --scenario tools-list \
             >"$PROBE_LOG" 2>&1
           PROBE_STATUS=$?
           set -e
@@ -162,7 +171,7 @@ jobs:
             cat "$PROBE_LOG"
             exit "$PROBE_STATUS"
           fi
-          npx --yes @modelcontextprotocol/conformance@latest server \
+          npx --yes "$CONFORMANCE_PKG" server \
             --url http://127.0.0.1:7683/mcp \
             --spec-version "$SDK_SPEC_VERSION" \
             --expected-failures ./conformance-baseline.yml

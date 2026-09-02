@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -12,6 +16,33 @@ from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.result_store import ResultStore
 
 pytestmark = pytest.mark.asyncio
+
+SEARCH_URL = "https://api.sejm.gov.pl/eli/acts/search"
+
+
+def _item(n: int) -> dict[str, Any]:
+    return {
+        "ELI": f"DU/2024/{n}",
+        "publisher": "DU",
+        "year": 2024,
+        "pos": n,
+        "title": f"Akt {n}",
+        "status": "akt obowiązujący",
+        "type": "Ustawa",
+    }
+
+
+def _windowed(items: list[dict[str, Any]]) -> Callable[[httpx.Request], Response]:
+    """A search endpoint that honours `limit` and `offset`, the way `acts/search` does."""
+
+    def respond(request: httpx.Request) -> Response:
+        params = request.url.params
+        start = int(params.get("offset", 0))
+        end = start + int(params.get("limit", 20))
+        page = items[start:end]
+        return Response(200, json={"count": len(page), "totalCount": len(items), "items": page})
+
+    return respond
 
 
 class TestChangesService:
@@ -41,11 +72,15 @@ class TestChangesService:
         assert output.page_info.unit == PageUnit.ITEMS
 
     @respx.mock
-    async def test_track_changes_stores_full_set_but_pages_response(
+    async def test_track_changes_stores_the_fetched_window_and_reports_the_corpus(
         self, service: ChangesService, search_results: dict
     ):
-        """Tracked changes store the complete set before paging the response."""
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
+        """Issue #54: the store holds what was fetched, `total_count` says how much exists.
+
+        Before the fix the tool fetched an unbounded range, stored it whole and sliced
+        locally, so `total_count` was the download size and never the corpus size.
+        """
+        respx.get(SEARCH_URL).mock(side_effect=_windowed(search_results["items"]))
 
         output = await service.track_changes(
             publisher="DU",
@@ -58,11 +93,15 @@ class TestChangesService:
         assert output.total_count == 3
         assert len(output.changes) == 1
         assert output.page_info.returned_count == 1
+        assert output.page_info.total_count == 3
+        assert output.page_info.was_truncated is True
+        assert output.page_info.next_offset == 1
 
         assert output.result_set_id is not None
         stored = await service._result_store.get(output.result_set_id)
         assert stored is not None
-        assert len(stored.results) == 3
+        assert len(stored.results) == 1
+        assert stored.total_count == 3
 
     @respx.mock
     async def test_track_changes_defaults_date_to_today(self, service: ChangesService, search_results: dict):
@@ -196,13 +235,67 @@ class TestChangesService:
         assert output.changes[0].promulgation_date is None
 
     @respx.mock
-    async def test_tracked_changes_are_a_complete_set(self, service: ChangesService, search_results: dict):
-        """Criterion 4 (D6). The one tool whose set filter_results searches whole.
+    async def test_the_requested_window_reaches_the_api(self, service: ChangesService):
+        """Issue #54: `limit` and `offset` are query parameters, not a local slice.
 
-        No behaviour changes here — `ChangesService` already stored the full fetched
-        list. The cluster only gives that fact a name in the contract.
+        Without them the request downloads whatever page the API feels like building
+        (500 records by default, tests/fixtures/search_default_page.provenance.md)
+        to return twenty, and a caller can never reach record 501.
         """
-        respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
+        route = respx.get(SEARCH_URL).mock(side_effect=_windowed([_item(n) for n in range(100)]))
+
+        await service.track_changes(publisher="DU", date_from="2024-01-01", date_to="2024-12-31", limit=20, offset=40)
+
+        params = route.calls.last.request.url.params
+        assert params["limit"] == "20"
+        assert params["offset"] == "40"
+
+    @respx.mock
+    async def test_the_first_page_omits_offset(self, service: ChangesService):
+        """Same params dict shape as `search()`: `offset=0` is not sent."""
+        route = respx.get(SEARCH_URL).mock(side_effect=_windowed([_item(n) for n in range(5)]))
+
+        await service.track_changes(publisher="DU", date_from="2024-01-01", date_to="2024-12-31")
+
+        params = route.calls.last.request.url.params
+        assert params["limit"] == "20"
+        assert "offset" not in params
+
+    @respx.mock
+    async def test_a_windowed_range_declares_itself_a_page(self, service: ChangesService):
+        """Issue #54: twenty records out of five hundred are a window, not the answer."""
+        respx.get(SEARCH_URL).mock(side_effect=_windowed([_item(n) for n in range(500)]))
+
+        output = await service.track_changes(publisher="DU", date_from="2024-01-01", date_to="2024-12-31", limit=20)
+
+        assert output.total_count == 500
+        assert len(output.changes) == 20
+        assert output.result_set_scope is not None
+        assert output.result_set_scope.scope == "page"
+        assert output.result_set_scope.stored_count == 20
+        assert output.result_set_scope.window_offset == 0
+        assert output.result_set_scope.corpus_count == 500
+
+    @respx.mock
+    async def test_an_empty_filter_on_a_window_is_inconclusive(self, service: ChangesService):
+        """A window that was called COMPLETE let filter_results prove a negative it could not."""
+        respx.get(SEARCH_URL).mock(side_effect=_windowed([_item(n) for n in range(500)]))
+
+        output = await service.track_changes(publisher="DU", date_from="2024-01-01", date_to="2024-12-31", limit=20)
+        assert output.result_set_id is not None
+        filtered = await service._result_store.filter_and_store(output.result_set_id, pattern="nie-ma-takiego-slowa")
+
+        assert filtered.filtered_count == 0
+        assert filtered.no_match_is_inconclusive is True
+
+    @respx.mock
+    async def test_a_range_that_fits_one_page_is_still_complete(self, service: ChangesService, search_results: dict):
+        """Criterion 4 (D6) survives paging: a first page holding the whole range is complete.
+
+        `store()` derives the reach from `window_offset == 0` and `len(results) ==
+        total_count`; the paging change only makes both inputs truthful.
+        """
+        respx.get(SEARCH_URL).mock(side_effect=_windowed(search_results["items"]))
 
         output = await service.track_changes(
             publisher="DU",
@@ -214,4 +307,17 @@ class TestChangesService:
         assert output.result_set_scope is not None
         assert output.result_set_scope.scope == "complete"
         assert output.result_set_scope.window_offset == 0
-        assert output.result_set_scope.corpus_count == output.total_count
+        assert output.result_set_scope.corpus_count == output.total_count == 3
+
+    @respx.mock
+    async def test_a_zero_limit_page_still_reports_the_range_size(self, service: ChangesService):
+        """`limit=0` asks upstream for one record and slices it away, as search and browse do."""
+        route = respx.get(SEARCH_URL).mock(side_effect=_windowed([_item(n) for n in range(50)]))
+
+        output = await service.track_changes(publisher="DU", date_from="2024-01-01", date_to="2024-12-31", limit=0)
+
+        assert route.calls.last.request.url.params["limit"] == "1"
+        assert output.changes == []
+        assert output.page_info.limit == 0
+        assert output.page_info.total_count == 50
+        assert output.result_set_id is None

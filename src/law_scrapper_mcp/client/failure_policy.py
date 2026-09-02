@@ -156,5 +156,12 @@ def backoff(
 
     Returns:
         Number of seconds to wait.
+
+    Attempts below 1 are read as the first (a caller miscounting from zero gets the
+    base, not a fraction of it), and the exponent stops at 32 before the power is
+    taken: `2 ** 1999` does not fit a float and raised `OverflowError` where the cap
+    should simply have won. Both bounds are unreachable through `Settings`, which
+    caps `api_max_attempts` at 20 — this guards the function's own contract.
     """
-    return min(base * (2 ** (attempt - 1)), cap)
+    exponent = min(max(attempt, 1) - 1, 32)
+    return min(base * 2.0**exponent, cap)

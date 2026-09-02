@@ -35,6 +35,16 @@ def enforce_security_boundary(current: Settings) -> Settings:
             )
         if current.auth_token is None and current.auth_token_file is None:
             raise ValueError("Tryb 'bearer' wymaga tokenu. Ustaw LAW_MCP_AUTH_TOKEN albo LAW_MCP_AUTH_TOKEN_FILE.")
+        if current.auth_required_scopes:
+            # The static verifier grants exactly the configured scopes to every
+            # holder of the token, so `RequireAuthMiddleware` is satisfied by
+            # construction and the setting confers no authorization. An operator
+            # who set it believed otherwise; refuse rather than pretend.
+            raise ValueError(
+                "LAW_MCP_AUTH_REQUIRED_SCOPES ma znaczenie tylko w trybie 'oauth'. "
+                "W trybie 'bearer' każdy posiadacz tokenu otrzymuje dokładnie te uprawnienia, "
+                "więc wymaganie ich niczego nie ogranicza. Usuń zmienną albo przejdź na LAW_MCP_AUTH_MODE=oauth."
+            )
         try:
             token = current.resolve_auth_token()
         except (OSError, UnicodeDecodeError) as error:

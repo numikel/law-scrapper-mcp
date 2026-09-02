@@ -119,3 +119,11 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
     app_logger = logging.getLogger("law_scrapper_mcp")
     app_logger.setLevel(log_level)
     app_logger.propagate = True
+
+    # httpx logs every request at INFO with its full URL, query string included.
+    # For `acts/search` that is the caller's search text, which this project
+    # already redacts from its own ERROR records; letting the transport echo it
+    # at INFO would reopen the same leak one layer down. Held at WARNING or the
+    # configured level, whichever is stricter, so a DEBUG run stays quiet too.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(max(log_level, logging.WARNING))

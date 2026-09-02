@@ -46,6 +46,8 @@ jobs:
               - 'tests/**'
               - 'pyproject.toml'
               - 'uv.lock'
+              - 'Dockerfile'
+              - '.dockerignore'
               - '.github/workflows/ci.yml'
 
   lint:
@@ -124,6 +126,11 @@ jobs:
           export LAW_MCP_TRANSPORT=streamable-http
           export LAW_MCP_HOST=127.0.0.1
           export LAW_MCP_PORT=7683
+          # The conformance runner drives every scenario from one loopback peer; the
+          # per-client bucket (burst 10) would answer the sweep with 429s that read
+          # like protocol failures. Throttling has its own tests; this step gates
+          # protocol conformance only.
+          export LAW_MCP_RATE_LIMIT_ENABLED=false
           uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
@@ -141,13 +148,17 @@ jobs:
             cat server.stdout.log || true
             exit 1
           fi
+          # Pinned exactly: the 0.2.0 alpha line is the first to accept the SDK's protocol
+          # era (2026-07-28); @latest (0.1.x) still rejects it. A floating @alpha tag
+          # would make CI results irreproducible between runs.
+          CONFORMANCE_PKG="@modelcontextprotocol/conformance@0.2.0-alpha.11"
           SDK_SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
           PROBE_LOG="$(mktemp)"
           set +e
-          npx --yes @modelcontextprotocol/conformance@latest server \
+          npx --yes "$CONFORMANCE_PKG" server \
             --url http://127.0.0.1:7683/mcp \
             --spec-version "$SDK_SPEC_VERSION" \
-            --scenario server-initialize \
+            --scenario tools-list \
             >"$PROBE_LOG" 2>&1
           PROBE_STATUS=$?
           set -e
@@ -162,11 +173,60 @@ jobs:
             cat "$PROBE_LOG"
             exit "$PROBE_STATUS"
           fi
-          npx --yes @modelcontextprotocol/conformance@latest server \
+          npx --yes "$CONFORMANCE_PKG" server \
             --url http://127.0.0.1:7683/mcp \
             --spec-version "$SDK_SPEC_VERSION" \
             --expected-failures ./conformance-baseline.yml
 
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
+
+  docker:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the image
+        if: needs.changes.outputs.code == 'true'
+        run: docker build -t law-scrapper-mcp:ci .
+      - name: Smoke-test the HTTP transport
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The image inherits the loopback bind (D19); publishing it needs the
+          # explicit host override together with an auth mode, exactly as the
+          # README's Docker section describes. The token is throwaway.
+          docker run -d --name lsm-http -p 7683:7683             -e LAW_MCP_HOST=0.0.0.0             -e LAW_MCP_AUTH_MODE=bearer             -e LAW_MCP_AUTH_TOKEN="$(openssl rand -base64 32)"             law-scrapper-mcp:ci
+          trap 'docker logs lsm-http || true; docker rm -f lsm-http >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..40}; do
+            if body="$(curl --fail --silent http://127.0.0.1:7683/health)"; then
+              echo "$body"
+              grep -q '"status":"ok"' <<<"$body"
+              exit 0
+            fi
+            sleep 0.25
+          done
+          echo "Container /health did not become ready in time"
+          exit 1
+      - name: Smoke-test the STDIO transport
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # What an MCP registry runner does: start the container on stdio and
+          # send one initialize request. LAW_MCP_TRANSPORT=stdio overrides the
+          # image's baked streamable-http default, so this also pins that the
+          # override path works.
+          request='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+          reply="$(printf '%s\n' "$request" | timeout 60 docker run -i --rm -e LAW_MCP_TRANSPORT=stdio law-scrapper-mcp:ci | head -n 1)"
+          echo "${reply:0:200}"
+          grep -q '"serverInfo"' <<<"$reply"
+          grep -q '"law-scrapper-mcp"' <<<"$reply"
+      - name: Runs as a non-root user
+        if: needs.changes.outputs.code == 'true'
+        run: test "$(docker run --rm --entrypoint id law-scrapper-mcp:ci -u)" != "0"
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

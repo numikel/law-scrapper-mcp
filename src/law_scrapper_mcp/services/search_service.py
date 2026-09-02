@@ -133,8 +133,11 @@ class SearchService:
         # does with `limit=0` is unverified, and a zero-item page still owes the caller a
         # truthful `totalCount`. `_output` slices the record away either way.
         params["limit"] = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 1)
-        if offset:
-            params["offset"] = offset
+        # Clamped before the wire, not only in `_output`: `if offset:` is true for -5
+        # and forwarded it verbatim while the page metadata reported zero (#18).
+        page_offset = max(offset or 0, 0)
+        if page_offset:
+            params["offset"] = page_offset
 
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
@@ -158,8 +161,8 @@ class SearchService:
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
-            offset=offset or 0,
-            window_offset=offset or 0,
+            offset=page_offset,
+            window_offset=page_offset,
         )
 
     async def browse(
@@ -181,11 +184,12 @@ class SearchService:
         whenever the parameters match exactly. That is deliberate (D8), not an
         oversight: both calls ask the API the same question and get the same answer,
         and giving `browse` its own key prefix would fetch the same year twice — more
-        outbound traffic, which is what this whole change exists to reduce. Because
-        the cache key does not include TTL (`cache_search_ttl=600` vs
-        `cache_browse_ttl=3600`), whichever call stores the entry first decides
-        freshness for both — the 6× TTL difference stops applying to whichever method
-        writes the cache entry second.
+        outbound traffic, which is what this whole change exists to reduce. The cache
+        key does not include TTL (`cache_search_ttl=600` vs `cache_browse_ttl=3600`),
+        but each read is bounded by its own caller's TTL (`TTLCache.get(max_age=...)`):
+        a `search()` call refuses an entry `browse()` wrote more than 600 s ago and
+        refetches, while `browse()` keeps reading the shared entry for its full hour.
+        `track_legal_changes` joins the same key space since it sends `limit` (#54).
 
         `limit` is clamped by the calling tool, not here, and that clamp is load-bearing
         now rather than cosmetic: `acts/search` honours `limit`, so it decides how wide a
@@ -242,7 +246,10 @@ class SearchService:
         if detail_level in (DetailLevel.STANDARD, DetailLevel.FULL):
             output.type = item.get("type")
             output.promulgation_date = item.get("promulgation")
-            output.effective_date = item.get("dateEffect")
+            # `entryIntoForce`, not `dateEffect`: the latter is a key neither endpoint
+            # returns (tests/fixtures/browse_page.provenance.md), so it read None on
+            # every record ever formatted (#52).
+            output.effective_date = item.get("entryIntoForce")
             output.in_force = item.get("inForce")
 
         return output

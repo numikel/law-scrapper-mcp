@@ -22,24 +22,15 @@ def bearer_app(monkeypatch: pytest.MonkeyPatch):
     `importlib.reload(config)` would rebuild the `settings` singleton that five
     service modules already captured by value at their own import time,
     leaving them out of sync with `server.settings` until a second reload — a
-    global side effect that survives a setup failure (a reload raising
-    partway through skips this generator's post-`yield` teardown entirely).
+    global side effect that survives a setup failure.
 
-    Instead, this patches only what `server.py`'s call graph actually reads at
-    request time: the module-level `settings` name (read fresh by
-    `build_http_app`/`build_transport_security`/`health`, since Python looks up
-    module globals by name on every call) and the already-constructed `app`
-    instance's `settings.auth` / `_token_verifier` (read fresh by
-    `MCPServer.streamable_http_app` on every call — confirmed in the SDK
-    source, not assumed). Nothing under `sys.modules` is touched, so the five
-    service modules' own `settings` references are untouched by construction,
-    not by convention.
-
-    Every mutation goes through `monkeypatch.setattr`, whose own fixture
-    (`yield mpatch; mpatch.undo()`) records each change immediately and undoes
-    it in its own guaranteed teardown — independent of whether this fixture's
-    body raises before reaching `yield`. There is nothing left for a manual
-    `try/finally` to protect that `monkeypatch` doesn't already protect.
+    Instead, this patches the one name `build_http_app()` derives everything
+    from: the module-level `settings` (read fresh by every bootstrap function,
+    since Python looks up module globals by name on every call). Auth is not
+    assembled here — `build_http_app()` is the single derivation point for the
+    HTTP surface (#41) and writes `app.settings.auth` / `app._token_verifier`
+    itself. Those two lines below only register the current values so that
+    monkeypatch restores them for the other tests sharing the `app` instance.
     """
     bearer_settings = Settings(
         transport="streamable-http",
@@ -47,11 +38,9 @@ def bearer_app(monkeypatch: pytest.MonkeyPatch):
         auth_token=TOKEN,
         rate_limit_enabled=False,
     )
-    auth_settings, token_verifier = build_auth(bearer_settings)
-
     monkeypatch.setattr(server_module, "settings", bearer_settings)
-    monkeypatch.setattr(server_module.app.settings, "auth", auth_settings)
-    monkeypatch.setattr(server_module.app, "_token_verifier", token_verifier)
+    monkeypatch.setattr(server_module.app.settings, "auth", server_module.app.settings.auth)
+    monkeypatch.setattr(server_module.app, "_token_verifier", server_module.app._token_verifier)
 
     yield server_module.build_http_app()
 

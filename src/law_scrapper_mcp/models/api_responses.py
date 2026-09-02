@@ -20,7 +20,10 @@ class ActSummary(BaseModel):
     status: str
     type: str | None = None
     promulgation: str | None = None
-    dateEffect: str | None = None
+    # The key the API actually returns for the entry-into-force date, on both the
+    # search and the detail endpoints. `dateEffect` was a phantom that never
+    # deserialised anything (#52).
+    entryIntoForce: str | None = None
     inForce: str | None = None
 
 
@@ -28,7 +31,6 @@ class ActDetail(ActSummary):
     """Detailed information about a legal act."""
 
     announcementDate: str | None = None
-    entryIntoForce: str | None = None
     validFrom: str | None = None
     repealDate: str | None = None
     changeDate: str | None = None

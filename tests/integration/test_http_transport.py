@@ -16,8 +16,8 @@ from mcp import Client
 from mcp.types import CLIENT_CAPABILITIES_META_KEY, LATEST_PROTOCOL_VERSION, PROTOCOL_VERSION_META_KEY
 from starlette.testclient import TestClient
 
+from law_scrapper_mcp import server as server_module
 from law_scrapper_mcp.config import settings
-from law_scrapper_mcp.server import app, build_transport_security
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -32,19 +32,28 @@ LIVE_SERVER_TOKEN = "k" * 32
 
 
 @pytest.fixture
-def asgi_app():
-    # host="0.0.0.0" mirrors the production bind address (Docker port publishing).
-    # The SDK only auto-enables Host/Origin validation for a literal loopback
-    # `host`, so this fixture must pass `transport_security` explicitly, exactly
-    # like `server.main()` does, or it would silently test a less-protected app
-    # than what actually runs. The allowlist itself now comes from `Settings`,
-    # not a hardcoded constant — `build_transport_security()` reads it live.
-    return app.streamable_http_app(
-        streamable_http_path="/mcp",
-        stateless_http=True,
-        host="0.0.0.0",
-        transport_security=build_transport_security(),
-    )
+def asgi_app(monkeypatch: pytest.MonkeyPatch):
+    """The app exactly as `build_http_app()` assembles it, bound like production.
+
+    host="0.0.0.0" mirrors the production bind address (Docker port publishing).
+    The SDK only auto-enables Host/Origin validation for a literal loopback
+    `host`, so a fixture bound to the default 127.0.0.1 would pass the forged
+    Host/Origin tests even if `build_http_app()` stopped passing
+    `transport_security`. `Settings` refuses that bind under `auth_mode=none`
+    at construction, which is why the attribute is patched on the live instance
+    rather than passed to `Settings()`. Going through `build_http_app()` rather
+    than calling `streamable_http_app()` by hand means the middleware stack
+    (credential stripper, rate limiter) and the auth derivation are the ones
+    that actually run — not a hand-rolled approximation of them.
+    """
+    monkeypatch.setattr(server_module.settings, "host", "0.0.0.0")
+    # `build_http_app()` writes the derived auth pair onto the shared `app` singleton,
+    # so registering the current values first is what makes that write reversible —
+    # otherwise this fixture leaks the last derivation into every later test in the
+    # session. The same idiom guards `test_http_auth.bearer_app`.
+    monkeypatch.setattr(server_module.app.settings, "auth", server_module.app.settings.auth)
+    monkeypatch.setattr(server_module.app, "_token_verifier", server_module.app._token_verifier)
+    return server_module.build_http_app()
 
 
 def _rpc(client: TestClient, method: str, params: dict[str, object], request_id: int):
@@ -141,7 +150,7 @@ def test_forged_host_header_is_rejected(asgi_app) -> None:
     Regression test: binding host="0.0.0.0" (this project's Docker default)
     disables the SDK's auto-enabled DNS-rebinding protection, because the SDK
     only auto-enables it for a literal loopback `host` value. Without the
-    explicit `transport_security` passed in `server.main()`, this request
+    explicit `transport_security` passed in `build_http_app()`, this request
     returned 200.
     """
     with TestClient(asgi_app) as client:
@@ -275,13 +284,18 @@ def live_http_server(tmp_path: Path):
             "LAW_MCP_TRANSPORT": "streamable-http",
             # Mirror the production bind address. A literal loopback host would
             # make the SDK enable Host/Origin validation on its own, so the
-            # explicit `transport_security` in `main()` could be deleted without
-            # any test noticing.
+            # explicit `transport_security` in `build_http_app()` could be
+            # deleted without any test noticing.
             "LAW_MCP_HOST": "0.0.0.0",
             "LAW_MCP_PORT": str(port),
             # Required since Task 1: a non-loopback bind is refused under auth_mode="none".
             "LAW_MCP_AUTH_MODE": "bearer",
             "LAW_MCP_AUTH_TOKEN": LIVE_SERVER_TOKEN,
+            # These tests gate protocol behaviour, not throttling, and every request
+            # in a test comes from the same loopback peer. Leaving the per-client
+            # bucket on (burst 10) would turn a future extra call into a 429 that
+            # reads like a transport failure; throttling keeps its own unit tests.
+            "LAW_MCP_RATE_LIMIT_ENABLED": "false",
         }
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(
@@ -330,11 +344,13 @@ async def test_live_http_discovery_tools_success_and_error(live_http_server: str
 
 @pytest.mark.anyio
 async def test_live_server_enforces_allowlist_and_statelessness(live_http_server: str) -> None:
-    """Guard `main()` itself.
+    """Guard the real process, `main()` → `build_uvicorn_config()` → `build_http_app()`.
 
-    Every other transport test builds its own ASGI app and supplies
-    `transport_security` from the test side, so deleting it from `main()` would
-    not fail any of them. This test drives the real subprocess instead.
+    The in-process tests above go through `build_http_app()` too, but with a
+    patched bind address and no uvicorn in the stack. This test drives the
+    real subprocess so that the wiring `main()` performs on top —
+    `proxy_headers=False`, `ws="none"`, the graceful window — is exercised at
+    least once, not only the ASGI app underneath it.
     """
     body = {
         "jsonrpc": "2.0",
@@ -406,7 +422,7 @@ async def test_health_answers_while_a_document_is_converting(
             raise RuntimeError("no structure for this act")
         return act_detail
 
-    async def fake_get_act_html(publisher: str, year: int, pos: int) -> str:
+    async def fake_get_act_html(publisher: str, year: int, pos: int, *, max_bytes: int | None = None) -> str:
         return "<html><body><h1>Ustawa</h1></body></html>"
 
     monkeypatch.setattr(mock_client, "get_json", fake_get_json)

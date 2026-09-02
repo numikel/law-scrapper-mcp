@@ -12,6 +12,7 @@ from law_scrapper_mcp.models.tool_outputs import ContentOutput, SearchInActOutpu
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.pagination import (
     effective_limit,
+    item_page_info,
     paginate_items,
     paginate_text,
     parse_non_negative,
@@ -93,17 +94,18 @@ class ContentService:
     ) -> SearchInActOutput:
         """Return one page of in-act matches with their surrounding context.
 
-        Scanning covers the whole document, so `total_count` stays exact.
-        Context slicing and section attribution are paid only for the spans
-        that belong to the requested page.
+        Scanning covers the whole document, so `total_count` stays exact, but
+        the store keeps only the requested window of spans, so memory is
+        bounded by `limit` rather than by the number of matches. Context
+        slicing and section attribution are paid only for that window.
         """
         requested_context = parse_non_negative(context_chars, name="context_chars", default=DEFAULT_CONTEXT_CHARS)
         context_size = min(requested_context, MAX_CONTEXT_CHARS)
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
 
-        spans = await self._document_store.scan(eli, query)
-        page_spans, page_info = paginate_items(spans, limit=page_limit, offset=page_offset)
+        page_spans, total = await self._document_store.scan_page(eli, query, limit=page_limit, offset=page_offset)
+        page_info = item_page_info(limit=page_limit, offset=page_offset, returned=len(page_spans), total=total)
         hits = await self._document_store.hydrate(eli, page_spans, context_chars=context_size)
 
         matches = [

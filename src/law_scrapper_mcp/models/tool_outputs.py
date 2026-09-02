@@ -7,7 +7,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
-from law_scrapper_mcp.models.pagination import PageInfo
+from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, PageInfo
 
 T = TypeVar("T")
 
@@ -39,7 +39,7 @@ class ActSummaryOutput(BaseModel):
     status: str
     type: str | None = None
     promulgation_date: str | None = None
-    effective_date: str | None = None
+    effective_date: str | None = Field(default=None, description="Data wejścia w życie (entryIntoForce).")
     in_force: str | None = None
 
 
@@ -134,8 +134,8 @@ class SearchInActOutput(BaseModel):
     matches: list[dict[str, Any]]
     total_matches: int
     page_info: PageInfo
-    context_chars_requested: int = 500
-    context_chars_applied: int = 500
+    context_chars_requested: int = DEFAULT_CONTEXT_CHARS
+    context_chars_applied: int = DEFAULT_CONTEXT_CHARS
 
 
 class MetadataOutput(BaseModel):
@@ -169,8 +169,9 @@ class ChangesOutput(BaseModel):
     result_set_scope: ResultSetScope | None = Field(
         default=None,
         description=(
-            "Zasięg zapisanego zestawu zmian. Zawsze 'complete' dla niepustego wyniku — "
-            "to jedyne narzędzie, którego zestaw filter_results przeszukuje w całości."
+            "Zasięg zapisanego zestawu zmian: 'complete', gdy pierwsza strona mieści cały "
+            "zakres dat, albo 'page', gdy zakres jest szerszy niż jedna strona — wtedy "
+            "filter_results przeszukuje tylko to okno."
         ),
     )
     page_info: PageInfo

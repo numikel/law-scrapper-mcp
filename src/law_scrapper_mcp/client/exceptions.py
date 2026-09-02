@@ -51,17 +51,63 @@ class ContentTooLargeError(LawScrapperError):
     Refusal, not truncation: a legal act cut mid-clause is a silent loss the
     model cannot detect, while a refusal naming the source URL is one it can
     act on. The message is Polish because the agent reads it.
+
+    `exact=False` marks a size measured on a download aborted at the budget:
+    the body is known to be *at least* that large, and the message says so
+    rather than quoting a running total as the document's size.
     """
 
-    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str):
-        super().__init__(
-            f"Treść aktu {eli} ma {size_bytes} B i przekracza limit {limit_bytes} B, "
-            f"więc nie została przetworzona. Pobierz plik źródłowy: {pdf_url}"
-        )
+    @staticmethod
+    def _measured(size_bytes: int, *, exact: bool) -> str:
+        """Render a size that may be a lower bound rather than a total."""
+        return f"{size_bytes} B" if exact else f"co najmniej {size_bytes} B"
+
+    def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None, *, exact: bool = True):
+        measured = self._measured(size_bytes, exact=exact)
+        message = f"Treść aktu {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
+        if pdf_url is not None:
+            message += f" Pobierz plik źródłowy: {pdf_url}"
+        super().__init__(message)
         self.eli = eli
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes
         self.pdf_url = pdf_url
+        self.exact = exact
+
+
+class ResponseTooLargeError(ContentTooLargeError):
+    """A response body ran past its byte budget while it was still streaming in.
+
+    Raised by the client, which knows the URL and the budget but neither the act
+    nor the source file an agent should fetch instead; `ActService` re-raises it
+    as a full `ContentTooLargeError` carrying that context. Subclassed so that a
+    refusal which slips through untranslated still lands in the same tool error
+    category as the post-hoc size gates, instead of falling through as an
+    internal error.
+
+    `exact` is `True` when the size came from `Content-Length` and the body was
+    never read, `False` when the download was aborted at `size_bytes` — the
+    body is then known only to be at least that large.
+    """
+
+    def __init__(self, url: str, size_bytes: int, limit_bytes: int, *, exact: bool):
+        # The parent's message is shaped around an act; this one has only a URL,
+        # so the base class is initialised directly with a message of its own.
+        measured = self._measured(size_bytes, exact=exact)
+        LawScrapperError.__init__(
+            self,
+            f"Odpowiedź z {url} ma {measured} i przekracza limit {limit_bytes} B, więc pobieranie przerwano.",
+        )
+        self.url = url
+        self.size_bytes = size_bytes
+        self.limit_bytes = limit_bytes
+        self.exact = exact
+        # Every `ContentTooLargeError` promises these two, and being a subclass is the
+        # whole point of this class — a refusal that slips through untranslated must
+        # land in the same handler. They are present and empty, not absent, so that
+        # handler reads "no act context here" instead of raising `AttributeError`.
+        self.eli = ""
+        self.pdf_url = None
 
 
 class DocumentNotLoadedError(LawScrapperError):

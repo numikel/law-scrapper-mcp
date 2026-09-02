@@ -198,6 +198,23 @@ class TestBrowsePage:
         params = client.get_json.await_args.kwargs["params"]
         assert (params["limit"], params["offset"]) == (10, 30)
 
+    async def test_the_last_partial_page_is_reported_as_the_end(self) -> None:
+        """Issue #50: five records left of fifty at offset 45 is the end, not a truncation.
+
+        The page is shorter than `limit`, so `was_truncated` must be False and no
+        `next_offset` offered — an agent following one would fetch an empty page.
+        """
+        service, _ = _paging_service(50)
+
+        output = await service.browse("DU", 2024, limit=10, offset=45)
+
+        assert output.returned_count == 5
+        assert [act.eli for act in output.results] == [f"DU/2024/{n}" for n in range(45, 50)]
+        assert output.page_info.returned_count == 5
+        assert output.page_info.total_count == 50
+        assert output.page_info.was_truncated is False
+        assert output.page_info.next_offset is None
+
     async def test_offset_past_the_end_returns_an_empty_untruncated_page(self) -> None:
         service, _ = _paging_service(5)
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
+from starlette.types import Scope
 
 from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 
@@ -15,7 +18,7 @@ async def _ok(_request):
     return JSONResponse({"ok": True})
 
 
-def build_client(**overrides) -> TestClient:
+def build_client(*, client: tuple[str, int] = ("127.0.0.1", 50000), **overrides) -> TestClient:
     kwargs = {"requests": 5, "window": 60.0, "burst": 5, "trusted_proxies": []}
     kwargs.update(overrides)
     inner = Starlette(routes=[Route("/mcp", _ok, methods=["GET"]), Route("/health", _ok)])
@@ -23,7 +26,7 @@ def build_client(**overrides) -> TestClient:
     # IP — real uvicorn deployments populate scope["client"] with an actual
     # address. Pin a loopback IP so tests exercising `trusted_proxies` CIDR
     # matching see something that can actually be parsed as an IP.
-    return TestClient(RateLimitMiddleware(inner, **kwargs), client=("127.0.0.1", 50000))
+    return TestClient(RateLimitMiddleware(inner, **kwargs), client=client)
 
 
 def test_requests_within_the_bucket_pass() -> None:
@@ -55,9 +58,57 @@ def test_bucket_refills_over_time(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_health_is_exempt_from_rate_limit() -> None:
-    """Criterion 16 (D12): the container probe must not share the budget."""
+    """Criterion 16 (D12): the container probe must not share the budget.
+
+    The probe in docker-compose.yml runs inside the container, so it arrives
+    from the loopback — that is the peer the exemption exists for.
+    """
     client = build_client(requests=1, burst=1)
     assert [client.get("/health").status_code for _ in range(10)] == [200] * 10
+
+
+def test_health_from_ipv6_loopback_is_exempt() -> None:
+    client = build_client(requests=1, burst=1, client=("::1", 50000))
+    assert [client.get("/health").status_code for _ in range(10)] == [200] * 10
+
+
+def test_health_from_a_non_loopback_peer_is_metered() -> None:
+    """#39: a blanket exemption made `/health` an unmetered route for anyone.
+
+    Only the container's own probe needs the exemption; a remote peer looping
+    over `/health` gets the same per-client bucket as every other request.
+    """
+    client = build_client(requests=1, burst=1, client=("203.0.113.5", 5000))
+    assert client.get("/health").status_code == 200
+    assert client.get("/health").status_code == 429
+
+
+def test_health_without_a_client_address_is_metered() -> None:
+    """A scope with no `client` cannot prove it is local, so it is not exempt."""
+    middleware = RateLimitMiddleware(
+        Starlette(routes=[Route("/health", _ok)]),
+        requests=1,
+        window=60.0,
+        burst=1,
+        trusted_proxies=[],
+    )
+    statuses: list[int] = []
+
+    async def send(message) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(message["status"])
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def drive() -> None:
+        for _ in range(2):
+            scope = {"type": "http", "method": "GET", "path": "/health", "headers": [], "query_string": b""}
+            await middleware(scope, receive, send)
+
+    asyncio.run(drive())
+
+    assert statuses == [200, 429]
 
 
 def test_xff_from_untrusted_peer_is_ignored() -> None:
@@ -69,7 +120,8 @@ def test_xff_from_untrusted_peer_is_ignored() -> None:
 
 
 def test_xff_from_trusted_peer_splits_the_buckets() -> None:
-    """TestClient presents itself as testclient/127.0.0.1."""
+    """`build_client` pins the peer to 127.0.0.1, inside the trusted range, so
+    the forwarded address becomes the key and each client gets its own bucket."""
     client = build_client(burst=1, trusted_proxies=["127.0.0.0/8"])
     assert client.get("/mcp", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 200
     assert client.get("/mcp", headers={"X-Forwarded-For": "5.6.7.8"}).status_code == 200
@@ -102,10 +154,37 @@ def test_idle_buckets_are_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_non_http_scope_passes_through() -> None:
-    """Lifespan and websocket scopes carry no client address."""
-    client = build_client()
-    with client:  # entering the context manager runs the lifespan scope
-        assert client.get("/mcp").status_code == 200
+    """Lifespan scopes carry no client address and must not be metered.
+
+    The middleware is driven with the scope directly: the earlier version
+    entered a `TestClient` context and then asserted an unrelated `GET`
+    succeeded, which passed even when the lifespan scope was consumed as a
+    request. What matters is that the inner app receives the very same scope
+    object and that no bucket is created for it.
+    """
+    received: list[Scope] = []
+
+    async def inner(scope: Scope, receive, send) -> None:
+        received.append(scope)
+
+    middleware = RateLimitMiddleware(inner, requests=1, window=60.0, burst=1, trusted_proxies=[])
+    lifespan_scope: Scope = {"type": "lifespan"}
+
+    async def receive():
+        return {"type": "lifespan.startup"}
+
+    async def send(message) -> None:
+        return None
+
+    async def drive() -> None:
+        for _ in range(3):  # more than the burst — a metered scope would be refused
+            await middleware(lifespan_scope, receive, send)
+
+    asyncio.run(drive())
+
+    assert received == [lifespan_scope, lifespan_scope, lifespan_scope]
+    assert all(scope is lifespan_scope for scope in received)
+    assert middleware._buckets == {}
 
 
 def build_header_spy_client(**overrides) -> tuple[TestClient, list[list[str]]]:

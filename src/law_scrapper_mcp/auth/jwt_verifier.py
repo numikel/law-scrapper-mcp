@@ -108,12 +108,22 @@ class JwtTokenVerifier:
         )
 
     async def _jwk_client(self) -> PyJWKClient:
-        """Build the key-set client once, discovering its URI if needed."""
-        if self._client is not None:
-            return self._client
+        """Build the key-set client once, discovering its URI if needed.
+
+        The lock publishes the client exactly once; it does not cover the
+        discovery round trip (D5). Holding it across the network call would
+        serialise every verification in the process behind one slow identity
+        provider, and a stalled discovery would then stall all of them — the
+        outage-as-lockout shape the missing circuit breaker above is careful
+        not to create. A cold race may run discovery twice; only the first
+        result is published, and the duplicate request is the cheaper wrong.
+        """
+        async with self._lock:
+            if self._client is not None:
+                return self._client
+        uri = self._configured_jwks_uri or await self._discover_jwks_uri()
         async with self._lock:
             if self._client is None:
-                uri = self._configured_jwks_uri or await self._discover_jwks_uri()
                 # `cache_keys=True` is deliberately absent. It would enable
                 # PyJWT's second cache tier: an `lru_cache` over individual
                 # signing keys with no time-based expiry at all

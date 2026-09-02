@@ -18,7 +18,11 @@ services:
     # Must stay >= 2 x LAW_MCP_SHUTDOWN_GRACE (default 15s). Nothing in the code
     # enforces the relation. The process needs its full graceful window before
     # Docker sends SIGKILL; equal values would race, and the lifespan `finally`
-    # could be cut off halfway through closing the HTTP client.
+    # could be cut off halfway through closing the HTTP client. The factor of
+    # two also covers the interpreter's own exit: document conversions run in
+    # `asyncio.to_thread`, and the event loop joins that executor on shutdown,
+    # so a conversion in flight when the graceful window ends still has to
+    # finish before the process can exit.
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7683/health', timeout=5)"]

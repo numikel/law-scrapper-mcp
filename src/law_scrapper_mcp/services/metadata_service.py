@@ -40,11 +40,6 @@ class MetadataService:
             return await self._fetch_all(ttl)
         return {category.value: await self._fetch_category(category, ttl)}, ()
 
-    async def get_metadata(self, category: MetadataCategory) -> dict[str, Any]:
-        """Retrieve metadata for the given category or all categories."""
-        raw, _ = await self._fetch(category)
-        return raw
-
     async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Fetch every category concurrently, preserving METADATA_ORDER.
 

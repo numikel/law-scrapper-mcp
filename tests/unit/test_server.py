@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from typing import Any
 
 import httpx
 import pytest
@@ -62,31 +62,96 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
         assert set(tool.output_schema["properties"]) != {"result"}
 
 
-async def test_scope_fields_reach_the_output_schemas() -> None:
-    """Criterion 20: the new contract is visible to clients, and nothing was dropped."""
-    expected_new = {
-        "search_legal_acts": "result_set_scope",
-        "browse_acts": "result_set_scope",
-        "track_legal_changes": "result_set_scope",
-        "filter_results": "no_match_is_inconclusive",
-        "list_result_sets": "scope",
-    }
-    expected_kept = {
-        "search_legal_acts": "total_count",
-        "browse_acts": "result_set_id",
-        "track_legal_changes": "date_range",
-        "filter_results": "filtered_count",
-        "list_result_sets": "result_count",
-    }
+def _resolve(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
+    """Follow a local `$ref` into the schema's `$defs`; return other nodes as they are."""
+    ref = node.get("$ref")
+    if ref is None:
+        return node
+    prefix = "#/$defs/"
+    assert ref.startswith(prefix), f"non-local $ref {ref!r}"
+    return schema["$defs"][ref[len(prefix) :]]
 
+
+def _property(schema: dict[str, Any], path: str) -> dict[str, Any]:
+    """Return the raw property node at `path` under the tool's `data` payload.
+
+    Segments are property names; a trailing `[]` steps into a list's `items`.
+    """
+    node = _resolve(schema, schema["properties"]["data"])
+    for segment in path.split("."):
+        name, _, suffix = segment.partition("[")
+        node = node["properties"][name]
+        if suffix:
+            node = _resolve(schema, node)["items"]
+        node = _resolve(schema, node)
+    return node
+
+
+def _nullable_ref(schema: dict[str, Any], node: dict[str, Any], model: str) -> dict[str, Any]:
+    """Assert `node` is an optional reference to `model` and return the referenced model."""
+    assert node.get("anyOf") == [{"$ref": f"#/$defs/{model}"}, {"type": "null"}], node
+    assert node.get("default") is None
+    return schema["$defs"][model]
+
+
+def _assert_result_set_scope(schema: dict[str, Any], node: dict[str, Any]) -> None:
+    """`ResultSetScope` must reach the client with its enum and its nullable corpus size."""
+    scope = node["properties"]["scope"]
+    assert _resolve(schema, scope)["enum"] == ["complete", "page"]
+    assert node["properties"]["corpus_count"]["anyOf"] == [{"type": "integer"}, {"type": "null"}]
+    assert {"scope", "stored_count", "window_offset"} <= set(node["required"])
+
+
+async def test_scope_fields_reach_the_output_schemas() -> None:
+    """Criterion 20: the scope contract is typed in the schemas, and nothing was dropped.
+
+    A substring check over the serialised schema would still pass if a field
+    were retyped to `str`, moved into a description, or lost its enum; every
+    property is therefore resolved through `$defs` and pinned by type.
+    """
     async with Client(app) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    schemas = {name: tool.output_schema for name, tool in tools.items()}
+    for name in ("search_legal_acts", "browse_acts", "track_legal_changes", "filter_results", "list_result_sets"):
+        assert schemas[name] is not None, f"{name} has no output schema"
 
-    for name, field in expected_new.items():
-        assert tools[name].output_schema is not None
-        assert field in json.dumps(tools[name].output_schema), f"{name} lost {field}"
-    for name, field in expected_kept.items():
-        assert field in json.dumps(tools[name].output_schema), f"{name} dropped {field}"
+    for name in ("search_legal_acts", "browse_acts"):
+        schema = schemas[name]
+        assert schema is not None
+        data = _resolve(schema, schema["properties"]["data"])
+        scope = _nullable_ref(schema, data["properties"]["result_set_scope"], "ResultSetScope")
+        _assert_result_set_scope(schema, scope)
+        assert _property(schema, "total_count") == {"title": "Total Count", "type": "integer"}
+        assert _property(schema, "result_set_id")["anyOf"] == [{"type": "string"}, {"type": "null"}]
+
+    changes = schemas["track_legal_changes"]
+    assert changes is not None
+    data = _resolve(changes, changes["properties"]["data"])
+    _assert_result_set_scope(changes, _nullable_ref(changes, data["properties"]["result_set_scope"], "ResultSetScope"))
+    assert _property(changes, "date_range") == {"title": "Date Range", "type": "string"}
+
+    filtered = schemas["filter_results"]
+    assert filtered is not None
+    data = _resolve(filtered, filtered["properties"]["data"])
+    inconclusive = data["properties"]["no_match_is_inconclusive"]
+    assert inconclusive["type"] == "boolean"
+    assert inconclusive["default"] is False
+    assert data["properties"]["source_scope"] == {
+        "$ref": "#/$defs/ResultSetScope",
+        "description": data["properties"]["source_scope"]["description"],
+    }
+    assert "source_scope" in data["required"]
+    _assert_result_set_scope(
+        filtered, _nullable_ref(filtered, data["properties"]["result_set_scope"], "ResultSetScope")
+    )
+    assert _property(filtered, "filtered_count") == {"title": "Filtered Count", "type": "integer"}
+
+    listing = schemas["list_result_sets"]
+    assert listing is not None
+    entry = _property(listing, "sets[]")
+    assert _resolve(listing, entry["properties"]["scope"])["enum"] == ["complete", "page"]
+    assert "scope" in entry["required"]
+    assert _property(listing, "sets[].result_count") == {"title": "Result Count", "type": "integer"}
 
 
 async def test_lifespan_yields_services() -> None:

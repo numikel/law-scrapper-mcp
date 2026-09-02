@@ -495,6 +495,7 @@ def test_lifespan_wires_client_settings_into_the_client() -> None:
     assert "max_concurrent_content=settings.api_max_concurrent_content" in source
     assert "rate_per_second=settings.api_rate_per_second" in source
     assert "rate_burst=settings.api_rate_burst" in source
+    assert "max_server_pause=settings.api_max_server_pause" in source
     assert "user_agent=settings.user_agent" in source
 
 
@@ -530,6 +531,7 @@ async def test_the_lifespan_hands_the_client_the_configured_pace(monkeypatch: py
         api_max_concurrent_content=4,
         api_max_attempts=2,
         api_retry_budget=7.0,
+        api_max_server_pause=90.0,
     )
     monkeypatch.setattr(server, "settings", configured)
 
@@ -542,5 +544,6 @@ async def test_the_lifespan_hands_the_client_the_configured_pace(monkeypatch: py
             assert client._semaphores[RequestClass.HEAVY]._value == 4
             assert client._max_attempts == 2
             assert client._retry_budget == pytest.approx(7.0)
+            assert client._rate_limiter.max_pause == pytest.approx(90.0)
         finally:
             await client.close()

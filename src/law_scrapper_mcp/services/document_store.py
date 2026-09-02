@@ -7,8 +7,9 @@ import time
 from bisect import bisect_right
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 
-from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import LoadedDocumentInfo, LoadedDocumentListOutput
 from law_scrapper_mcp.services.content_processor import Section
@@ -35,6 +36,14 @@ class LoadedDocument:
     def __post_init__(self) -> None:
         self.size_bytes = len(self.markdown.encode("utf-8"))
         self.sections = sorted(self.sections, key=lambda section: section.start_pos)
+        # `section_for_position` relies on disjoint ranges; a producer that
+        # violates that would misattribute hits silently, so refuse it here.
+        for current, following in pairwise(self.sections):
+            if current.end_pos is not None and current.end_pos > following.start_pos:
+                raise ValueError(
+                    f"Sekcje aktu {self.eli} nakładają się: '{current.title}' kończy się na pozycji "
+                    f"{current.end_pos}, a '{following.title}' zaczyna się na pozycji {following.start_pos}."
+                )
         self.section_starts = tuple(section.start_pos for section in self.sections)
 
 
@@ -46,15 +55,22 @@ def section_for_position(
 ) -> tuple[str, str]:
     """Return the (id, title) of the section covering `position`.
 
-    Sections occupy disjoint, increasing ranges, so the candidate is the last
-    section starting at or before `position`. A linear scan over `sections`
-    would make in-act search cost matches x sections; this is logarithmic.
+    Precondition: `sections` is sorted by `start_pos` and the ranges are
+    disjoint, so the candidate is the last section starting at or before
+    `position`. `ContentProcessor.index_sections` guarantees this — each
+    section ends where the next begins — and `LoadedDocument.__post_init__`
+    rejects any producer that does not. A linear scan over `sections` would
+    make in-act search cost matches x sections; this is logarithmic.
+
+    Only `end_pos is None` means "extends to the end of the document"; an
+    explicit `0` is an empty range, not an open-ended one.
     """
     index = bisect_right(section_starts, position) - 1
     if index < 0:
         return UNKNOWN_SECTION
     section = sections[index]
-    if position < (section.end_pos or document_length):
+    end = section.end_pos if section.end_pos is not None else document_length
+    if position < end:
         return section.id, section.title
     return UNKNOWN_SECTION
 
@@ -75,16 +91,17 @@ class DocumentStore:
 
     Invariant, load-bearing: **no critical section of this class may contain an
     `await`**. Because none does, the lock is never held across a suspension
-    point, so an uncontended `Lock.acquire()` never yields and the scan/hydrate
-    sequence in `ContentService.search` is atomic with respect to the event
-    loop. That is the only reason `page_info.returned_count` cannot exceed the
-    number of hits actually returned.
+    point, so an uncontended `Lock.acquire()` never yields and the
+    scan_page/hydrate sequence in `ContentService.search` is atomic with
+    respect to the event loop. That is the only reason
+    `page_info.returned_count` cannot exceed the number of hits actually
+    returned.
 
     Adding a suspension point inside any critical section — moving the regex
     scan to `run_in_executor`, for instance — breaks that atomicity and makes
     it possible for `hydrate` to build context from a document that replaced
-    the one `scan` measured. The span filter guards ranges, not identity, so
-    such a mismatch would be returned silently. Pair any such change with a
+    the one `scan_page` measured. The span filter guards ranges, not identity,
+    so such a mismatch would be returned silently. Pair any such change with a
     document generation token checked in `hydrate`.
     """
 
@@ -102,26 +119,27 @@ class DocumentStore:
 
     async def load(self, eli: str, markdown: str, sections: list[Section]) -> None:
         """Load a document into the store."""
-        async with self._lock:
-            doc_size = len(markdown.encode("utf-8"))
-            # Unreachable from production since cluster 5: `ActService` refuses an
-            # oversized act against this same limit before it ever gets here, so
-            # silence in this log is not evidence that the limit is off. Kept as
-            # defence in depth for any future caller that skips that guard.
-            if doc_size > self._max_size_bytes:
-                logger.warning(f"Document {eli} exceeds max size ({doc_size} > {self._max_size_bytes}), truncating")
-                # Truncate to max size
-                markdown = markdown[: self._max_size_bytes]
-                # Re-index sections for truncated content
-                sections = [s for s in sections if s.start_pos < len(markdown)]
+        # Built before the lock and measured through the document itself: the size is
+        # `__post_init__`'s own product, so measuring it here as well would encode a
+        # 5 MiB act to UTF-8 twice per load. Construction touches nothing shared, so
+        # the critical section below stays as short as it was.
+        document = LoadedDocument(eli=eli, markdown=markdown, sections=sections)
+        # `ActService` refuses an oversized act against this same limit before
+        # it ever gets here, so this guards callers that skip that check. It
+        # refuses rather than truncates: a legal act cut mid-clause is a loss
+        # the model cannot detect, while a refusal is one it can act on. The
+        # store does not know the source URL, so the error carries none.
+        if document.size_bytes > self._max_size_bytes:
+            raise ContentTooLargeError(eli, document.size_bytes, self._max_size_bytes)
 
+        async with self._lock:
             self._evict_expired()
 
             if len(self._store) >= self._max_documents and eli not in self._store:
                 self._evict_lru()
 
-            self._store[eli] = LoadedDocument(eli=eli, markdown=markdown, sections=sections)
-            logger.info(f"Loaded document {eli} ({doc_size} bytes, {len(sections)} sections)")
+            self._store[eli] = document
+            logger.info(f"Loaded document {eli} ({document.size_bytes} bytes, {len(sections)} sections)")
 
     async def get_section(self, eli: str, section_id: str) -> str | None:
         """Get content of a specific section."""
@@ -145,8 +163,15 @@ class DocumentStore:
 
             return None
 
-    async def scan(self, eli: str, query: str) -> list[MatchSpan]:
-        """Return the positions of every literal match, without building context.
+    async def scan_page(self, eli: str, query: str, *, limit: int, offset: int) -> tuple[list[MatchSpan], int]:
+        """Return one page of literal-match positions and the exact match count.
+
+        The document is walked once. Only spans whose match index falls in
+        `[offset, offset + limit)` are kept, so memory is bounded by `limit`
+        rather than by how often the query occurs — a single space in a 1 MiB
+        act has over a hundred thousand matches, and a list of them all cost
+        about 15 MB per request. The total still counts every match, so the
+        caller's page metadata stays exact.
 
         The query is escaped before compilation, so Python's backtracking
         engine never receives client-supplied regex syntax. Replacing
@@ -167,7 +192,14 @@ class DocumentStore:
             markdown = doc.markdown
 
         pattern = re.compile(re.escape(query), re.IGNORECASE)
-        return [(match.start(), match.end()) for match in pattern.finditer(markdown)]
+        page_end = offset + limit
+        spans: list[MatchSpan] = []
+        total = 0
+        for index, match in enumerate(pattern.finditer(markdown)):
+            total = index + 1
+            if offset <= index < page_end:
+                spans.append((match.start(), match.end()))
+        return spans, total
 
     async def hydrate(
         self,
@@ -181,7 +213,7 @@ class DocumentStore:
         Cost is proportional to `len(spans)`, not to the number of matches in
         the document. The lock is released before any context extraction.
 
-        Spans must originate from a scan() of the same document. Today the
+        Spans must originate from a scan_page() of the same document. Today the
         store cannot change between the two calls — see the no-`await`
         invariant on the class — so the filter below is a guard against a
         future suspension point, not against a reachable state. Spans outside
@@ -199,19 +231,10 @@ class DocumentStore:
 
         document_length = len(markdown)
         # Filter out spans that are no longer valid for the current document.
-        # This happens if the store mutated between scan and hydrate.
+        # This happens if the store mutated between scan_page and hydrate.
         valid_spans = [(start, end) for start, end in spans if 0 <= start <= end <= document_length]
 
         return _build_hits(markdown, sections, section_starts, valid_spans, context_chars)
-
-    async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
-        """Search literal text within a loaded document, returning every hit.
-
-        Kept as the unbounded composition of `scan` and `hydrate`. Callers that
-        only need one page must paginate the spans between the two calls.
-        """
-        spans = await self.scan(eli, query)
-        return await self.hydrate(eli, spans, context_chars=context_chars)
 
     async def get_toc(self, eli: str) -> list[Section]:
         """Get table of contents for a loaded document."""

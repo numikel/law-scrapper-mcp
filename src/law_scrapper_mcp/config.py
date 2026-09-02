@@ -8,7 +8,16 @@ from ipaddress import ip_network
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from .config_primitives import MIN_AUTH_TOKEN_BYTES, _host_of, is_loopback_entry
@@ -43,6 +52,16 @@ LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
 
 
+# Human-readable bands for the egress knobs, quoted by the validator below. Kept next
+# to the fields they describe would be nicer, but a `Field` cannot carry a message.
+_EGRESS_BANDS = {
+    "api_rate_per_second": "0.1-100",
+    "api_rate_burst": "1-1000",
+    "api_max_server_pause": "0-600 (powyżej zera)",
+    "api_max_attempts": "1-20",
+}
+
+
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
@@ -54,6 +73,25 @@ class Settings(BaseSettings):
     # mechanism — exposure is a deliberate act requiring an authentication mode.
     host: str = "127.0.0.1"
     port: int = 7683
+
+    @field_validator("api_rate_per_second", "api_rate_burst", "api_max_server_pause", "api_max_attempts", mode="wrap")
+    @classmethod
+    def _describe_egress_bounds(
+        cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+    ) -> object:
+        """Name the variable and its band instead of pydantic's bare "less than" line.
+
+        The constraints stay on the `Field` so the schema tells the truth; this only
+        rewrites the failure so an operator reading a startup crash knows which
+        `LAW_MCP_*` variable to fix without opening the source. The input is not
+        echoed, matching `hide_input_in_errors`.
+        """
+        try:
+            return handler(value)
+        except ValidationError as error:
+            name = info.field_name or ""
+            band = _EGRESS_BANDS[name]
+            raise ValueError(f"LAW_MCP_{name.upper()} musi być liczbą z zakresu {band}.") from error
 
     @field_validator("trusted_proxies")
     @classmethod
@@ -105,10 +143,12 @@ class Settings(BaseSettings):
     # Shorter than `api_timeout` on purpose: the trade-off between restart speed
     # and the share of requests allowed to finish is settled in favour of a fast
     # restart. Deployments that want it the other way round raise the value.
-    # Constrained to ≥1 so the downstream `int()` cast in the bootstrap layer
-    # never collapses the value to zero. The deployment contract is
-    # `stop_grace_period >= 2 * shutdown_grace` — see docker-compose.yml.
-    shutdown_grace: float = Field(default=15.0, ge=1)
+    # An int, because uvicorn's knob is whole seconds: a float here with an
+    # `int()` cast downstream silently truncated `2.5` to `2` (#31). Pydantic
+    # rejects a fractional value outright and `ge=1` keeps zero out. The
+    # deployment contract is `stop_grace_period >= 2 * shutdown_grace` — see
+    # docker-compose.yml.
+    shutdown_grace: int = Field(default=15, ge=1)
 
     # Network boundary (F18). The defaults reproduce, value for value, the
     # constant that used to be hardcoded in server.py:43-47 — introducing the
@@ -185,12 +225,20 @@ class Settings(BaseSettings):
     # Egress pace (D1). Concurrency alone bounds nothing: a sequential loop reaches any
     # rate at all, because a released slot is taken again immediately. A zero rate is
     # rejected rather than clamped — it would wedge every request on a bucket that
-    # never refills.
-    api_rate_per_second: float = Field(default=5.0, gt=0)
-    api_rate_burst: int = Field(default=10, ge=1)
+    # never refills. Bounded above as well: `inf` used to pass `gt=0` and turned the
+    # bucket into no limiter at all, `nan` poisoned every refill comparison, and a
+    # burst of a million tokens is a limiter that never engages.
+    api_rate_per_second: float = Field(default=5.0, ge=0.1, le=100, allow_inf_nan=False)
+    api_rate_burst: int = Field(default=10, ge=1, le=1000)
+    # Longest client-wide pause one `Retry-After` header may impose. The request that
+    # received the header has its own give-up check; this bounds what it costs every
+    # other caller. Ten minutes is already past what any MCP client waits.
+    api_max_server_pause: float = Field(default=60.0, gt=0, le=600, allow_inf_nan=False)
     # Bounded so that a misconfigured value degrades loudly at startup instead of
-    # silently turning the retry loop into zero attempts.
-    api_max_attempts: int = Field(default=3, ge=1)
+    # silently turning the retry loop into zero attempts. Capped as well: twenty
+    # attempts already outlast any retry budget, and a larger count only reaches the
+    # `backoff` exponent guard, never the API.
+    api_max_attempts: int = Field(default=3, ge=1, le=20)
     api_retry_budget: float = Field(default=45.0, gt=0)
 
     # Cache TTL (seconds)
@@ -238,13 +286,29 @@ class Settings(BaseSettings):
     circuit_breaker_recovery_timeout: float = 60.0
     circuit_breaker_half_open_max_calls: int = 3
 
-    # Logging
-    log_level: str = "INFO"
+    # Logging. A closed set rather than `str`: `setup_logging` used to fall back
+    # to INFO for anything `logging` did not know, so `WARN` or `FATAL` quietly
+    # produced INFO output on both transports (#31).
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["text", "json"] = "text"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _normalise_log_level(cls, value: object) -> object:
+        """Accept `info` as well as `INFO`; anything else is left to the Literal."""
+        if isinstance(value, str):
+            upper = value.strip().upper()
+            if upper not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                raise ValueError(
+                    f"LAW_MCP_LOG_LEVEL={value!r} nie jest obsługiwanym poziomem. "
+                    "Dozwolone wartości: DEBUG, INFO, WARNING, ERROR, CRITICAL."
+                )
+            return upper
+        return value
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "4.1.0"
+    server_version: str = "4.2.0"
 
     @property
     def user_agent(self) -> str:

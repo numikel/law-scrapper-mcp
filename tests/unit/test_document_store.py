@@ -8,14 +8,22 @@ from typing import overload
 
 import pytest
 
-from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.services.content_processor import Section
 from law_scrapper_mcp.services.document_store import (
     UNKNOWN_SECTION,
     DocumentStore,
     LoadedDocument,
+    SearchHit,
     section_for_position,
 )
+
+
+async def _search(store: DocumentStore, eli: str, query: str, *, context_chars: int = 500) -> list[SearchHit]:
+    """Compose `scan_page` and `hydrate` the way `ContentService.search` does, on one page."""
+    spans, total = await store.scan_page(eli, query, limit=1_000, offset=0)
+    assert total == len(spans), "test documents must fit on a single page"
+    return await store.hydrate(eli, spans, context_chars=context_chars)
 
 
 @pytest.mark.asyncio
@@ -170,7 +178,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert "keyword" in hits[0].context
 
@@ -182,7 +190,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert "KEYWORD" in hits[0].context
 
@@ -195,7 +203,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 2
 
     async def test_search_with_context(self, document_store: DocumentStore):
@@ -206,7 +214,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword", context_chars=20)
+        hits = await _search(document_store, "DU/2024/1", "keyword", context_chars=20)
         assert len(hits) == 1
         # Context should include text before and after
         assert "keyword" in hits[0].context
@@ -235,7 +243,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert hits[0].section_id == "art_2"
         assert hits[0].section_title == "Art. 2."
@@ -246,13 +254,13 @@ class TestSearchInDocument:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "nonexistent")
+        hits = await _search(document_store, "DU/2024/1", "nonexistent")
         assert len(hits) == 0
 
     async def test_search_document_not_loaded(self, document_store: DocumentStore):
         """Test searching in non-loaded document raises error."""
         with pytest.raises(DocumentNotLoadedError, match="Dokument DU/2024/999 nie jest załadowany"):
-            await document_store.search("DU/2024/999", "keyword")
+            await _search(document_store, "DU/2024/999", "keyword")
 
 
 @pytest.mark.asyncio
@@ -349,16 +357,27 @@ class TestLRUEviction:
 class TestDocumentSizeLimits:
     """Tests for document size limits."""
 
-    async def test_large_document_truncated(self):
-        """Test that documents exceeding max size are truncated."""
+    async def test_oversized_document_is_refused_not_truncated(self):
+        """An act cut mid-clause is a silent loss; the store must refuse it.
+
+        `ActService` already rejects oversized acts before they reach the
+        store, so this path guards future callers that skip that check. The
+        limit is measured in UTF-8 bytes, not characters, so a document that
+        fits by `len()` can still exceed it.
+        """
         store = DocumentStore(max_size_bytes=100)
-        large_content = "x" * 200  # 200 bytes
+        large_content = "ż" * 60  # 60 characters, 120 bytes in UTF-8
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
 
-        await store.load("DU/2024/1", large_content, sections)
+        with pytest.raises(ContentTooLargeError) as excinfo:
+            await store.load("DU/2024/1", large_content, sections)
 
-        # Document should be loaded but truncated
-        assert await store.is_loaded("DU/2024/1")
+        message = str(excinfo.value)
+        assert "DU/2024/1" in message
+        assert "przekracza limit 100 B" in message
+        assert excinfo.value.size_bytes == 120
+        assert excinfo.value.limit_bytes == 100
+        assert not await store.is_loaded("DU/2024/1")
 
     async def test_normal_size_document_not_truncated(self):
         """Test that documents within size limits are not truncated."""
@@ -472,7 +491,7 @@ class TestSearchTreatsQueryLiterally:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "(.+)+!")
+        hits = await _search(document_store, "DU/2024/1", "(.+)+!")
 
         assert len(hits) == 1
         assert hits[0].match_start == markdown.index("(.+)+!")
@@ -484,8 +503,8 @@ class TestSearchTreatsQueryLiterally:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        literal_hits = await document_store.search("DU/2024/1", "(dwadzieścia")
-        wildcard_hits = await document_store.search("DU/2024/1", "23.")
+        literal_hits = await _search(document_store, "DU/2024/1", "(dwadzieścia")
+        wildcard_hits = await _search(document_store, "DU/2024/1", "23.")
 
         assert len(literal_hits) == 1
         assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur
@@ -549,6 +568,16 @@ class TestSectionForPosition:
 
         assert section_for_position([0], sections, 90, 100) == ("art_1", "Art. 1")
 
+    def test_explicit_zero_end_pos_is_not_confused_with_open_ended(self) -> None:
+        """Only `None` means "extends to the end"; `end_pos=0` is an empty range.
+
+        Written as `end_pos or document_length`, the falsy zero silently
+        turned an empty section into one covering the whole document.
+        """
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=0)]
+
+        assert section_for_position([0], sections, 5, 100) == UNKNOWN_SECTION
+
     def test_section_lookup_is_logarithmic_in_the_number_of_sections(self) -> None:
         sections = _numbered_sections(4096)
         starts = _CountingStarts([section.start_pos for section in sections])
@@ -574,6 +603,28 @@ class TestLoadedDocumentSectionIndex:
         assert [section.id for section in document.sections] == ["art_0", "art_1", "art_2"]
         assert document.section_starts == (0, 100, 200)
 
+    def test_overlapping_sections_are_rejected_at_load_time(self) -> None:
+        """`section_for_position` assumes disjoint ranges; a producer that
+        breaks the assumption must fail loudly here, not attribute hits to the
+        wrong section later."""
+        sections = [
+            Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=150),
+            Section(id="art_2", title="Art. 2", level=2, start_pos=100, end_pos=200),
+        ]
+
+        with pytest.raises(ValueError, match=r"DU/2024/1.*Art\. 1.*150.*Art\. 2.*100"):
+            LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+    def test_open_ended_sections_do_not_trip_the_overlap_check(self) -> None:
+        sections = [
+            Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=None),
+            Section(id="art_2", title="Art. 2", level=2, start_pos=100, end_pos=None),
+        ]
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert document.section_starts == (0, 100)
+
 
 def _document_with_two_hits() -> tuple[str, list[Section]]:
     markdown = "Art. 1\npodatek od nieruchomosci\nArt. 2\npodatek dochodowy\n"
@@ -586,20 +637,68 @@ def _document_with_two_hits() -> tuple[str, list[Section]]:
 
 @pytest.mark.asyncio
 class TestScanAndHydrate:
-    async def test_scan_returns_only_match_positions(self) -> None:
+    async def test_scan_page_returns_match_positions_and_the_exact_total(self) -> None:
         markdown, sections = _document_with_two_hits()
         store = DocumentStore()
         await store.load("DU/2024/1", markdown, sections)
 
-        spans = await store.scan("DU/2024/1", "podatek")
+        spans, total = await store.scan_page("DU/2024/1", "podatek", limit=20, offset=0)
 
         assert spans == [(7, 14), (39, 46)]
+        assert total == 2
 
-    async def test_scan_is_case_insensitive_and_escapes_the_query(self) -> None:
+    async def test_scan_page_is_case_insensitive_and_escapes_the_query(self) -> None:
         store = DocumentStore()
         await store.load("DU/2024/1", "Art. 1 (a+b) i A+B", [])
 
-        assert await store.scan("DU/2024/1", "a+b") == [(8, 11), (15, 18)]
+        assert await store.scan_page("DU/2024/1", "a+b", limit=20, offset=0) == ([(8, 11), (15, 18)], 2)
+
+    async def test_scan_page_windows_by_offset_and_limit(self) -> None:
+        """Every page reports the same exact total; only the window moves."""
+        store = DocumentStore()
+        await store.load("DU/2024/1", "x" * 10, [])
+        every = [(n, n + 1) for n in range(10)]
+
+        first = await store.scan_page("DU/2024/1", "x", limit=3, offset=0)
+        middle = await store.scan_page("DU/2024/1", "x", limit=3, offset=4)
+        last_partial = await store.scan_page("DU/2024/1", "x", limit=3, offset=9)
+        at_end = await store.scan_page("DU/2024/1", "x", limit=3, offset=10)
+        past_end = await store.scan_page("DU/2024/1", "x", limit=3, offset=50)
+        empty_page = await store.scan_page("DU/2024/1", "x", limit=0, offset=0)
+
+        assert first == (every[0:3], 10)
+        assert middle == (every[4:7], 10)
+        assert last_partial == (every[9:10], 10)
+        assert at_end == ([], 10)
+        assert past_end == ([], 10)
+        assert empty_page == ([], 10)
+
+    async def test_scan_page_never_materialises_more_than_one_page_of_spans(self) -> None:
+        """A frequent query on a large act must not build a list of every match.
+
+        Measured on this document (1 MiB, 131072 matches): the old unbounded
+        `scan` peaked at about 15.8 MB, a bounded loop at about 2 KB. The
+        bound below sits far under the former and well above the latter, so
+        it fails on the regression without being sensitive to interpreter
+        noise.
+        """
+        import tracemalloc
+
+        markdown = "podatek " * 131_072  # 1 MiB, one space per word
+        store = DocumentStore()
+        await store.load("DU/2024/1", markdown, [])
+
+        tracemalloc.start()
+        try:
+            spans, total = await store.scan_page("DU/2024/1", " ", limit=20, offset=65_536)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert total == 131_072
+        assert len(spans) == 20
+        assert spans == [(8 * n + 7, 8 * n + 8) for n in range(65_536, 65_556)]
+        assert peak < 64 * 1024, f"scan_page allocated {peak} bytes; it must hold only one page of spans"
 
     async def test_hydrate_builds_hits_only_for_the_given_spans(self) -> None:
         markdown, sections = _document_with_two_hits()
@@ -636,16 +735,16 @@ class TestScanAndHydrate:
 
         assert observed == [False], "the store lock must not be held while contexts are built"
 
-    async def test_search_still_returns_every_hit(self) -> None:
+    async def test_scan_then_hydrate_returns_every_hit(self) -> None:
         markdown, sections = _document_with_two_hits()
         store = DocumentStore()
         await store.load("DU/2024/1", markdown, sections)
 
-        hits = await store.search("DU/2024/1", "podatek", context_chars=5)
+        hits = await _search(store, "DU/2024/1", "podatek", context_chars=5)
 
         assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
 
-    async def test_scan_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_scan_page_releases_the_lock_before_matching(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import re as re_module
         from typing import Any
 
@@ -656,13 +755,13 @@ class TestScanAndHydrate:
 
         def _spy_compile(*args: Any, **kwargs: Any) -> Any:
             # Check if lock is held when re.compile is called.
-            # This happens after scan() has released the lock.
+            # This happens after scan_page() has released the lock.
             observed.append(store._lock.locked())
             return original_compile(*args, **kwargs)
 
         monkeypatch.setattr(re_module, "compile", _spy_compile)
 
-        await store.scan("DU/2024/1", "podatek")
+        await store.scan_page("DU/2024/1", "podatek", limit=20, offset=0)
 
         assert observed == [False], "the store lock must not be held during pattern compilation"
 

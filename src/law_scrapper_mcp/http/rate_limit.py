@@ -23,7 +23,12 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 # A hardcoded list, not a setting: making it configurable would allow an
 # operator to put the container healthcheck under the limit, which is precisely
-# the outage this exemption prevents (D12).
+# the outage this exemption prevents (D12). The exemption applies to loopback
+# peers only (#39): the probe in docker-compose.yml runs inside the container,
+# so it always arrives from 127.0.0.1 or ::1, while a remote peer looping over
+# `/health` is metered like any other request. `ExemptPathCredentialStripper`
+# is not narrowed the same way — the credential must not reach the verifier on
+# this path from anyone.
 EXEMPT_PATHS = frozenset({"/health"})
 
 
@@ -59,7 +64,10 @@ class RateLimitMiddleware:
         self._lock = asyncio.Lock()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope.get("path") in EXEMPT_PATHS:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        if scope.get("path") in EXEMPT_PATHS and _is_loopback_peer(scope):
             await self._app(scope, receive, send)
             return
 
@@ -159,6 +167,22 @@ def _is_ip_address(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_loopback_peer(scope: Scope) -> bool:
+    """Whether the connection itself — not any forwarded header — is local.
+
+    A scope without a client address cannot prove it is local, so it is not.
+    `X-Forwarded-For` is deliberately ignored here: the exemption is about the
+    container's own probe, which never goes through a proxy.
+    """
+    client = scope.get("client")
+    if not client:
+        return False
+    try:
+        return ip_address(client[0]).is_loopback
+    except ValueError:
+        return False
 
 
 def _without_authorization(scope: Scope) -> Scope:

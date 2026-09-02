@@ -8,9 +8,12 @@ bounds how many requests are in flight; this module bounds how fast they leave.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from collections.abc import Callable
 from time import monotonic
+
+logger = logging.getLogger(__name__)
 
 
 class EgressPaceDeadlineError(Exception):
@@ -54,18 +57,42 @@ class RateLimiter:
     slow after an incident hours ago is the worst failure mode to diagnose.
     """
 
-    def __init__(self, rate: float, burst: int, *, clock: Callable[[], float] = monotonic) -> None:
+    def __init__(
+        self,
+        rate: float,
+        burst: int,
+        *,
+        clock: Callable[[], float] = monotonic,
+        max_pause: float = 60.0,
+    ) -> None:
         if rate <= 0:
             raise ValueError("Tempo żądań musi być większe od zera.")
         if burst < 1:
             raise ValueError("Pojemność zbiornika tokenów musi wynosić co najmniej 1.")
+        if max_pause <= 0:
+            raise ValueError("Maksymalna pauza na żądanie serwera musi być większa od zera.")
         self._rate = rate
         self._burst = float(burst)
         self._tokens = float(burst)
         self._clock = clock
+        self._max_pause = max_pause
         self._updated = clock()
         self._paused_until = 0.0
         self._lock = asyncio.Lock()
+
+    @property
+    def clock(self) -> Callable[[], float]:
+        """The clock every deadline handed to `acquire` must be measured on.
+
+        Exposed so a client that receives a prebuilt limiter can compute its deadlines
+        on the same scale instead of assuming the limiter runs on `time.monotonic()`.
+        """
+        return self._clock
+
+    @property
+    def max_pause(self) -> float:
+        """Longest pause one server signal may impose, in seconds."""
+        return self._max_pause
 
     def pause_for(self, seconds: float) -> None:
         """Hold every request back for `seconds`, at the server's request.
@@ -74,9 +101,27 @@ class RateLimiter:
         completion, so no other task can observe a half-applied pause, and the retry
         loop that calls it never has to await the limiter's lock. Extending rather than
         replacing the window keeps a short second signal from cutting a long first one.
+
+        Clamped to `max_pause` here rather than by the caller: the pause outlives the
+        request that received the header and holds every other waiter's `acquire()`,
+        so the bound on what one signal can cost belongs to the object that applies it.
+        The log line lives here for the same reason — only this side knows the length
+        actually held. A non-positive request (`Retry-After: 0` is legal and means "go
+        ahead") is neither applied nor logged: announcing a 0.0 s hold would describe
+        a pause that never happens.
         """
         if seconds <= 0:
             return
+        if seconds > self._max_pause:
+            logger.warning(
+                "Server-requested pause of %.1fs exceeds the %.1fs cap; pausing egress for %.1fs instead.",
+                seconds,
+                self._max_pause,
+                self._max_pause,
+            )
+            seconds = self._max_pause
+        else:
+            logger.warning("Pausing egress for %.1fs (server requested via Retry-After).", seconds)
         self._paused_until = max(self._paused_until, self._clock() + seconds)
         # Bank what has been earned up to now before moving the refill mark forward:
         # skipping this would forfeit the tokens accrued since the last `_refill`, which
@@ -110,13 +155,13 @@ class RateLimiter:
         order and hands each one an exact deficit to sleep off. Releasing the lock
         before sleeping would wake every waiter onto the same single token.
 
-        `deadline` is an instant on THIS limiter's `clock()`, which is a contract the
-        caller has to honour: a client that injects a limiter clock but derives its
-        deadline from `time.monotonic()` hands over two unrelated scales, and the bound
-        then fails silently open rather than loudly. Absolute instants are kept rather
-        than durations so that a pause extended mid-wait is re-measured correctly. It is checked before every wait, not once on entry, because a pause
-        may be extended by another task while this one is already waiting. `None` means
-        the caller accepts an unbounded wait.
+        `deadline` is an instant on THIS limiter's `clock()`, which the caller reads
+        through the `clock` property rather than assuming `time.monotonic()`: two
+        unrelated scales would make the bound fail silently open rather than loudly.
+        Absolute instants are kept rather than durations so that a pause extended
+        mid-wait is re-measured correctly. It is checked before every wait, not once on
+        entry, because a pause may be extended by another task while this one is
+        already waiting. `None` means the caller accepts an unbounded wait.
 
         Raises:
             EgressPaceDeadlineError: The next wait would end past `deadline`.

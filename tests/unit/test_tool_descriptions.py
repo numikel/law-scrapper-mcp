@@ -80,12 +80,18 @@ class TestToolInputSchemaDescriptions:
         `browse_acts` used to be the second exception and no longer is — see
         `test_browse_limit_is_documented_as_clamped` below for why the premise
         under P5 changed for that tool specifically.
+
+        Issue #19: stating the asymmetry is not enough — the schema also has to say
+        *why* it exists (the value goes straight to a public institution's API) and
+        what that asks of the caller (the smallest value that will do).
         """
         tool = await _get_tool(mcp_client, "search_legal_acts")
         description = tool.input_schema["properties"]["limit"]["description"]
 
         assert "100" in description
-        assert "bez górnej granicy" in description.lower()
+        assert "nie jest przycinana" in description.lower()
+        assert "api.sejm.gov.pl" in description
+        assert "najmniejszą" in description.lower()
 
     async def test_browse_limit_is_documented_as_clamped(self, mcp_client) -> None:
         """`browse_acts` left P5's exception when the endpoint under it changed.
@@ -102,6 +108,7 @@ class TestToolInputSchemaDescriptions:
 
         assert "100" in description
         assert "bez górnej granicy" not in description.lower()
+        assert "najmniejszą" in description.lower()
 
     async def test_tool_schemas_preserve_arguments_and_expose_typed_outputs(self, mcp_client) -> None:
         tools = (await mcp_client.list_tools()).tools
@@ -143,3 +150,34 @@ class TestFilterResultsDescriptions:
         assert result.is_error is True
         assert result.structured_content is None
         assert "nie jest obsługiwany" in result.content[0].text
+
+
+class TestSearchInActContextChars:
+    """Issue #21: the context window bounds live in one place, `models/pagination.py`.
+
+    The schema default, its description, the request model and the output model each
+    used to spell out 500 and 2000 as literals. A literal cannot drift *visibly* —
+    the schema would keep promising 500 after the constant moved — so the test pins
+    every surface to the constant rather than to a number.
+    """
+
+    async def test_schema_default_and_ceiling_follow_the_shared_constants(self, mcp_client) -> None:
+        from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, MAX_CONTEXT_CHARS
+
+        tool = await _get_tool(mcp_client, "search_in_act")
+        schema = tool.input_schema["properties"]["context_chars"]
+
+        assert schema["default"] == DEFAULT_CONTEXT_CHARS
+        assert str(DEFAULT_CONTEXT_CHARS) in schema["description"]
+        assert str(MAX_CONTEXT_CHARS) in schema["description"]
+
+    async def test_request_and_output_models_follow_the_shared_constants(self) -> None:
+        from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, MAX_CONTEXT_CHARS
+        from law_scrapper_mcp.models.tool_inputs import SearchInActRequest
+        from law_scrapper_mcp.models.tool_outputs import SearchInActOutput
+
+        request_field = SearchInActRequest.model_fields["context_chars"]
+        assert request_field.default == DEFAULT_CONTEXT_CHARS
+        assert str(MAX_CONTEXT_CHARS) in (request_field.description or "")
+        assert SearchInActOutput.model_fields["context_chars_requested"].default == DEFAULT_CONTEXT_CHARS
+        assert SearchInActOutput.model_fields["context_chars_applied"].default == DEFAULT_CONTEXT_CHARS

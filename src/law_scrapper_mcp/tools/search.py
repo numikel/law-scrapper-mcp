@@ -1,6 +1,5 @@
 """Search legal acts tool."""
 
-import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -12,6 +11,7 @@ from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
+from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.response_enrichment import search_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -94,8 +94,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Maksymalna liczba wyników do zwrócenia. Domyślnie 20. "
-                    "Przydatne do ograniczenia dużych zbiorów. Bez górnej granicy — "
-                    "w odróżnieniu od pozostałych narzędzi listujących, gdzie limit jest przycinany do 100."
+                    "Przydatne do ograniczenia dużych zbiorów. Nie jest przycinana do 100 jak w "
+                    "pozostałych narzędziach listujących, ponieważ trafia wprost do zapytania do "
+                    "api.sejm.gov.pl — publicznej usługi instytucji państwowej. "
+                    "Podawaj najmniejszą wystarczającą wartość."
                 ),
             ),
         ] = None,
@@ -136,20 +138,33 @@ def register(mcp: MCPServer[AppContext]) -> None:
         """
         search_service = get_app_context(ctx).search_service
 
+        # Loud, like every other list tool (#18). Suppressing the parse turned
+        # `offset="abc"` into page one and `limit="x"` into twenty with no signal that
+        # the call had been misread — and `year="abc"` into a search across the whole
+        # publisher, which is the same defect on the parameter that costs the most.
+        # `limit` keeps no upper clamp (P5, pinned by
+        # `test_limit_above_the_shared_maximum_is_not_clamped`) but does need a floor:
+        # the upstream request is the whole cost of this tool, and an empty page still
+        # pays for one record.
         year_int: int | None = None
         if year is not None:
-            with contextlib.suppress(ValueError, TypeError):
+            try:
                 year_int = int(year)
+            except (ValueError, TypeError) as e:
+                raise ValueError("Parametr 'year' musi być liczbą całkowitą.") from e
 
         limit_int: int | None = None
         if limit is not None:
-            with contextlib.suppress(ValueError, TypeError):
+            try:
                 limit_int = int(limit)
+            except (ValueError, TypeError) as e:
+                raise ValueError("Parametr 'limit' musi być liczbą całkowitą.") from e
+            if limit_int < 1:
+                raise ValueError("Parametr 'limit' musi być większy od zera.")
 
         offset_int: int | None = None
         if offset is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                offset_int = int(offset)
+            offset_int = parse_non_negative(offset, name="offset", default=0)
 
         in_force_bool: bool | None = None
         if in_force is not None:

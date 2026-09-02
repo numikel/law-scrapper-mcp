@@ -7,6 +7,7 @@ sees. Discovery is ours and goes over httpx, so that half uses respx.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac as hmac_module
@@ -24,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 from jwt.exceptions import PyJWKClientConnectionError
 
+from law_scrapper_mcp.auth import jwt_verifier as jwt_verifier_module
 from law_scrapper_mcp.auth.jwt_verifier import JwtTokenVerifier
 
 ISSUER = "https://login.example.com/tenant/v2.0"
@@ -191,6 +193,41 @@ async def test_jwks_uri_is_discovered_when_not_configured(keypair, fetch_calls) 
     )
     verifier = make_verifier(jwks_uri=None)
     assert await verifier.verify_token(make_token(keypair)) is not None
+    assert fetch_calls == [JWKS_URI]
+
+
+async def test_discovery_runs_outside_the_lock(keypair, fetch_calls, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#39: a slow OIDC discovery must not serialise every verification behind it.
+
+    The lock exists to publish the client exactly once, not to hold the whole
+    network round trip. The discovery request is gated on an event so the
+    call is observably stuck inside it, and the lock must be free at that
+    moment (D5). Reaching into `_lock` is deliberate: the alternative — timing
+    a second caller — measures the scheduler, not the code.
+    """
+    gate = asyncio.Event()
+
+    async def gated_discovery(request: httpx.Request) -> httpx.Response:
+        await gate.wait()
+        return httpx.Response(200, json={"jwks_uri": JWKS_URI})
+
+    real_async_client = httpx.AsyncClient
+
+    def client_with_gated_transport(**kwargs: Any) -> httpx.AsyncClient:
+        return real_async_client(transport=httpx.MockTransport(gated_discovery), **kwargs)
+
+    monkeypatch.setattr(jwt_verifier_module.httpx, "AsyncClient", client_with_gated_transport)
+    verifier = make_verifier(jwks_uri=None)
+
+    in_flight = asyncio.create_task(verifier.verify_token(make_token(keypair)))
+    for _ in range(10):  # let the task run up to the gated `await`
+        await asyncio.sleep(0)
+    assert not in_flight.done()
+
+    assert verifier._lock.locked() is False
+
+    gate.set()
+    assert await in_flight is not None
     assert fetch_calls == [JWKS_URI]
 
 

@@ -21,6 +21,20 @@ class TestHostOf:
         assert _host_of("[::1]:8080") == "::1"
         assert _host_of("[fe80::1]:443") == "fe80::1"
 
+    def test_bracketed_ipv6_accepts_only_a_port_suffix(self) -> None:
+        """After `]` only nothing, `:<digits>` or `:*` may follow (D7)."""
+        assert _host_of("[::1]:*") == "::1"
+        assert _host_of("[::1]:8080") == "::1"
+        assert _host_of("[::1]") == "::1"
+
+    def test_bracketed_ipv6_with_trailing_text_is_returned_raw(self) -> None:
+        """`[::1].evil.com` is not a bracketed loopback with a port — it is a
+        hostname the SDK's Host check would compare verbatim. Returning the
+        inner `::1` would let it pass the loopback gate."""
+        assert _host_of("[::1].evil.com") == "[::1].evil.com"
+        assert _host_of("[::1]evil") == "[::1]evil"
+        assert _host_of("[::1]:80x") == "[::1]:80x"
+
     def test_handles_bare_ipv6_loopback(self) -> None:
         """Bare IPv6 loopback (::1) must be recognized, not split on colon."""
         assert _host_of("::1") == "::1"
@@ -63,6 +77,12 @@ class TestIsLoopbackEntry:
         """Bracketed IPv6 loopback [::1] must be recognized."""
         assert is_loopback_entry("[::1]")
         assert is_loopback_entry("[::1]:8080")
+        assert is_loopback_entry("[::1]:*")
+
+    def test_bracketed_loopback_with_trailing_hostname_is_not_loopback(self) -> None:
+        """Allowlist bypass: `[::1].evil.com` must not read as `::1` (#38)."""
+        assert is_loopback_entry("[::1].evil.com") is False
+        assert is_loopback_entry("http://[::1].evil.com:8080") is False
 
     def test_ipv6_non_loopback(self) -> None:
         """Link-local fe80::1 is non-loopback."""
@@ -91,3 +111,21 @@ class TestIsLoopbackEntry:
         """Invalid IP strings should be treated as non-loopback."""
         assert not is_loopback_entry("not-an-ip")
         assert not is_loopback_entry("256.256.256.256")
+
+
+class TestPathSuffix:
+    """An allowlist entry is an authority; a path can never match a header."""
+
+    def test_trailing_slash_does_not_change_the_host(self) -> None:
+        assert _host_of("http://[::1]:8080/") == "::1"
+        assert _host_of("http://localhost:8080/") == "localhost"
+        assert _host_of("[::1]:*") == "::1"
+
+    def test_bracketed_loopback_with_trailing_slash_is_loopback(self) -> None:
+        """4.1.0 accepted this form; the bracket tightening must not refuse it."""
+        assert is_loopback_entry("http://[::1]:8080/")
+        assert is_loopback_entry("http://localhost:8080/")
+
+    def test_hostname_after_the_bracket_stays_remote_with_a_path(self) -> None:
+        assert not is_loopback_entry("[::1].evil.com/")
+        assert not is_loopback_entry("http://[::1].evil.com/x")

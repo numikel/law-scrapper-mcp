@@ -248,3 +248,19 @@ class TestCacheEdgeCases:
         # Should return None, but it's cached (different from missing key)
         # This is a design choice - None is a valid cache value
         assert await cache.get("none_key") is None
+
+
+class TestCallerBoundedAge:
+    """A shared entry is fresh only within the reading caller's own TTL."""
+
+    @pytest.mark.asyncio
+    async def test_entry_older_than_max_age_is_a_miss_but_stays_for_longer_ttls(self):
+        cache = TTLCache(max_entries=10)
+        with patch("time.time") as mock_time:
+            mock_time.return_value = 1000.0
+            await cache.set("shared", "page", ttl=600)
+
+            mock_time.return_value = 1400.0
+            assert await cache.get("shared", max_age=300) is None
+            assert await cache.get("shared") == "page"
+            assert await cache.get("shared", max_age=600) == "page"

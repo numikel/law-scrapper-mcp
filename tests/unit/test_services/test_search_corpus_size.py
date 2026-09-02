@@ -133,3 +133,40 @@ def test_the_default_page_measurement_is_on_record() -> None:
     assert "709 437 B" in text
     assert "count=500" in text
     assert "totalCount=1984" in text
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_negative_offset_never_reaches_the_wire(service: SearchService, browse_page: dict[str, Any]) -> None:
+    """Issue #18: `if offset:` forwarded -5 verbatim while `_output` treated it as zero.
+
+    The tool rejects negatives before they get here; the service is the second line
+    and must not ask api.sejm.gov.pl a question it would not ask itself.
+    """
+    route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
+
+    output = await service.search(year=2024, limit=5, offset=-5)
+
+    assert "offset" not in route.calls.last.request.url.params
+    assert output.page_info.offset == 0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_zero_limit_search_still_asks_upstream_for_one_record(
+    service: SearchService, browse_page: dict[str, Any]
+) -> None:
+    """Issue #55: the floor in `search()` mirrors `browse()` and is pinned the same way.
+
+    The tool rejects `limit=0` since #18; the service is still reachable with it and
+    must neither send `limit=0` (what the endpoint does with that is unverified) nor
+    lose the corpus size. One record is fetched and `_output` slices it away.
+    """
+    route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
+
+    output = await service.search(year=2024, limit=0)
+
+    assert route.calls.last.request.url.params["limit"] == "1"
+    assert output.results == []
+    assert output.page_info.limit == 0
+    assert output.page_info.total_count == 1984

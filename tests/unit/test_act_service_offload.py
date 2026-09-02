@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import AsyncIterator
 
 import pytest
 import respx
-from httpx import Response
+from httpx import AsyncByteStream, Response
 
 from law_scrapper_mcp.client.exceptions import ContentTooLargeError
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
@@ -133,6 +134,78 @@ async def test_oversized_pdf_is_refused_before_conversion(
     message = str(excinfo.value)
     assert "przekracza limit" in message
     assert PDF_URL in message
+
+
+class RecordingStream(AsyncByteStream):
+    """A response body served in chunks that counts how many were pulled."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+        self.pulled = 0
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            self.pulled += 1
+            yield chunk
+
+
+@respx.mock
+async def test_oversized_html_is_refused_while_it_streams(
+    service: ActService,
+    counting_processor: CountingProcessor,
+    act_detail: dict,
+    monkeypatch,
+) -> None:
+    """The budget reaches the download itself: the body is never materialised past the limit (#19).
+
+    The refusal still names the act and the source file, as the post-hoc gate's does,
+    because that is the sentence an agent can act on.
+    """
+    from law_scrapper_mcp.services import act_service as act_service_module
+
+    monkeypatch.setattr(act_service_module.settings, "doc_store_max_size_bytes", 1024)
+    stream = RecordingStream([b"<p>" + b"x" * 509] * 4)
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.html").mock(
+        return_value=Response(200, stream=stream, headers={"Content-Type": "text/html; charset=utf-8"})
+    )
+
+    with pytest.raises(ContentTooLargeError) as excinfo:
+        await service.get_details("DU/2024/1", load_content=True)
+
+    assert stream.pulled == 3
+    assert counting_processor.html_calls == 0
+    message = str(excinfo.value)
+    assert "DU/2024/1" in message
+    assert "przekracza limit" in message
+    assert PDF_URL in message
+
+
+@respx.mock
+async def test_oversized_pdf_is_refused_while_it_streams(
+    service: ActService,
+    counting_processor: CountingProcessor,
+    act_detail: dict,
+    monkeypatch,
+) -> None:
+    """The PDF branch's fetch-failure fallback must not swallow a refusal raised mid-download."""
+    from law_scrapper_mcp.services import act_service as act_service_module
+
+    monkeypatch.setattr(act_service_module.settings, "doc_store_max_size_bytes", 1024)
+    act_detail_no_html = act_detail.copy()
+    act_detail_no_html["textHTML"] = None
+    stream = RecordingStream([b"x" * 512] * 4)
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail_no_html))
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
+    respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf").mock(return_value=Response(200, stream=stream))
+
+    with pytest.raises(ContentTooLargeError) as excinfo:
+        await service.get_details("DU/2024/1", load_content=True)
+
+    assert stream.pulled == 3
+    assert counting_processor.pdf_calls == 0
+    assert PDF_URL in str(excinfo.value)
 
 
 class SlowProcessor(ContentProcessor):

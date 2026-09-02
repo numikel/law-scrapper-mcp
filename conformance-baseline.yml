@@ -6,29 +6,28 @@
 # elicitation, multi-modal tool results, etc.). List those scenarios here so CI
 # still fails on unexpected regressions while remaining green for known gaps.
 #
-# When @modelcontextprotocol/conformance gains support for the SDK's
-# LATEST_PROTOCOL_VERSION, CI runs the suite with this baseline. Until then the
-# workflow skips the suite with a warning (design: do not mask lag by testing
-# an older protocol era).
+# CI runs @modelcontextprotocol/conformance 0.2.0-alpha.11 (pinned in
+# .github/workflows/ci.yml), the first release line that accepts the SDK's
+# LATEST_PROTOCOL_VERSION (2026-07-28). Should a future SDK bump outrun the
+# runner again, the workflow skips the suite with a warning (design: do not
+# mask lag by testing an older protocol era).
+#
+# Only the "active" suite is gated. The "pending" suite at 2026-07-28 has two
+# known failures (json-schema-2020-12, http-custom-header-server-validation)
+# that are not part of the gate; revisit when those scenarios leave pending.
+#
+# Measured on 2026-09-02 against v4.1.0: 27 checks pass, the 13 below fail.
 
 server:
-  - logging-set-level
   - completion-complete
   - tools-call-image
   - tools-call-audio
   - tools-call-embedded-resource
   - tools-call-mixed-content
-  - tools-call-with-logging
   - tools-call-with-progress
-  - tools-call-sampling
-  - tools-call-elicitation
-  - elicitation-sep1034-defaults
-  - elicitation-sep1330-enums
   - resources-read-text
   - resources-read-binary
   - resources-templates-read
-  - resources-subscribe
-  - resources-unsubscribe
   - prompts-get-simple
   - prompts-get-with-args
   - prompts-get-embedded-resource

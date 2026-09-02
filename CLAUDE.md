@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v4.1.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.0.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
+Law Scrapper MCP v4.2.0 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.0.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
 
 ## Development commands
 
@@ -38,6 +38,7 @@ Layered, src/ layout: `models/` → `client/` → `services/` → `tools/` → `
 - **Document Store**: Acts loaded into memory for section-level reading and search (asyncio.Lock)
 - **Result Store**: Search results persisted for chained filtering (LRU eviction, TTL, asyncio.Lock)
 - **Circuit Breaker**: CLOSED → OPEN → HALF_OPEN states protecting Sejm API from cascading failures
+- **Egress restraint**: token-bucket pacing (`LAW_MCP_API_RATE_PER_SECOND`/`_BURST`), a bounded server-pause (`LAW_MCP_API_MAX_SERVER_PAUSE`), and document downloads aborted mid-stream past `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES`
 - **Enriched responses**: Every tool returns `EnrichedResponse` with hints; native `outputSchema` and object `structuredContent`
 - **Pagination**: `PageInfo` model exposed as the `page_info` field with `limit`/`offset` on list and content tools (defaults: 20 items, 10,000 chars; maxima: 100 items, 50,000 chars)
 - **TTL cache**: Async API response cache with configurable TTL (metadata=24h, search=10min)
@@ -47,7 +48,9 @@ Layered, src/ layout: `models/` → `client/` → `services/` → `tools/` → `
 
 Tools are grouped by a `meta` category tag (`metadata`, `search`, `filter`, `analysis`,
 `tracking`, `dates`, `utility`); `get_system_metadata` consolidates six older metadata
-tools, and `search_legal_acts` / `browse_acts` default to a limit of 20.
+tools, and `search_legal_acts` / `browse_acts` default to a limit of 20. `search_legal_acts` validates
+`limit`/`offset` strictly (Polish `ValueError` on malformed or negative input) but deliberately has no
+upper clamp on `limit`, because the value reaches `api.sejm.gov.pl` unchanged.
 
 **Key API patterns:**
 - Base URL: `https://api.sejm.gov.pl/eli/`

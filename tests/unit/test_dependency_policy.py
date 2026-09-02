@@ -24,3 +24,13 @@ def test_jwt_library_is_a_direct_dependency() -> None:
 
     assert any(dependency.lower().startswith("pyjwt") for dependency in dependencies)
     assert not any(dependency.lower().startswith("joserfc") for dependency in dependencies)
+
+
+def test_uvicorn_is_a_direct_dependency() -> None:
+    """`server.py` imports uvicorn at module level and owns the HTTP bootstrap,
+    so it must not ride on `mcp[cli]`'s transitive pin — a future SDK release
+    dropping or loosening it would break the server without any diff here."""
+    with (PROJECT_ROOT / "pyproject.toml").open("rb") as pyproject:
+        dependencies = tomllib.load(pyproject)["project"]["dependencies"]
+
+    assert any(dependency.lower().startswith("uvicorn>=") for dependency in dependencies)

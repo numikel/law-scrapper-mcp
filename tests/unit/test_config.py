@@ -84,6 +84,14 @@ class TestSettingsDefaults:
         with pytest.raises(ValidationError):
             Settings()
 
+    def test_api_max_attempts_above_twenty_is_rejected(self, monkeypatch):
+        """Twenty attempts already exceed any budget; a larger count only reaches the
+        `backoff` exponent guard, never the API."""
+        monkeypatch.setenv("LAW_MCP_API_MAX_ATTEMPTS", "21")
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_MAX_ATTEMPTS" in str(rejected.value)
+
     def test_api_concurrency_defaults_split_the_previous_budget(self):
         """Criterion 14: the split rebalances the peak, it does not raise it.
 
@@ -111,6 +119,23 @@ class TestSettingsDefaults:
         with pytest.raises(ValidationError):
             Settings()
 
+    @pytest.mark.parametrize("value", ["inf", "nan", "0.01", "1e6"])
+    def test_api_rate_per_second_outside_the_sane_band_is_rejected(self, monkeypatch, value):
+        """`inf` used to be accepted: it turns the bucket into no limiter at all, and
+        `nan` poisons every refill comparison. The band 0.1-100 rps rules both out
+        together with values no Sejm deployment could mean."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_PER_SECOND", value)
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_RATE_PER_SECOND" in str(rejected.value)
+
+    def test_api_rate_burst_above_the_cap_is_rejected(self, monkeypatch):
+        """A burst of a million tokens is a limiter that never engages."""
+        monkeypatch.setenv("LAW_MCP_API_RATE_BURST", "1001")
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_RATE_BURST" in str(rejected.value)
+
     @pytest.mark.parametrize("value", ["0", "-1"])
     def test_api_rate_burst_below_one_is_rejected(self, monkeypatch, value):
         """A bucket that cannot hold one whole token never admits a request."""
@@ -136,6 +161,23 @@ class TestSettingsDefaults:
         assert settings.api_rate_per_second == pytest.approx(2.5)
         assert settings.api_rate_burst == 4
         assert settings.api_max_concurrent_content == 1
+
+    def test_api_max_server_pause_defaults_to_the_former_constant(self):
+        """The cap used to be a module constant in `sejm_client`; the default keeps it."""
+        assert Settings().api_max_server_pause == pytest.approx(60.0)
+
+    def test_api_max_server_pause_comes_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv("LAW_MCP_API_MAX_SERVER_PAUSE", "120")
+        assert Settings().api_max_server_pause == pytest.approx(120.0)
+
+    @pytest.mark.parametrize("value", ["0", "-1", "601", "inf"])
+    def test_api_max_server_pause_outside_the_band_is_rejected(self, monkeypatch, value):
+        """Zero would silence every server pause; ten minutes is already longer than any
+        MCP client waits, so anything above it only wedges callers for nothing."""
+        monkeypatch.setenv("LAW_MCP_API_MAX_SERVER_PAUSE", value)
+        with pytest.raises(ValidationError) as rejected:
+            Settings()
+        assert "LAW_MCP_API_MAX_SERVER_PAUSE" in str(rejected.value)
 
     @pytest.mark.parametrize("value", ["0", "-0.5"])
     def test_api_retry_budget_must_be_positive(self, monkeypatch, value):
@@ -171,7 +213,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "4.1.0"
+        assert settings.server_version == "4.2.0"
 
 
 class TestSettingsFromEnvironment:
@@ -354,12 +396,22 @@ class TestShutdownGrace:
 
     def test_shutdown_grace_defaults_to_fifteen_seconds(self) -> None:
         """The audit's recommended window, adopted verbatim as the default."""
-        assert Settings().shutdown_grace == 15.0
+        assert Settings().shutdown_grace == 15
+        assert isinstance(Settings().shutdown_grace, int)
 
     def test_shutdown_grace_reads_the_environment(self, monkeypatch) -> None:
         monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "25")
 
-        assert Settings().shutdown_grace == 25.0
+        assert Settings().shutdown_grace == 25
+
+    def test_shutdown_grace_rejects_a_fractional_window(self, monkeypatch) -> None:
+        """uvicorn's `timeout_graceful_shutdown` is whole seconds (#31). A float
+        field with an `int()` cast downstream silently turned 2.5 into 2; the
+        field is an int now, so the operator sees the truncation as an error."""
+        monkeypatch.setenv("LAW_MCP_SHUTDOWN_GRACE", "2.5")
+
+        with pytest.raises(ValidationError):
+            Settings()
 
     @pytest.mark.parametrize("value", ["0", "-1"])
     def test_shutdown_grace_rejects_non_positive_values(self, monkeypatch, value) -> None:
@@ -371,3 +423,26 @@ class TestShutdownGrace:
 
         with pytest.raises(ValidationError):
             Settings()
+
+
+class TestLogLevel:
+    """`LAW_MCP_LOG_LEVEL` is a closed set, not free text (#31)."""
+
+    def test_lowercase_is_normalised(self) -> None:
+        assert Settings(log_level="info").log_level == "INFO"
+
+    def test_lowercase_from_the_environment_is_normalised(self, monkeypatch) -> None:
+        monkeypatch.setenv("LAW_MCP_LOG_LEVEL", "debug")
+
+        assert Settings().log_level == "DEBUG"
+
+    @pytest.mark.parametrize("value", ["WARN", "FATAL", "TRACE", "verbose"])
+    def test_unknown_level_is_rejected(self, monkeypatch, value: str) -> None:
+        """`setup_logging` used to fall back to INFO for anything `logging` did
+        not know, so `WARN` — the spelling every other tool accepts — quietly
+        produced INFO output on both transports."""
+        monkeypatch.setenv("LAW_MCP_LOG_LEVEL", value)
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings()
+        assert "LAW_MCP_LOG_LEVEL" in str(exc_info.value)

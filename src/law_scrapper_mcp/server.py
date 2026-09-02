@@ -172,6 +172,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         max_concurrent_content=settings.api_max_concurrent_content,
         rate_per_second=settings.api_rate_per_second,
         rate_burst=settings.api_rate_burst,
+        max_server_pause=settings.api_max_server_pause,
         circuit_breaker=circuit_breaker,
         max_attempts=settings.api_max_attempts,
         retry_budget=settings.api_retry_budget,
@@ -222,11 +223,21 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         # Cleared first: if `client.close()` raised, a populated handle would
         # let `/health` claim a live breaker after the lifespan had ended.
         _health_state.clear()
-        await client.close()
-        await cache.clear()
+        try:
+            await client.close()
+        finally:
+            # Nested so a failed close still empties the cache (#31); the
+            # exception itself propagates — swallowing it would hide why the
+            # shutdown was unclean.
+            await cache.clear()
         logger.info("Law Scrapper MCP Server stopped")
 
 
+# Import-time derivation serves the stdio path only: `MCPServer.__init__`
+# validates the (auth, token_verifier) pair, and `app.run(transport="stdio")`
+# never looks at it again. The HTTP surface has a single derivation point in
+# `build_http_app()`, which re-reads the live `settings` (#41) — this pair is
+# never the source of truth for what the HTTP app serves.
 _auth_settings, _token_verifier = build_auth(settings)
 
 app = MCPServer[AppContext](
@@ -270,8 +281,16 @@ def build_http_app() -> ASGIApp:
     Re-check this function against that SDK method on every `mcp` upgrade: a
     changed `streamable_http_app()` signature would surface here first. Since
     v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
-    off the server instance (server.py:1241), not passed here.
+    off the server instance (server.py:1240-1241), not passed here.
     """
+    # Single derivation point for the HTTP surface (#41): the SDK reads the
+    # pair off the instance inside `streamable_http_app()`, so it is derived
+    # from the live `settings` here rather than frozen at import time — the
+    # same module global every other bootstrap function reads fresh, which is
+    # what lets a test swap `settings` and get the auth the server would run.
+    # `_token_verifier` is SDK-private; the integration suite already relies
+    # on it, so a rename would break there before it broke here.
+    app.settings.auth, app._token_verifier = build_auth(settings)
     http_app: ASGIApp = app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
@@ -306,9 +325,9 @@ def build_uvicorn_config() -> uvicorn.Config:
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level.lower(),
-        # uvicorn's knob is whole seconds; the setting is a float so that it
-        # reads like the other timeouts in `Settings`.
-        timeout_graceful_shutdown=int(settings.shutdown_grace),
+        # Whole seconds, validated as an int by `Settings` — no cast here, so
+        # a fractional value is refused at startup instead of truncated.
+        timeout_graceful_shutdown=settings.shutdown_grace,
         # Off unconditionally, against uvicorn's default of True.
         # ProxyHeadersMiddleware wraps the app from the outside and writes the
         # `X-Forwarded-For` value into `scope["client"]` *without validating it

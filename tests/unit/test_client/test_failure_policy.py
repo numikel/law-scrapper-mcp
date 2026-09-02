@@ -23,38 +23,32 @@ def _status_error(status: int, headers: dict[str, str] | None = None) -> httpx.H
 def test_5xx_is_retryable_and_counts_as_breaker_failure(status: int) -> None:
     """F19: the whole 5xx range opens the circuit, not just 502/503."""
     verdict = classify_failure(_status_error(status))
-    assert verdict.retryable is True
-    assert verdict.breaker_failure is True
-    assert verdict.rate_limited is False
+    assert verdict == Verdict(retryable=True, breaker_failure=True, retry_after=None, rate_limited=False)
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 410, 418, 422])
 def test_4xx_other_than_429_is_terminal(status: int) -> None:
     """A request error, not a server one — retrying would load Sejm for nothing."""
     verdict = classify_failure(_status_error(status))
-    assert verdict.retryable is False
-    assert verdict.breaker_failure is False
+    assert verdict == Verdict(retryable=False, breaker_failure=False, retry_after=None, rate_limited=False)
 
 
 def test_429_is_retryable_but_never_a_breaker_failure() -> None:
     """D6: 429 means "we are overdoing it", not "Sejm is down"."""
     verdict = classify_failure(_status_error(429))
-    assert verdict.retryable is True
-    assert verdict.breaker_failure is False
-    assert verdict.rate_limited is True
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=None, rate_limited=True)
 
 
 def test_429_honours_numeric_retry_after() -> None:
     verdict = classify_failure(_status_error(429, {"Retry-After": "2"}))
-    assert verdict.retry_after == pytest.approx(2.0)
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=2.0, rate_limited=True)
 
 
 @pytest.mark.parametrize("raw", ["", "later", "-5", "inf", "nan", "1e400"])
 def test_unparsable_retry_after_falls_back_to_backoff(raw: str) -> None:
     """A junk header must not upset the classification."""
     verdict = classify_failure(_status_error(429, {"Retry-After": raw}))
-    assert verdict.retryable is True
-    assert verdict.retry_after is None
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=None, rate_limited=True)
 
 
 PINNED_NOW = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
@@ -83,7 +77,7 @@ def test_429_honours_an_http_date_retry_after(pinned_clock: None) -> None:
 
     verdict = classify_failure(_status_error(429, {"Retry-After": when}))
 
-    assert verdict.retry_after == pytest.approx(120.0)
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=120.0, rate_limited=True)
 
 
 def test_an_expired_http_date_falls_back_to_backoff(pinned_clock: None) -> None:
@@ -96,7 +90,7 @@ def test_an_expired_http_date_falls_back_to_backoff(pinned_clock: None) -> None:
 
     verdict = classify_failure(_status_error(429, {"Retry-After": when}))
 
-    assert verdict.retry_after is None
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=None, rate_limited=True)
 
 
 def test_duplicate_retry_after_headers_resolve_to_the_longest_wait(pinned_clock: None) -> None:
@@ -107,7 +101,7 @@ def test_duplicate_retry_after_headers_resolve_to_the_longest_wait(pinned_clock:
     """
     verdict = classify_failure(_status_error(429, {"Retry-After": "60, 120"}))
 
-    assert verdict.retry_after == pytest.approx(120.0)
+    assert verdict == Verdict(retryable=True, breaker_failure=False, retry_after=120.0, rate_limited=True)
 
 
 @pytest.mark.parametrize(
@@ -128,8 +122,7 @@ def test_duplicate_retry_after_headers_resolve_to_the_longest_wait(pinned_clock:
 def test_transport_errors_are_retryable_failures(exc: httpx.TransportError) -> None:
     """F11: one branch covers timeouts and the remaining transport errors."""
     verdict = classify_failure(exc)
-    assert verdict.retryable is True
-    assert verdict.breaker_failure is True
+    assert verdict == Verdict(retryable=True, breaker_failure=True, retry_after=None, rate_limited=False)
 
 
 @pytest.mark.parametrize(
@@ -149,8 +142,7 @@ def test_non_transport_request_errors_are_terminal(exc: httpx.RequestError) -> N
     costing Sejm traffic (O1) and risking a circuit opened against a healthy API.
     """
     verdict = classify_failure(exc)
-    assert verdict.retryable is False
-    assert verdict.breaker_failure is False
+    assert verdict == Verdict(retryable=False, breaker_failure=False, retry_after=None, rate_limited=False)
 
 
 @pytest.mark.parametrize("status", list(range(100, 600)))
@@ -180,3 +172,14 @@ def test_verdict_is_immutable() -> None:
 def test_backoff_is_exponential_and_capped(attempt: int, expected: float) -> None:
     """Preserves the shape of the removed wait_exponential(min=1, max=10)."""
     assert backoff(attempt) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("attempt", [0, -3])
+def test_backoff_below_the_first_attempt_returns_the_base(attempt: int) -> None:
+    """A caller miscounting from zero must get the base delay, not a fraction of it."""
+    assert backoff(attempt) == pytest.approx(1.0)
+
+
+def test_backoff_far_past_the_cap_stays_at_the_cap() -> None:
+    """`2 ** 1999` does not fit a float; the cap must win before the power is taken."""
+    assert backoff(2000) == pytest.approx(10.0)

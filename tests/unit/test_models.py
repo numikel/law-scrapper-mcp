@@ -347,7 +347,7 @@ class TestApiResponseModels:
             status=item["status"],
             type=item.get("type"),
             promulgation=item.get("promulgation"),
-            dateEffect=item.get("dateEffect"),
+            entryIntoForce=item.get("entryIntoForce"),
             inForce=item.get("inForce"),
         )
         assert summary.ELI == "DU/2024/1"

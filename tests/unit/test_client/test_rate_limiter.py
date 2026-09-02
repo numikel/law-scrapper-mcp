@@ -3,52 +3,21 @@
 Not to be confused with `tests/unit/test_rate_limit.py`, which covers the inbound
 limiter in `http/rate_limit.py`. This one is about traffic we send.
 
-Every test drives an injected clock; none sits out a real delay (design constraint 3).
+Every test drives the injected clock from `conftest.py`; none sits out a real delay
+(design constraint 3).
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
-from law_scrapper_mcp.client import rate_limiter as limiter_module
 from law_scrapper_mcp.client.rate_limiter import EgressPaceDeadlineError, RateLimiter
+from test_client.conftest import FakeClock
 
 pytestmark = pytest.mark.asyncio
-
-
-class FakeClock:
-    """A monotonic clock that only moves when the limiter waits."""
-
-    def __init__(self) -> None:
-        self.now = 0.0
-
-    def __call__(self) -> float:
-        return self.now
-
-
-@pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
-
-
-@pytest.fixture
-def waits(clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Record requested waits and advance the fake clock by each one.
-
-    Yields to the event loop to allow other tasks to run (necessary for testing
-    concurrent wait serialisation).
-    """
-    recorded: list[float] = []
-
-    async def fake_wait(seconds: float) -> None:
-        recorded.append(seconds)
-        clock.now += seconds
-        await asyncio.sleep(0)
-
-    monkeypatch.setattr(limiter_module, "_wait", fake_wait)
-    return recorded
 
 
 async def test_a_full_bucket_admits_the_whole_burst_without_waiting(clock: FakeClock, waits: list[float]) -> None:
@@ -84,6 +53,39 @@ async def test_an_idle_bucket_never_overfills(clock: FakeClock, waits: list[floa
     await limiter.acquire()
 
     assert waits == [pytest.approx(0.2)]
+
+
+@pytest.mark.timeout(5)
+@pytest.mark.parametrize("now", [0.0, 1e3, 1e7, 1e9])
+async def test_the_deficit_wait_is_exact_at_any_clock_magnitude(
+    clock: FakeClock, waits: list[float], now: float
+) -> None:
+    """Refill arithmetic must not depend on how far the monotonic clock has run.
+
+    `monotonic()` counts from boot, so on a long-lived host `now` is 1e7 and up, and
+    `now - self._updated` loses digits to the magnitude of `now` rather than to the
+    size of the deficit. The tolerance in `acquire` scales with `ulp(now) * rate` for
+    exactly that reason; a fixed epsilon covers the small-clock cases the rest of this
+    suite runs at and nothing else. At 1e7 a bare `1e-9` already falls short (`ulp(1e7)
+    * 5 = 9.3e-9`): the deficit wait leaves the bucket a rounding error under one
+    token, the limiter asks for a wait too small to move a clock of that magnitude,
+    and the loop never returns. The timeout turns that hang into a failure.
+
+    Five post-burst waits rather than one: a single wait can land on a friendly
+    rounding by luck (it does at 1e9), a run of them does not.
+    """
+    clock.now = now
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    for _ in range(10):
+        await limiter.acquire()
+
+    admitted: list[float] = []
+    for _ in range(5):
+        await limiter.acquire()
+        admitted.append(clock.now - now)
+
+    assert waits == [pytest.approx(0.2, abs=1e-6)] * 5
+    assert admitted == [pytest.approx(0.2 * n, abs=1e-6) for n in range(1, 6)]
 
 
 async def test_a_paused_limiter_holds_back_every_request(clock: FakeClock, waits: list[float]) -> None:
@@ -137,6 +139,38 @@ async def test_a_non_positive_pause_is_ignored(clock: FakeClock, waits: list[flo
     await limiter.acquire()
 
     assert waits == []
+
+
+async def test_a_pause_past_the_cap_is_clamped_to_max_pause(clock: FakeClock, waits: list[float]) -> None:
+    """The limiter owns the bound on what one server signal can cost every caller.
+
+    Before, `pause_for` took any length at face value and relied on its one caller to
+    clamp first; a second caller — or a test — could wedge the whole client for hours.
+    """
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
+
+    limiter.pause_for(10_000.0)
+    await limiter.acquire()
+
+    assert clock.now == pytest.approx(60.0)
+    assert waits == [pytest.approx(60.0)]
+
+
+async def test_a_clamped_pause_is_logged(clock: FakeClock, caplog: pytest.LogCaptureFixture) -> None:
+    """Silently shortening a server's request for quiet would hide the very signal an operator tunes for."""
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock, max_pause=60.0)
+
+    with caplog.at_level(logging.WARNING, logger="law_scrapper_mcp"):
+        limiter.pause_for(10_000.0)
+
+    assert any("exceeds the 60.0s cap" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("max_pause", [0.0, -1.0])
+async def test_a_non_positive_max_pause_is_rejected(max_pause: float) -> None:
+    """A zero cap would silently turn every server pause into no pause at all."""
+    with pytest.raises(ValueError):
+        RateLimiter(rate=5.0, burst=10, max_pause=max_pause)
 
 
 @pytest.mark.parametrize("rate", [0.0, -1.0])
@@ -200,6 +234,68 @@ async def test_a_pause_does_not_earn_tokens_while_it_lasts(clock: FakeClock, wai
     await asyncio.gather(one_request(), one_request(), one_request())
 
     assert admitted == [pytest.approx(30.2), pytest.approx(30.4), pytest.approx(30.6)]
+
+
+async def _park_in_acquire(limiter: RateLimiter, waits: list[float]) -> asyncio.Task[None]:
+    """Start `acquire` in its own task and return once it is suspended inside a wait.
+
+    The fake wait advances the clock and then yields, so "parked" means the first wait
+    has been booked and the task is sitting at that yield with the lock held. Bounded
+    rather than counted: how many loop turns it takes is a property of asyncio, not of
+    the limiter.
+    """
+    task = asyncio.create_task(limiter.acquire())
+    for _ in range(100):
+        if waits:
+            return task
+        await asyncio.sleep(0)
+    task.cancel()
+    raise AssertionError("acquire never reached its wait")
+
+
+async def test_a_pause_extended_mid_wait_moves_the_admission_time(clock: FakeClock, waits: list[float]) -> None:
+    """A second 429 that lands while a task is already waiting out the first must count.
+
+    The retry loop calls `pause_for` from whichever task saw the header; the tasks it
+    holds back are parked inside `acquire`. If `acquire` measured the pause once on
+    entry and slept it off, the extension would be applied to nobody already waiting —
+    the very requests most likely to hit the server the moment the first window ends.
+    """
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    limiter.pause_for(30.0)
+    parked = await _park_in_acquire(limiter, waits)
+    assert clock.now == pytest.approx(30.0)
+
+    limiter.pause_for(30.0)
+    await parked
+
+    assert clock.now == pytest.approx(60.0)
+    assert waits == [pytest.approx(30.0), pytest.approx(30.0)]
+
+
+@pytest.mark.timeout(5)
+async def test_cancelling_a_parked_acquire_releases_the_lock(clock: FakeClock, waits: list[float]) -> None:
+    """A caller that gives up while waiting must not take the limiter down with it.
+
+    The wait happens under the lock on purpose (arrival order), which makes the lock
+    the one thing a cancelled waiter can leave behind. An MCP client timing out a tool
+    call is exactly this cancellation; a wedged lock would then refuse every later
+    request from every session for the life of the process. The timeout turns that
+    wedge into a failure instead of a hang.
+    """
+    limiter = RateLimiter(rate=5.0, burst=10, clock=clock)
+    limiter.pause_for(30.0)
+    parked = await _park_in_acquire(limiter, waits)
+
+    parked.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await parked
+
+    assert limiter._lock.locked() is False
+    # The pause has run out on the fake clock by now, so the next caller must be
+    # admitted without waiting — and without being held by a lock nobody owns.
+    await limiter.acquire()
+    assert waits == [pytest.approx(30.0)]
 
 
 async def test_a_pause_longer_than_the_deadline_is_refused_without_waiting(

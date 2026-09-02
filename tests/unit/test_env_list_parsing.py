@@ -67,8 +67,16 @@ def test_every_list_setting_accepts_a_flat_value(monkeypatch: pytest.MonkeyPatch
     below exercises the same decoding path with a value that satisfies both.
     """
     monkeypatch.setenv(variable, "https://mcp.example.com")
-    monkeypatch.setenv("LAW_MCP_AUTH_MODE", "bearer")
-    monkeypatch.setenv("LAW_MCP_AUTH_TOKEN", "x" * 32)
+    if variable == "LAW_MCP_AUTH_REQUIRED_SCOPES":
+        # A non-empty scope list is refused under `bearer` (#38), so the one
+        # mode in which the value is meaningful has to carry this case.
+        monkeypatch.setenv("LAW_MCP_AUTH_MODE", "oauth")
+        monkeypatch.setenv("LAW_MCP_AUTH_ISSUER", "https://login.example.com/tenant/v2.0")
+        monkeypatch.setenv("LAW_MCP_AUTH_AUDIENCE", "api://law-scrapper")
+        monkeypatch.setenv("LAW_MCP_AUTH_RESOURCE_SERVER_URL", "https://mcp.example.com/mcp")
+    else:
+        monkeypatch.setenv("LAW_MCP_AUTH_MODE", "bearer")
+        monkeypatch.setenv("LAW_MCP_AUTH_TOKEN", "x" * 32)
 
     settings = Settings()
 

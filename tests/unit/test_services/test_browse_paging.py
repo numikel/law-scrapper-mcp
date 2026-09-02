@@ -51,6 +51,34 @@ def browse_page() -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _derived_page(browse_page: dict[str, Any], count: int) -> dict[str, Any]:
+    """A `count`-record page derived from the recording, every record distinct.
+
+    The provenance note forbids extending the recording with invented records and
+    asks for derived shapes instead. Each derived record keeps the recorded field set
+    and format and varies only what identifies an act — `pos`, `ELI`, `address`,
+    `displayAddress` — counting down from the recording's own first position, the way
+    the live endpoint orders a year. Repeating the five recorded records four times
+    would give a page whose ELIs collide, and a test on such a page cannot tell a
+    re-sliced window from an intact one.
+    """
+    template = browse_page["items"][0]
+    first_pos = template["pos"]
+    items = []
+    for n in range(count):
+        pos = first_pos - n
+        items.append(
+            dict(
+                template,
+                pos=pos,
+                ELI=f"{template['publisher']}/{template['year']}/{pos}",
+                address=f"W{template['publisher']}{template['year']}000{pos}",
+                displayAddress=f"Dz.U. {template['year']} poz. {pos}",
+            )
+        )
+    return dict(browse_page, count=count, items=items)
+
+
 @pytest_asyncio.fixture
 async def service() -> AsyncGenerator[SearchService]:
     client = SejmApiClient(cache=TTLCache(max_entries=100), timeout=5.0)
@@ -104,7 +132,7 @@ async def test_first_page_of_a_large_year_reports_a_next_offset(
     service: SearchService, browse_page: dict[str, Any]
 ) -> None:
     """Criterion 8: the default first page of DU/2024 is truncated and servable."""
-    page = dict(browse_page, count=20, items=browse_page["items"] * 4)
+    page = _derived_page(browse_page, 20)
     route = respx.get(SEARCH_URL).mock(return_value=Response(200, json=page))
 
     output = await service.browse("DU", 2024)
@@ -115,6 +143,10 @@ async def test_first_page_of_a_large_year_reports_a_next_offset(
     assert output.page_info.returned_count == 20
     assert output.page_info.was_truncated is True
     assert output.page_info.next_offset == 20
+    # Twenty distinct acts in, twenty distinct acts out, in the API's order (#50).
+    elis = [act.eli for act in output.results]
+    assert len(set(elis)) == 20
+    assert elis == [item["ELI"] for item in page["items"]]
 
 
 @respx.mock
@@ -141,6 +173,15 @@ async def test_the_richer_response_does_not_leak_new_fields(
     output = await service.browse("DU", 2024, limit=5, offset=10, detail_level=DetailLevel.FULL)
 
     assert set(output.results[0].model_dump().keys()) == EXPECTED_FIELDS
+    # Names alone would pass with every value None (#50). Each value is read from the
+    # recording, so a refreshed recording still needs no test edit.
+    first, recorded = output.results[0], browse_page["items"][0]
+    assert first.eli == recorded["ELI"]
+    assert first.title == recorded["title"]
+    assert first.type == recorded["type"]
+    assert first.promulgation_date == recorded["promulgation"]
+    assert first.effective_date == recorded["entryIntoForce"]
+    assert first.in_force == recorded["inForce"]
 
 
 @respx.mock
@@ -201,3 +242,25 @@ async def test_a_zero_limit_page_still_reports_the_year_size(
     assert output.results == []
     assert output.page_info.limit == 0
     assert output.page_info.total_count == 1984
+
+
+@respx.mock
+async def test_effective_date_is_read_from_entry_into_force(
+    service: SearchService, browse_page: dict[str, Any]
+) -> None:
+    """Issue #52: the API calls the field `entryIntoForce`; `dateEffect` does not exist.
+
+    The recording is the ground truth here. Reading a key that neither endpoint returns
+    made `effective_date` None on every record ever formatted, and the date-range
+    filter in `filter_results` silently matched nothing on it.
+    """
+    respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
+
+    output = await service.browse("DU", 2024, limit=5)
+
+    assert output.results[0].effective_date == browse_page["items"][0]["entryIntoForce"]
+    # Two of the five recorded acts carry no entry-into-force date at all; the reader
+    # must pass that through as None rather than invent a value.
+    assert [act.effective_date for act in output.results] == [
+        item.get("entryIntoForce") for item in browse_page["items"]
+    ]

@@ -245,6 +245,9 @@ GitHub Actions (`.github/workflows/ci.yml`), `lint` and `test` jobs:
 
 A `release-prep-check` job requires `docs/changelogs/v<version>.md` whenever `pyproject.toml`'s
 version changes, and an `audit` job runs `pip-audit`.
+A `docker` job builds the image and smoke-tests it: `/health` over streamable-http with a throwaway
+bearer token, one `initialize` round-trip over STDIO (`LAW_MCP_TRANSPORT=stdio` overriding the
+image default), and a non-root check.
 
 ## Maintenance
 

@@ -155,6 +155,8 @@ docker compose up
 docker compose -f docker-compose.yml up
 ```
 
+CI builds this image and smoke-tests both transports (`/health` over streamable-http, one `initialize` over STDIO) on every code change, so a Dockerfile that no longer builds fails the pull request rather than a downstream registry.
+
 ## Configuration
 
 All settings are configured via environment variables with the `LAW_MCP_` prefix:

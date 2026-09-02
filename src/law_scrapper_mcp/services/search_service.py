@@ -242,7 +242,10 @@ class SearchService:
         if detail_level in (DetailLevel.STANDARD, DetailLevel.FULL):
             output.type = item.get("type")
             output.promulgation_date = item.get("promulgation")
-            output.effective_date = item.get("dateEffect")
+            # `entryIntoForce`, not `dateEffect`: the latter is a key neither endpoint
+            # returns (tests/fixtures/browse_page.provenance.md), so it read None on
+            # every record ever formatted (#52).
+            output.effective_date = item.get("entryIntoForce")
             output.in_force = item.get("inForce")
 
         return output

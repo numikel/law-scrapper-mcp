@@ -95,7 +95,7 @@ class ChangesService:
                     status=item.get("status", ""),
                     type=item.get("type"),
                     promulgation_date=item.get("promulgation"),
-                    effective_date=item.get("dateEffect"),
+                    effective_date=item.get("entryIntoForce"),
                     in_force=item.get("inForce"),
                 )
             )

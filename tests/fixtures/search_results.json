@@ -10,7 +10,7 @@
       "status": "akt obowiązujący",
       "type": "Ustawa",
       "promulgation": "2024-01-05",
-      "dateEffect": "2024-02-01",
+      "entryIntoForce": "2024-02-01",
       "inForce": "YES"
     },
     {
@@ -22,7 +22,7 @@
       "status": "akt obowiązujący",
       "type": "Rozporządzenie",
       "promulgation": "2024-01-10",
-      "dateEffect": "2024-03-01",
+      "entryIntoForce": "2024-03-01",
       "inForce": "YES"
     },
     {
@@ -34,7 +34,7 @@
       "status": "uchylony",
       "type": "Ustawa",
       "promulgation": "2024-02-01",
-      "dateEffect": "2024-04-01",
+      "entryIntoForce": "2024-04-01",
       "inForce": "NO"
     }
   ]

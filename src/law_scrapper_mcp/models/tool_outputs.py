@@ -39,7 +39,7 @@ class ActSummaryOutput(BaseModel):
     status: str
     type: str | None = None
     promulgation_date: str | None = None
-    effective_date: str | None = None
+    effective_date: str | None = Field(default=None, description="Data wejścia w życie (entryIntoForce).")
     in_force: str | None = None
 
 

@@ -201,3 +201,25 @@ async def test_a_zero_limit_page_still_reports_the_year_size(
     assert output.results == []
     assert output.page_info.limit == 0
     assert output.page_info.total_count == 1984
+
+
+@respx.mock
+async def test_effective_date_is_read_from_entry_into_force(
+    service: SearchService, browse_page: dict[str, Any]
+) -> None:
+    """Issue #52: the API calls the field `entryIntoForce`; `dateEffect` does not exist.
+
+    The recording is the ground truth here. Reading a key that neither endpoint returns
+    made `effective_date` None on every record ever formatted, and the date-range
+    filter in `filter_results` silently matched nothing on it.
+    """
+    respx.get(SEARCH_URL).mock(return_value=Response(200, json=browse_page))
+
+    output = await service.browse("DU", 2024, limit=5)
+
+    assert output.results[0].effective_date == browse_page["items"][0]["entryIntoForce"]
+    # Two of the five recorded acts carry no entry-into-force date at all; the reader
+    # must pass that through as None rather than invent a value.
+    assert [act.effective_date for act in output.results] == [
+        item.get("entryIntoForce") for item in browse_page["items"]
+    ]

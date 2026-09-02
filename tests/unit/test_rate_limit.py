@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -15,7 +17,7 @@ async def _ok(_request):
     return JSONResponse({"ok": True})
 
 
-def build_client(**overrides) -> TestClient:
+def build_client(*, client: tuple[str, int] = ("127.0.0.1", 50000), **overrides) -> TestClient:
     kwargs = {"requests": 5, "window": 60.0, "burst": 5, "trusted_proxies": []}
     kwargs.update(overrides)
     inner = Starlette(routes=[Route("/mcp", _ok, methods=["GET"]), Route("/health", _ok)])
@@ -23,7 +25,7 @@ def build_client(**overrides) -> TestClient:
     # IP — real uvicorn deployments populate scope["client"] with an actual
     # address. Pin a loopback IP so tests exercising `trusted_proxies` CIDR
     # matching see something that can actually be parsed as an IP.
-    return TestClient(RateLimitMiddleware(inner, **kwargs), client=("127.0.0.1", 50000))
+    return TestClient(RateLimitMiddleware(inner, **kwargs), client=client)
 
 
 def test_requests_within_the_bucket_pass() -> None:
@@ -55,9 +57,57 @@ def test_bucket_refills_over_time(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_health_is_exempt_from_rate_limit() -> None:
-    """Criterion 16 (D12): the container probe must not share the budget."""
+    """Criterion 16 (D12): the container probe must not share the budget.
+
+    The probe in docker-compose.yml runs inside the container, so it arrives
+    from the loopback — that is the peer the exemption exists for.
+    """
     client = build_client(requests=1, burst=1)
     assert [client.get("/health").status_code for _ in range(10)] == [200] * 10
+
+
+def test_health_from_ipv6_loopback_is_exempt() -> None:
+    client = build_client(requests=1, burst=1, client=("::1", 50000))
+    assert [client.get("/health").status_code for _ in range(10)] == [200] * 10
+
+
+def test_health_from_a_non_loopback_peer_is_metered() -> None:
+    """#39: a blanket exemption made `/health` an unmetered route for anyone.
+
+    Only the container's own probe needs the exemption; a remote peer looping
+    over `/health` gets the same per-client bucket as every other request.
+    """
+    client = build_client(requests=1, burst=1, client=("203.0.113.5", 5000))
+    assert client.get("/health").status_code == 200
+    assert client.get("/health").status_code == 429
+
+
+def test_health_without_a_client_address_is_metered() -> None:
+    """A scope with no `client` cannot prove it is local, so it is not exempt."""
+    middleware = RateLimitMiddleware(
+        Starlette(routes=[Route("/health", _ok)]),
+        requests=1,
+        window=60.0,
+        burst=1,
+        trusted_proxies=[],
+    )
+    statuses: list[int] = []
+
+    async def send(message) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(message["status"])
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def drive() -> None:
+        for _ in range(2):
+            scope = {"type": "http", "method": "GET", "path": "/health", "headers": [], "query_string": b""}
+            await middleware(scope, receive, send)
+
+    asyncio.run(drive())
+
+    assert statuses == [200, 429]
 
 
 def test_xff_from_untrusted_peer_is_ignored() -> None:

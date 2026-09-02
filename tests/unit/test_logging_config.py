@@ -45,12 +45,15 @@ def restore_logging_state() -> Iterator[None]:
     saved_root_level = root.level
     app_logger = logging.getLogger("law_scrapper_mcp")
     saved_app_level = app_logger.level
+    saved_http_levels = {name: logging.getLogger(name).level for name in ("httpx", "httpcore")}
 
     yield
 
     root.handlers[:] = saved_handlers
     root.setLevel(saved_root_level)
     app_logger.setLevel(saved_app_level)
+    for name, level in saved_http_levels.items():
+        logging.getLogger(name).setLevel(level)
 
 
 def test_setup_logging_forces_utf8_on_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,3 +192,21 @@ def test_json_timestamp_is_explicit_utc(monkeypatch: pytest.MonkeyPatch) -> None
     # Must parse as timezone-aware datetime
     parsed = datetime.fromisoformat(timestamp_str)
     assert parsed.tzinfo is not None, f"Timestamp must be timezone-aware, got {parsed}"
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "INFO"])
+@pytest.mark.parametrize("name", ["httpx", "httpcore"])
+def test_http_client_request_lines_stay_off_info(monkeypatch: pytest.MonkeyPatch, level: str, name: str) -> None:
+    """httpx logs every request at INFO with its full URL, query string included.
+
+    For `acts/search` that query string is the caller's search text, so a plain INFO
+    deployment would write what an agent looked for into the log — the follow-on of
+    F13, which redacted the same text from this project's own ERROR records. The
+    transport loggers are held at WARNING or the configured level, whichever is
+    stricter; nothing this project logs about a request goes through them.
+    """
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    setup_logging(level=level, format="text")
+
+    assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING

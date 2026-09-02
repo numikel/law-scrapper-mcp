@@ -133,8 +133,11 @@ class SearchService:
         # does with `limit=0` is unverified, and a zero-item page still owes the caller a
         # truthful `totalCount`. `_output` slices the record away either way.
         params["limit"] = max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 1)
-        if offset:
-            params["offset"] = offset
+        # Clamped before the wire, not only in `_output`: `if offset:` is true for -5
+        # and forwarded it verbatim while the page metadata reported zero (#18).
+        page_offset = max(offset or 0, 0)
+        if page_offset:
+            params["offset"] = page_offset
 
         data = await self._client.get_json("acts/search", params=params, cache_ttl=settings.cache_search_ttl)
 
@@ -158,8 +161,8 @@ class SearchService:
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
-            offset=offset or 0,
-            window_offset=offset or 0,
+            offset=page_offset,
+            window_offset=page_offset,
         )
 
     async def browse(

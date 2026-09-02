@@ -12,6 +12,7 @@ from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
+from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.response_enrichment import search_hints
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -141,15 +142,24 @@ def register(mcp: MCPServer[AppContext]) -> None:
             with contextlib.suppress(ValueError, TypeError):
                 year_int = int(year)
 
+        # Loud, like every other list tool (#18). Suppressing the parse turned
+        # `offset="abc"` into page one and `limit="x"` into twenty with no signal that
+        # the call had been misread. `limit` keeps no upper clamp (P5, pinned by
+        # `test_limit_above_the_shared_maximum_is_not_clamped`) but does need a floor:
+        # the upstream request is the whole cost of this tool, and an empty page still
+        # pays for one record.
         limit_int: int | None = None
         if limit is not None:
-            with contextlib.suppress(ValueError, TypeError):
+            try:
                 limit_int = int(limit)
+            except (ValueError, TypeError) as e:
+                raise ValueError("Parametr 'limit' musi być liczbą całkowitą.") from e
+            if limit_int < 1:
+                raise ValueError("Parametr 'limit' musi być większy od zera.")
 
         offset_int: int | None = None
         if offset is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                offset_int = int(offset)
+            offset_int = parse_non_negative(offset, name="offset", default=0)
 
         in_force_bool: bool | None = None
         if in_force is not None:

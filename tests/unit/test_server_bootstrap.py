@@ -94,6 +94,44 @@ def test_http_app_pins_security_critical_kwargs(monkeypatch) -> None:
     assert calls[0]["streamable_http_path"] == "/mcp"
 
 
+def test_http_app_derives_auth_from_live_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#41: `build_auth()` ran once at import, so the served app carried the
+    auth of whatever `settings` looked like when `server.py` was first
+    imported. `build_http_app()` must be the single derivation point for the
+    HTTP surface, reading the module-level `settings` name fresh — the same
+    name every other bootstrap function already reads."""
+    from law_scrapper_mcp.auth.static_token import StaticTokenVerifier
+    from law_scrapper_mcp.config import Settings
+
+    bearer = Settings(transport="streamable-http", auth_mode="bearer", auth_token="k" * 32, rate_limit_enabled=False)
+    monkeypatch.setattr(server_module, "settings", bearer)
+    # `build_http_app()` writes these two on the shared `app` instance; the
+    # originals are registered so monkeypatch puts them back for other tests.
+    monkeypatch.setattr(server_module.app.settings, "auth", server_module.app.settings.auth)
+    monkeypatch.setattr(server_module.app, "_token_verifier", server_module.app._token_verifier)
+
+    server_module.build_http_app()
+
+    assert isinstance(server_module.app._token_verifier, StaticTokenVerifier)
+    assert server_module.app.settings.auth is not None
+    assert str(server_module.app.settings.auth.issuer_url) == "http://127.0.0.1:7683/"
+
+
+def test_http_app_clears_auth_when_settings_say_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The counter-direction: a verifier left over from an earlier derivation
+    must not survive a `settings` that says `auth_mode=none`."""
+    from law_scrapper_mcp.auth.static_token import StaticTokenVerifier
+
+    monkeypatch.setattr(server_module.app.settings, "auth", server_module.app.settings.auth)
+    monkeypatch.setattr(server_module.app, "_token_verifier", StaticTokenVerifier(token="k" * 32, scopes=[]))
+    monkeypatch.setattr(server_module.settings, "rate_limit_enabled", False)
+
+    server_module.build_http_app()
+
+    assert server_module.app._token_verifier is None
+    assert server_module.app.settings.auth is None
+
+
 def test_main_http_branch_uses_our_own_server(monkeypatch) -> None:
     monkeypatch.setattr(server_module.settings, "transport", "streamable-http")
     served: list[uvicorn.Config] = []

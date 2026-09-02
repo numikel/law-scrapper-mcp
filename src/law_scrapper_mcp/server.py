@@ -227,6 +227,11 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         logger.info("Law Scrapper MCP Server stopped")
 
 
+# Import-time derivation serves the stdio path only: `MCPServer.__init__`
+# validates the (auth, token_verifier) pair, and `app.run(transport="stdio")`
+# never looks at it again. The HTTP surface has a single derivation point in
+# `build_http_app()`, which re-reads the live `settings` (#41) — this pair is
+# never the source of truth for what the HTTP app serves.
 _auth_settings, _token_verifier = build_auth(settings)
 
 app = MCPServer[AppContext](
@@ -270,8 +275,16 @@ def build_http_app() -> ASGIApp:
     Re-check this function against that SDK method on every `mcp` upgrade: a
     changed `streamable_http_app()` signature would surface here first. Since
     v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
-    off the server instance (server.py:1241), not passed here.
+    off the server instance (server.py:1240-1241), not passed here.
     """
+    # Single derivation point for the HTTP surface (#41): the SDK reads the
+    # pair off the instance inside `streamable_http_app()`, so it is derived
+    # from the live `settings` here rather than frozen at import time — the
+    # same module global every other bootstrap function reads fresh, which is
+    # what lets a test swap `settings` and get the auth the server would run.
+    # `_token_verifier` is SDK-private; the integration suite already relies
+    # on it, so a rename would break there before it broke here.
+    app.settings.auth, app._token_verifier = build_auth(settings)
     http_app: ASGIApp = app.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,

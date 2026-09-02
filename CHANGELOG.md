@@ -99,7 +99,7 @@ parameter names or response shape; several fields and validations now behave as 
 - A section with `end_pos == 0` was treated as open-ended by `section_for_position`;
   overlapping sections are now rejected when a document is loaded (#20).
 
-## [4.1.0] - 2026-09-02 - 2026-09-02
+## [4.1.0] - 2026-09-02
 
 See [docs/changelogs/v4.1.0.md](docs/changelogs/v4.1.0.md) for details.
 

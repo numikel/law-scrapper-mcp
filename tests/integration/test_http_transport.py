@@ -47,6 +47,12 @@ def asgi_app(monkeypatch: pytest.MonkeyPatch):
     that actually run — not a hand-rolled approximation of them.
     """
     monkeypatch.setattr(server_module.settings, "host", "0.0.0.0")
+    # `build_http_app()` writes the derived auth pair onto the shared `app` singleton,
+    # so registering the current values first is what makes that write reversible —
+    # otherwise this fixture leaks the last derivation into every later test in the
+    # session. The same idiom guards `test_http_auth.bearer_app`.
+    monkeypatch.setattr(server_module.app.settings, "auth", server_module.app.settings.auth)
+    monkeypatch.setattr(server_module.app, "_token_verifier", server_module.app._token_verifier)
     return server_module.build_http_app()
 
 

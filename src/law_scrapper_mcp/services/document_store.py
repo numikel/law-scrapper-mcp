@@ -7,6 +7,7 @@ import time
 from bisect import bisect_right
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
@@ -35,6 +36,14 @@ class LoadedDocument:
     def __post_init__(self) -> None:
         self.size_bytes = len(self.markdown.encode("utf-8"))
         self.sections = sorted(self.sections, key=lambda section: section.start_pos)
+        # `section_for_position` relies on disjoint ranges; a producer that
+        # violates that would misattribute hits silently, so refuse it here.
+        for current, following in pairwise(self.sections):
+            if current.end_pos is not None and current.end_pos > following.start_pos:
+                raise ValueError(
+                    f"Sekcje aktu {self.eli} nakładają się: '{current.title}' kończy się na pozycji "
+                    f"{current.end_pos}, a '{following.title}' zaczyna się na pozycji {following.start_pos}."
+                )
         self.section_starts = tuple(section.start_pos for section in self.sections)
 
 
@@ -46,15 +55,22 @@ def section_for_position(
 ) -> tuple[str, str]:
     """Return the (id, title) of the section covering `position`.
 
-    Sections occupy disjoint, increasing ranges, so the candidate is the last
-    section starting at or before `position`. A linear scan over `sections`
-    would make in-act search cost matches x sections; this is logarithmic.
+    Precondition: `sections` is sorted by `start_pos` and the ranges are
+    disjoint, so the candidate is the last section starting at or before
+    `position`. `ContentProcessor.index_sections` guarantees this — each
+    section ends where the next begins — and `LoadedDocument.__post_init__`
+    rejects any producer that does not. A linear scan over `sections` would
+    make in-act search cost matches x sections; this is logarithmic.
+
+    Only `end_pos is None` means "extends to the end of the document"; an
+    explicit `0` is an empty range, not an open-ended one.
     """
     index = bisect_right(section_starts, position) - 1
     if index < 0:
         return UNKNOWN_SECTION
     section = sections[index]
-    if position < (section.end_pos or document_length):
+    end = section.end_pos if section.end_pos is not None else document_length
+    if position < end:
         return section.id, section.title
     return UNKNOWN_SECTION
 
@@ -200,15 +216,6 @@ class DocumentStore:
         valid_spans = [(start, end) for start, end in spans if 0 <= start <= end <= document_length]
 
         return _build_hits(markdown, sections, section_starts, valid_spans, context_chars)
-
-    async def search(self, eli: str, query: str, context_chars: int = 500) -> list[SearchHit]:
-        """Search literal text within a loaded document, returning every hit.
-
-        Kept as the unbounded composition of `scan` and `hydrate`. Callers that
-        only need one page must paginate the spans between the two calls.
-        """
-        spans = await self.scan(eli, query)
-        return await self.hydrate(eli, spans, context_chars=context_chars)
 
     async def get_toc(self, eli: str) -> list[Section]:
         """Get table of contents for a loaded document."""

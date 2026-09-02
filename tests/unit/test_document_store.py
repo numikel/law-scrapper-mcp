@@ -14,8 +14,15 @@ from law_scrapper_mcp.services.document_store import (
     UNKNOWN_SECTION,
     DocumentStore,
     LoadedDocument,
+    SearchHit,
     section_for_position,
 )
+
+
+async def _search(store: DocumentStore, eli: str, query: str, *, context_chars: int = 500) -> list[SearchHit]:
+    """Compose `scan` and `hydrate` the way `ContentService.search` does, unpaginated."""
+    spans = await store.scan(eli, query)
+    return await store.hydrate(eli, spans, context_chars=context_chars)
 
 
 @pytest.mark.asyncio
@@ -170,7 +177,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert "keyword" in hits[0].context
 
@@ -182,7 +189,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert "KEYWORD" in hits[0].context
 
@@ -195,7 +202,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 2
 
     async def test_search_with_context(self, document_store: DocumentStore):
@@ -206,7 +213,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword", context_chars=20)
+        hits = await _search(document_store, "DU/2024/1", "keyword", context_chars=20)
         assert len(hits) == 1
         # Context should include text before and after
         assert "keyword" in hits[0].context
@@ -235,7 +242,7 @@ class TestSearchInDocument:
         ]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "keyword")
+        hits = await _search(document_store, "DU/2024/1", "keyword")
         assert len(hits) == 1
         assert hits[0].section_id == "art_2"
         assert hits[0].section_title == "Art. 2."
@@ -246,13 +253,13 @@ class TestSearchInDocument:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "nonexistent")
+        hits = await _search(document_store, "DU/2024/1", "nonexistent")
         assert len(hits) == 0
 
     async def test_search_document_not_loaded(self, document_store: DocumentStore):
         """Test searching in non-loaded document raises error."""
         with pytest.raises(DocumentNotLoadedError, match="Dokument DU/2024/999 nie jest załadowany"):
-            await document_store.search("DU/2024/999", "keyword")
+            await _search(document_store, "DU/2024/999", "keyword")
 
 
 @pytest.mark.asyncio
@@ -483,7 +490,7 @@ class TestSearchTreatsQueryLiterally:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        hits = await document_store.search("DU/2024/1", "(.+)+!")
+        hits = await _search(document_store, "DU/2024/1", "(.+)+!")
 
         assert len(hits) == 1
         assert hits[0].match_start == markdown.index("(.+)+!")
@@ -495,8 +502,8 @@ class TestSearchTreatsQueryLiterally:
         sections = [Section(id="art_1", title="Art. 1.", level=2, start_pos=0)]
         await document_store.load("DU/2024/1", markdown, sections)
 
-        literal_hits = await document_store.search("DU/2024/1", "(dwadzieścia")
-        wildcard_hits = await document_store.search("DU/2024/1", "23.")
+        literal_hits = await _search(document_store, "DU/2024/1", "(dwadzieścia")
+        wildcard_hits = await _search(document_store, "DU/2024/1", "23.")
 
         assert len(literal_hits) == 1
         assert wildcard_hits == []  # dot is not a metacharacter — "23." does not occur
@@ -560,6 +567,16 @@ class TestSectionForPosition:
 
         assert section_for_position([0], sections, 90, 100) == ("art_1", "Art. 1")
 
+    def test_explicit_zero_end_pos_is_not_confused_with_open_ended(self) -> None:
+        """Only `None` means "extends to the end"; `end_pos=0` is an empty range.
+
+        Written as `end_pos or document_length`, the falsy zero silently
+        turned an empty section into one covering the whole document.
+        """
+        sections = [Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=0)]
+
+        assert section_for_position([0], sections, 5, 100) == UNKNOWN_SECTION
+
     def test_section_lookup_is_logarithmic_in_the_number_of_sections(self) -> None:
         sections = _numbered_sections(4096)
         starts = _CountingStarts([section.start_pos for section in sections])
@@ -584,6 +601,28 @@ class TestLoadedDocumentSectionIndex:
 
         assert [section.id for section in document.sections] == ["art_0", "art_1", "art_2"]
         assert document.section_starts == (0, 100, 200)
+
+    def test_overlapping_sections_are_rejected_at_load_time(self) -> None:
+        """`section_for_position` assumes disjoint ranges; a producer that
+        breaks the assumption must fail loudly here, not attribute hits to the
+        wrong section later."""
+        sections = [
+            Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=150),
+            Section(id="art_2", title="Art. 2", level=2, start_pos=100, end_pos=200),
+        ]
+
+        with pytest.raises(ValueError, match=r"DU/2024/1.*Art\. 1.*150.*Art\. 2.*100"):
+            LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+    def test_open_ended_sections_do_not_trip_the_overlap_check(self) -> None:
+        sections = [
+            Section(id="art_1", title="Art. 1", level=2, start_pos=0, end_pos=None),
+            Section(id="art_2", title="Art. 2", level=2, start_pos=100, end_pos=None),
+        ]
+
+        document = LoadedDocument(eli="DU/2024/1", markdown="x" * 300, sections=sections)
+
+        assert document.section_starts == (0, 100)
 
 
 def _document_with_two_hits() -> tuple[str, list[Section]]:
@@ -647,12 +686,12 @@ class TestScanAndHydrate:
 
         assert observed == [False], "the store lock must not be held while contexts are built"
 
-    async def test_search_still_returns_every_hit(self) -> None:
+    async def test_scan_then_hydrate_returns_every_hit(self) -> None:
         markdown, sections = _document_with_two_hits()
         store = DocumentStore()
         await store.load("DU/2024/1", markdown, sections)
 
-        hits = await store.search("DU/2024/1", "podatek", context_chars=5)
+        hits = await _search(store, "DU/2024/1", "podatek", context_chars=5)
 
         assert [hit.section_id for hit in hits] == ["art_1", "art_2"]
 

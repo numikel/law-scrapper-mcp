@@ -17,7 +17,6 @@ def _store(**overrides: object) -> AsyncMock:
     store = AsyncMock()
     store.get_toc.return_value = []
     store.get_section.return_value = None
-    store.search.return_value = []
     store.scan.return_value = []
     store.hydrate.return_value = []
     for name, value in overrides.items():

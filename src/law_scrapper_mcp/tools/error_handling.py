@@ -74,6 +74,12 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
 # out of scope here, and redacting it costs only log detail.
 _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 
+# Categories whose message body is `str(exc)` and therefore unbounded in
+# length. `unavailable` is included even though its text is project-authored:
+# the branch below is source-shaped, not provenance-shaped, and excluding it
+# would mean two different boundaries doing almost the same job (D8).
+_CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "unavailable"})
+
 
 class ToolExecutionError(Exception):
     """Public, sanitized tool execution failure."""
@@ -113,15 +119,23 @@ def _truncate(message: str) -> str:
 
 
 def _public_message(exc: Exception, category: str) -> str:
-    if category == "internal":
-        body = _INTERNAL_MESSAGE
+    if category in _CALLER_SOURCED_CATEGORIES:
+        body = _truncate(str(exc))
     elif category == "upstream":
         body = _UPSTREAM_MESSAGE
     else:
-        body = _truncate(str(exc))
+        body = _INTERNAL_MESSAGE
     # A truncated body already ends on the announcement suffix, which is itself
     # a complete parenthetical — appending a period there would split it in two.
-    if body and not body.endswith(_TRUNCATION_SUFFIX) and body[-1] not in ".!?…":
+    # A body ending in a bare URL (e.g. `ContentTooLargeError`'s PDF link) is
+    # left alone too: a period fused onto a URL is a copy-paste/auto-link hazard.
+    last_token = body.rsplit(maxsplit=1)[-1] if body else ""
+    if (
+        body
+        and not body.endswith(_TRUNCATION_SUFFIX)
+        and not last_token.startswith(("http://", "https://"))
+        and body[-1] not in ".!?…"
+    ):
         body += "."
     return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 

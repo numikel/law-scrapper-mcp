@@ -281,3 +281,31 @@ class TestMessagePunctuation:
         message = _public_message(ValueError(""), "validation")
 
         assert message == _CATEGORY_GUIDANCE["validation"]
+
+    def test_a_body_ending_in_a_url_is_not_glued_to_a_period(self) -> None:
+        """A period fused onto a URL is a copy-paste/auto-link hazard."""
+        from law_scrapper_mcp.client.exceptions import ContentTooLargeError
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        pdf_url = "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+        exc = ContentTooLargeError(
+            eli="DU/2024/1",
+            size_bytes=9_000_000,
+            limit_bytes=5_242_880,
+            pdf_url=pdf_url,
+        )
+
+        message = _public_message(exc, "precondition")
+
+        assert f"{pdf_url} " in message
+        assert f"{pdf_url}." not in message
+
+
+class TestCallerSourcedCategories:
+    """D8's truncation boundary is source-shaped, not an implicit `else`."""
+
+    def test_caller_sourced_categories_cover_every_category_except_internal_and_upstream(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CALLER_SOURCED_CATEGORIES, _ERROR_CATEGORIES
+
+        all_categories = set(_ERROR_CATEGORIES.values()) | {"internal"}
+        assert _CALLER_SOURCED_CATEGORIES | {"internal", "upstream"} == all_categories

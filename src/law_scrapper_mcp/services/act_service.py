@@ -58,15 +58,14 @@ class ActService:
         has_html = bool(data.get("textHTML"))
         has_pdf = bool(data.get("textPDF"))
 
-        # `content_status` is derived here and only here: two fields describing the
-        # same state drift the moment either is set by hand at the tool layer (R2).
         is_loaded = await self._doc_store.is_loaded(eli)
-        content_status = ContentStatus.NOT_REQUESTED
-        if load_content:
-            if not is_loaded:
-                await self._load_content(eli, publisher, year, pos, has_html)
-                is_loaded = await self._doc_store.is_loaded(eli)
-            content_status = ContentStatus.LOADED if is_loaded else ContentStatus.UNAVAILABLE
+        if load_content and not is_loaded:
+            await self._load_content(eli, publisher, year, pos, has_html)
+            is_loaded = await self._doc_store.is_loaded(eli)
+        # `UNAVAILABLE` is wired in Task 3, once `_load_content` can distinguish a
+        # transient failure from a permanent absence — assigning it here would mislabel
+        # a retryable failure as permanent.
+        content_status = ContentStatus.LOADED if is_loaded else ContentStatus.NOT_REQUESTED
 
         return ActDetailOutput(
             eli=data.get("ELI", eli),

@@ -255,6 +255,8 @@ def act_details_hints(
     by a load that cannot succeed — so it steered the model straight back into
     the call that had just come up empty (F33).
     """
+    if content_status is ContentStatus.LOADED:
+        is_loaded = True
     hints = []
     if content_status is ContentStatus.UNAVAILABLE:
         # One hint, no tool: every tool this server offers for this act would

@@ -383,6 +383,24 @@ def test_unavailable_content_hints_lead_nowhere_dead() -> None:
     assert not any(hint.tool == "get_act_details" and (hint.parameters or {}).get("load_content") for hint in hints)
 
 
+def test_unavailable_content_keeps_the_relationship_hint() -> None:
+    """Relationship analysis reads metadata, not text, so it survives UNAVAILABLE.
+
+    Per the brief's own design note: this is the one suggestion that still works
+    when the act has no readable content.
+    """
+    hints = act_details_hints(
+        "DU/2024/1",
+        is_loaded=False,
+        has_html=True,
+        content_status=ContentStatus.UNAVAILABLE,
+        pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
+    )
+
+    tools = [hint.tool for hint in hints]
+    assert "analyze_act_relationships" in tools
+
+
 def test_unavailable_content_hint_points_at_the_source_pdf() -> None:
     """Exactly one hint explains the absence and hands over the source URL (A11)."""
     pdf_url = "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"

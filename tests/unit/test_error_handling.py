@@ -181,6 +181,35 @@ class TestHandleToolErrorsPublicSurface:
         assert any("failing_tool" in r.getMessage() for r in error_records)
         assert any(detail in r.getMessage() for r in debug_records)
 
+    async def test_unavailable_failure_keeps_the_transport_cause_off_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`unavailable` messages are project-authored, so ERROR may carry them
+        whole; the httpx exception chained as `__cause__` is not, and stays on
+        DEBUG like the redacted categories' detail (#61)."""
+        detail = "secret-host-detail"
+
+        @handle_tool_errors
+        async def failing_tool() -> str:
+            try:
+                raise httpx.ConnectError(detail)
+            except httpx.ConnectError as exc:
+                raise ApiUnavailableError(
+                    "Błąd połączenia z API Sejmu (ConnectError) podczas żądania GET acts/DU/2024/1"
+                ) from exc
+
+        with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp.tools.error_handling"):
+            with pytest.raises(ToolExecutionError, match="ConnectError"):
+                await failing_tool()
+
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+        assert error_records
+        assert all(detail not in r.getMessage() for r in error_records)
+        assert any("ConnectError" in r.getMessage() for r in error_records)
+        assert any(detail in r.getMessage() for r in debug_records)
+
 
 @pytest.mark.asyncio
 async def test_content_too_large_message_survives_sanitization() -> None:

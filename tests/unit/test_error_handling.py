@@ -280,6 +280,77 @@ class TestMessageTruncation:
         assert len(message) < 500
 
 
+class TestTruncationKeepsTrailingUrl:
+    """A trailing URL is the one token the caller can act on, so the cut lands
+    in the prefix instead (#60). The cap still wins when even the URL and the
+    announcement together would breach it — a bound that bends for a long URL
+    is not a bound."""
+
+    _PDF_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1716/text.pdf"
+
+    def _oversized_act(self) -> ContentTooLargeError:
+        return ContentTooLargeError(
+            eli="DU/2024/1716", size_bytes=9_000_000, limit_bytes=5_242_880, pdf_url=self._PDF_URL
+        )
+
+    def _body(self, message: str) -> str:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        return message.removesuffix(_CATEGORY_GUIDANCE["content_too_large"]).rstrip()
+
+    def test_a_trailing_url_survives_when_the_prefix_can_be_cut_instead(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from law_scrapper_mcp import config
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        monkeypatch.setattr(config.settings, "error_message_max_chars", 120)
+        body = self._body(_public_message(self._oversized_act(), "content_too_large"))
+
+        assert len(body) <= 120
+        assert body.endswith(self._PDF_URL)
+        assert _TRUNCATION_SUFFIX in body
+        assert body.startswith("Treść aktu DU/2024/1716")
+
+    def test_a_url_that_does_not_fit_beside_the_suffix_falls_back_to_the_plain_cut(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deliberate trade-off, not an accident: at the configured floor of 80
+        the URL (54 chars) plus the announcement (26 chars) already exceeds the
+        cap, so nothing of the prefix could remain. The bound is honoured and
+        the URL is lost."""
+        from law_scrapper_mcp import config
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        monkeypatch.setattr(config.settings, "error_message_max_chars", 80)
+        body = self._body(_public_message(self._oversized_act(), "content_too_large"))
+
+        assert len(body) <= 80
+        assert body.endswith(_TRUNCATION_SUFFIX)
+        assert self._PDF_URL not in body
+
+    def test_a_message_ending_in_an_overlong_url_honours_the_bound(self) -> None:
+        """A caller-sourced message can end in a URL of any length; keeping it
+        whole would hand the caller a way past the cap."""
+        from law_scrapper_mcp.config import settings
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        limit = settings.error_message_max_chars
+        exc = ValueError("adres https://example.invalid/" + "a" * (limit + 100))
+
+        message = _public_message(exc, "validation")
+        body = message.removesuffix(_CATEGORY_GUIDANCE_SENTENCE_FOR_VALIDATION).rstrip()
+
+        assert len(body) <= limit
+        assert body.endswith(_TRUNCATION_SUFFIX)
+
+    def test_a_url_ending_message_that_fits_is_untouched(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        message = _public_message(self._oversized_act(), "content_too_large")
+
+        assert _TRUNCATION_SUFFIX not in message
+        assert f"{self._PDF_URL} " in message
+
+
 class TestMessagePunctuation:
     """The body's clause is terminated before the guidance sentence starts (D4)."""
 

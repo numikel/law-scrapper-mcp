@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-09-06
+
+See [docs/changelogs/v4.3.1.md](docs/changelogs/v4.3.1.md) for details.
+
+Two error-message fixes deferred from the v4.3.0 review. No contract changes.
+
+### Fixed
+
+- A truncated `content_too_large` message keeps its trailing source PDF URL whole whenever the
+  URL fits within `LAW_MCP_ERROR_MESSAGE_MAX_CHARS`; the cut lands in the descriptive prefix
+  instead. When it cannot fit, the cap still wins (#60).
+- A transport failure toward `api.sejm.gov.pl` no longer echoes the raw `httpx` text into the
+  tool error or the ERROR log; the message names the failure class and the endpoint, and the
+  transport detail is logged at DEBUG only (#61).
+- `law_scrapper_mcp.__version__` is read from the installed distribution instead of a hardcoded
+  string that had stayed at `3.0.0` since v3.0.0.
+
 ## [4.3.0] - 2026-09-06
 
 See [docs/changelogs/v4.3.0.md](docs/changelogs/v4.3.0.md) for details.

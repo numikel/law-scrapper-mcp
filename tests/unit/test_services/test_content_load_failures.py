@@ -13,8 +13,6 @@ from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
 
-pytestmark = pytest.mark.asyncio
-
 ACT_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1"
 
 
@@ -42,6 +40,8 @@ def _mock_metadata(act_detail: dict, *, html: bool, pdf: bool) -> None:
 
 class TestTransientFailuresPropagate:
     """A failing upstream must not be reported as an act without text (A1-A3)."""
+
+    pytestmark = pytest.mark.asyncio
 
     @respx.mock
     async def test_open_breaker_propagates(
@@ -115,6 +115,8 @@ class TestTransientFailuresPropagate:
 
 class TestPermanentAbsenceIsASuccess:
     """An act that has no readable text is a fact, not a failure (A5-A7)."""
+
+    pytestmark = pytest.mark.asyncio
 
     @respx.mock
     async def test_missing_pdf_is_a_documented_absence(

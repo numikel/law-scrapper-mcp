@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.2.0, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.3.0, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -90,6 +90,7 @@ tests/
 │   │   ├── test_browse_paging.py       # `browse()` fetches one page, reports the year's count, does not re-slice, reads `effective_date` from entryIntoForce
 │   │   ├── test_changes_service.py     # ChangesService: date/keyword/publisher params, paged upstream window
 │   │   ├── test_comparison_service.py  # ComparisonService: concurrent fetches, sibling cancellation, comparison mapping
+│   │   ├── test_content_load_failures.py # Transient loading failures propagate; permanent absence (no format, 404, empty extraction) is a documented `unavailable`, not a placeholder
 │   │   ├── test_content_service.py     # TOC/section/search pagination, naive-implementation equivalence, atomic against reload
 │   │   ├── test_date_service.py        # DateService: accepted formats, offsets, Polish error messages, clock seam
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
@@ -102,10 +103,12 @@ tests/
 │   │   ├── test_search_pagination.py   # PageInfo for search and browse windows
 │   │   └── test_search_service.py      # SearchService: keyword/date/title/in-force params, detail levels, browse by publisher/year, query summary, default limit
 │   └── test_tools/
+│       ├── test_act_details_tool.py    # `get_act_details` never hints a PDF URL the server's own metadata proves absent
 │       ├── test_dates_tool.py          # `calculate_legal_date` rejects boolean offsets at the tool boundary
 │       └── test_search_tool.py         # `search_legal_acts` validates `limit`/`offset` instead of ignoring bad values (#18)
 └── integration/
     ├── test_tools_e2e.py               # In-memory Client, all 13 tools, success and `is_error` paths
+    ├── test_content_failure_contract.py # Transient content-loading failures are protocol errors (`isError=true`), never a success body
     ├── test_content_pagination.py      # Section/TOC/search-in-act pagination over the wire
     ├── test_result_pagination.py       # Search/browse/filter/changes pagination over the wire
     ├── test_listing_pagination.py      # `list_loaded_documents` / `list_result_sets` pages

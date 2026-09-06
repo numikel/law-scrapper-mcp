@@ -129,7 +129,8 @@ class ActDetailOutput(BaseModel):
         default=ContentStatus.NOT_REQUESTED,
         description=(
             "Wynik ładowania treści. 'not_requested' — wywołanie nie prosiło o treść. "
-            "'loaded' — treść jest w pamięci, można użyć read_act_content i search_in_act. "
+            "'loaded' — treść jest w pamięci (mogła zostać załadowana bieżącym albo wcześniejszym "
+            "wywołaniem), można użyć read_act_content i search_in_act. "
             "'unavailable' — akt trwale nie ma czytelnego tekstu w API; ponowne ładowanie nic nie zmieni."
         ),
     )

@@ -216,3 +216,35 @@ class TestActService:
 
         with pytest.raises(Exception):  # noqa: B017
             await service.get_details("DU/2024/999")
+
+    @respx.mock
+    async def test_content_status_not_requested(self, service: ActService, act_detail: dict):
+        """A metadata-only call must not claim anything about content (A8, O3)."""
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
+
+        result = await service.get_details("DU/2024/1", load_content=False)
+
+        assert result.content_status == "not_requested"
+        assert result.is_loaded is False
+
+    @respx.mock
+    async def test_content_status_loaded(
+        self,
+        service: ActService,
+        act_detail: dict,
+        sample_act_html: str,
+        document_store: DocumentStore,
+    ):
+        """A successful load reports `loaded`, consistent with `is_loaded` (A9, R2)."""
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1").mock(return_value=Response(200, json=act_detail))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/struct").mock(return_value=Response(404))
+        respx.get("https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.html").mock(
+            return_value=Response(200, text=sample_act_html)
+        )
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "loaded"
+        assert result.is_loaded is True
+        assert await document_store.is_loaded("DU/2024/1")

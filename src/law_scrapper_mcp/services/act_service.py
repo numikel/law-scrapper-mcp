@@ -8,7 +8,7 @@ from law_scrapper_mcp.client.exceptions import ContentTooLargeError, ResponseToo
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_inputs import parse_eli
-from law_scrapper_mcp.models.tool_outputs import ActDetailOutput
+from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, ContentStatus
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
 
@@ -58,11 +58,15 @@ class ActService:
         has_html = bool(data.get("textHTML"))
         has_pdf = bool(data.get("textPDF"))
 
-        # Load content if requested
+        # `content_status` is derived here and only here: two fields describing the
+        # same state drift the moment either is set by hand at the tool layer (R2).
         is_loaded = await self._doc_store.is_loaded(eli)
-        if load_content and not is_loaded:
-            await self._load_content(eli, publisher, year, pos, has_html)
-            is_loaded = await self._doc_store.is_loaded(eli)
+        content_status = ContentStatus.NOT_REQUESTED
+        if load_content:
+            if not is_loaded:
+                await self._load_content(eli, publisher, year, pos, has_html)
+                is_loaded = await self._doc_store.is_loaded(eli)
+            content_status = ContentStatus.LOADED if is_loaded else ContentStatus.UNAVAILABLE
 
         return ActDetailOutput(
             eli=data.get("ELI", eli),
@@ -85,6 +89,7 @@ class ActService:
             has_html=has_html,
             toc=self._format_toc(toc_data) if toc_data else [],
             is_loaded=is_loaded,
+            content_status=content_status,
         )
 
     async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool) -> None:

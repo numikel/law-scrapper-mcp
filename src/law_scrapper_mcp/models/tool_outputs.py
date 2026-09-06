@@ -50,6 +50,18 @@ class SetScope(StrEnum):
     PAGE = "page"
 
 
+class ContentStatus(StrEnum):
+    """Outcome of the content-loading half of `get_act_details`.
+
+    Deliberately has no member for a transient upstream failure: that path
+    ends as a protocol error, so it never reaches a response body (D2, D6).
+    """
+
+    NOT_REQUESTED = "not_requested"
+    LOADED = "loaded"
+    UNAVAILABLE = "unavailable"
+
+
 class ResultSetScope(BaseModel):
     """Zasięg zestawu wyników względem korpusu, z którego pochodzi."""
 
@@ -113,6 +125,14 @@ class ActDetailOutput(BaseModel):
     has_html: bool = False
     toc: list[dict[str, Any]] = []
     is_loaded: bool = False
+    content_status: ContentStatus = Field(
+        default=ContentStatus.NOT_REQUESTED,
+        description=(
+            "Wynik ładowania treści. 'not_requested' — wywołanie nie prosiło o treść. "
+            "'loaded' — treść jest w pamięci, można użyć read_act_content i search_in_act. "
+            "'unavailable' — akt trwale nie ma czytelnego tekstu w API; ponowne ładowanie nic nie zmieni."
+        ),
+    )
 
 
 class ContentOutput(BaseModel):

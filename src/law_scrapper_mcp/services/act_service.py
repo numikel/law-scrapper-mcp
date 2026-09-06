@@ -4,7 +4,12 @@ import asyncio
 import logging
 from typing import Any
 
-from law_scrapper_mcp.client.exceptions import ContentTooLargeError, ResponseTooLargeError
+from law_scrapper_mcp.client.exceptions import (
+    ActNotFoundError,
+    ContentNotAvailableError,
+    ContentTooLargeError,
+    ResponseTooLargeError,
+)
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_inputs import parse_eli
@@ -60,12 +65,21 @@ class ActService:
 
         is_loaded = await self._doc_store.is_loaded(eli)
         if load_content and not is_loaded:
-            await self._load_content(eli, publisher, year, pos, has_html)
-            is_loaded = await self._doc_store.is_loaded(eli)
-        # `UNAVAILABLE` is wired in Task 3, once `_load_content` can distinguish a
-        # transient failure from a permanent absence — assigning it here would mislabel
-        # a retryable failure as permanent.
-        content_status = ContentStatus.LOADED if is_loaded else ContentStatus.NOT_REQUESTED
+            try:
+                await self._load_content(eli, publisher, year, pos, has_html, has_pdf)
+            except ContentNotAvailableError as exc:
+                # A permanent absence is information, not a failure: the metadata
+                # this call already fetched stays useful, and `content_status`
+                # below says plainly that there is no text to read (D6).
+                logger.info("No readable content for %s: %s", eli, exc)
+            else:
+                is_loaded = await self._doc_store.is_loaded(eli)
+        if is_loaded:
+            content_status = ContentStatus.LOADED
+        elif load_content:
+            content_status = ContentStatus.UNAVAILABLE
+        else:
+            content_status = ContentStatus.NOT_REQUESTED
 
         return ActDetailOutput(
             eli=data.get("ELI", eli),
@@ -91,7 +105,7 @@ class ActService:
             content_status=content_status,
         )
 
-    async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool) -> None:
+    async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool, has_pdf: bool) -> None:
         """Load act content into the document store.
 
         Failure is never silent. A transient upstream problem — an open breaker, a
@@ -100,9 +114,18 @@ class ActService:
         is the only retry this project performs above `client/failure_policy.py` (O1).
         The previous `except Exception: logger.error(...)` made every one of those
         indistinguishable from an act that simply has no text.
+
+        Permanent absence (no format at all, a 404 on the only available format,
+        or an extraction that yields nothing) is the one outcome that is not a
+        failure — it raises `ContentNotAvailableError` instead of propagating or
+        stashing a placeholder sentence in its place (D5, D6).
         """
         pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
         limit = settings.doc_store_max_size_bytes
+        if not has_html and not has_pdf:
+            # Metadata already says there is nothing to fetch. Asking anyway would
+            # spend a request on a guaranteed 404 against a public state API (O1).
+            raise ContentNotAvailableError(eli, "html/pdf")
         try:
             # The same limit reaches the download itself (#19): the client aborts a
             # body that runs past it while it is still streaming, so an oversized act
@@ -118,15 +141,16 @@ class ActService:
                 # `await` in its critical sections (see its class docstring).
                 markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
             else:
-                # A fetch failure here is not distinguishable from permanent absence
-                # without the D5 table (Task 3), so it takes the same default branch
-                # as every other unlisted failure: propagate, caught by the outer
-                # `except ResponseTooLargeError` if that's what it is, unchanged otherwise.
-                pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)
+                try:
+                    pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)
+                except ActNotFoundError as exc:
+                    # 404 is the source itself saying the file is not there. Every
+                    # other client error keeps its own meaning and propagates (D5).
+                    raise ContentNotAvailableError(eli, "pdf") from exc
                 _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
                 markdown = await asyncio.to_thread(self._content_processor.pdf_to_text, pdf_bytes)
-                if not markdown:
-                    markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
+                if not markdown.strip():
+                    raise ContentNotAvailableError(eli, "pdf")
 
             # Second gate, on the conversion *output*. The gates above bound the
             # input, which is enough for HTML — markdownify strips markup, so in

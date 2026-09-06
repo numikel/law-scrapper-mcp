@@ -111,3 +111,81 @@ class TestTransientFailuresPropagate:
             await service.get_details("DU/2024/1", load_content=True)
 
         assert not await document_store.is_loaded("DU/2024/1")
+
+
+class TestPermanentAbsenceIsASuccess:
+    """An act that has no readable text is a fact, not a failure (A5-A7)."""
+
+    @respx.mock
+    async def test_missing_pdf_is_a_documented_absence(
+        self, service: ActService, act_detail: dict, document_store: DocumentStore
+    ) -> None:
+        """404 on the only available format: success, stated plainly (A5)."""
+        _mock_metadata(act_detail, html=False, pdf=True)
+        respx.get(f"{ACT_URL}/text.pdf").mock(return_value=Response(404))
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "unavailable"
+        assert result.is_loaded is False
+        assert result.title  # metadata still came through
+        assert not await document_store.is_loaded("DU/2024/1")
+
+    @respx.mock
+    async def test_empty_extraction_is_a_documented_absence(
+        self, mock_client: SejmApiClient, document_store: DocumentStore, act_detail: dict
+    ) -> None:
+        """An empty extraction stores nothing at all — no stand-in sentence (A6)."""
+
+        class EmptyProcessor(ContentProcessor):
+            def pdf_to_text(self, pdf_bytes: bytes) -> str:
+                return "   \n  "
+
+        service = ActService(
+            client=mock_client,
+            document_store=document_store,
+            content_processor=EmptyProcessor(),
+        )
+        _mock_metadata(act_detail, html=False, pdf=True)
+        respx.get(f"{ACT_URL}/text.pdf").mock(return_value=Response(200, content=b"%PDF-1.4 fake"))
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "unavailable"
+        assert not await document_store.is_loaded("DU/2024/1")
+
+    @respx.mock
+    async def test_neither_format_present_sends_no_request(
+        self, service: ActService, act_detail: dict, document_store: DocumentStore
+    ) -> None:
+        """Metadata already proves the fetch is pointless, so it is not sent (O1).
+
+        No route is registered for text.pdf: if the code still requested it,
+        respx would fail the test with an unmocked-request error.
+        """
+        _mock_metadata(act_detail, html=False, pdf=False)
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "unavailable"
+        assert not await document_store.is_loaded("DU/2024/1")
+
+
+def test_no_placeholder_literals_remain_in_src() -> None:
+    """The stand-in sentences are gone for good (A7).
+
+    They were English text in an agent-facing field, they made `is_loaded=True`
+    a lie, and `search_in_act` matched against them as if they were the act.
+    """
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[3] / "src"
+    banned = ("*No readable content available", "*Content extraction failed")
+    offenders = [
+        f"{path}: {needle}"
+        for path in src.rglob("*.py")
+        for needle in banned
+        if needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == []

@@ -149,8 +149,11 @@ class TestActService:
 
         result = await service.get_details("DU/2024/1", load_content=True)
 
-        # Content should be loaded (even if PDF extraction fails)
+        # `%PDF-1.4 fake pdf` extracts to nothing, which is now a stated absence
+        # rather than a placeholder document (D3).
         assert result.has_pdf is True
+        assert result.content_status == "unavailable"
+        assert result.is_loaded is False
 
     @respx.mock
     async def test_get_details_handles_missing_content(self, service: ActService, act_detail: dict):
@@ -168,6 +171,7 @@ class TestActService:
 
         assert result.has_html is False
         assert result.has_pdf is False
+        assert result.content_status == "unavailable"
 
     @respx.mock
     async def test_get_details_from_url_eli(self, service: ActService, act_detail: dict):

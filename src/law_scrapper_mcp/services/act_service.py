@@ -49,8 +49,10 @@ class ActService:
         # without one, every repeated `load_content=True` on a textless act would
         # spend one or two upstream requests on an answer that cannot change
         # before the metadata it was derived from expires (O1). Hence the same
-        # TTL as that metadata: `has_html`/`has_pdf` route the fetch, and both
-        # are re-checked together.
+        # TTL value as that metadata, whose `has_html`/`has_pdf` route the fetch.
+        # Same duration, not same clock: this entry starts when the load fails,
+        # which can be later than the metadata was cached, so a verdict may
+        # outlive its snapshot by up to one more TTL window before a re-check.
         self._known_unavailable = TTLCache(max_entries=settings.cache_max_entries)
 
     async def get_details(self, eli: str, load_content: bool = False) -> ActDetailOutput:

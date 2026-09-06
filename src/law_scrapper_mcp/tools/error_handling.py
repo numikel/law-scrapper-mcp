@@ -82,9 +82,10 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
 _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 
 # Categories whose message body is `str(exc)` and therefore unbounded in
-# length. `unavailable` is included even though its text is project-authored:
-# the branch below is source-shaped, not provenance-shaped, and excluding it
-# would mean two different boundaries doing almost the same job (D8).
+# length. `unavailable` is included even though its text is project-authored at
+# every raise site (since #61 the transport branch no longer embeds the httpx
+# text): the branch below is source-shaped, not provenance-shaped, and excluding
+# it would mean two different boundaries doing almost the same job (D8).
 # `content_too_large` inherits `precondition`'s truncation behaviour (D9 only
 # splits the guidance sentence, not this boundary); what `_truncate` does keep
 # whole, best effort, is its trailing PDF URL (#60).
@@ -203,6 +204,12 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
                     exc,
                     exc_info=category == "internal",
                 )
+                # The message above is project-authored; what it was raised from
+                # need not be (an httpx transport error quotes hosts and errno
+                # text), so the cause gets the same ERROR/DEBUG split as the
+                # redacted categories' detail (#61).
+                if exc.__cause__ is not None:
+                    logger.debug("Tool %s failure cause [%s]: %r", func.__name__, category, exc.__cause__)
             raise ToolExecutionError(_public_message(exc, category)) from exc
 
     return wrapper

@@ -395,7 +395,12 @@ class SejmApiClient:
                 url=url,
             ) from exc
         except httpx.TransportError as exc:
-            raise ApiUnavailableError(f"Błąd połączenia z API Sejmu: {exc}") from exc
+            # `str(exc)` is httpx-authored and can quote hosts, proxies or errno
+            # text. The caller gets the failure class and the project-built
+            # endpoint; the detail stays on `__cause__` for the DEBUG log (#61).
+            raise ApiUnavailableError(
+                f"Błąd połączenia z API Sejmu ({type(exc).__name__}) podczas żądania {method} {path}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise SejmApiError(f"Błędne żądanie do API Sejmu: {exc}") from exc
 

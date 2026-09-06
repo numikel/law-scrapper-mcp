@@ -92,7 +92,15 @@ class ActService:
         )
 
     async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool) -> None:
-        """Load act content into document store."""
+        """Load act content into the document store.
+
+        Failure is never silent. A transient upstream problem — an open breaker, a
+        timeout, a 5xx, a converter blowing up — propagates unchanged so the tool
+        layer reports `isError=true`; the caller can then retry deliberately, which
+        is the only retry this project performs above `client/failure_policy.py` (O1).
+        The previous `except Exception: logger.error(...)` made every one of those
+        indistinguishable from an act that simply has no text.
+        """
         pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
         limit = settings.doc_store_max_size_bytes
         try:
@@ -110,20 +118,15 @@ class ActService:
                 # `await` in its critical sections (see its class docstring).
                 markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
             else:
-                # try/except/else, not a single try block: the fallback below is
-                # for an unreachable PDF, and it must not swallow a size refusal —
-                # neither one raised mid-download nor one raised after it succeeded.
-                try:
-                    pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)
-                except ResponseTooLargeError:
-                    raise
-                except Exception:
-                    markdown = f"*No readable content available for {eli}. PDF URL: {pdf_url}*"
-                else:
-                    _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
-                    markdown = await asyncio.to_thread(self._content_processor.pdf_to_text, pdf_bytes)
-                    if not markdown:
-                        markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
+                # A fetch failure here is not distinguishable from permanent absence
+                # without the D5 table (Task 3), so it takes the same default branch
+                # as every other unlisted failure: propagate, caught by the outer
+                # `except ResponseTooLargeError` if that's what it is, unchanged otherwise.
+                pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)
+                _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
+                markdown = await asyncio.to_thread(self._content_processor.pdf_to_text, pdf_bytes)
+                if not markdown:
+                    markdown = f"*Content extraction failed. PDF available at: {pdf_url}*"
 
             # Second gate, on the conversion *output*. The gates above bound the
             # input, which is enough for HTML — markdownify strips markup, so in
@@ -142,12 +145,6 @@ class ActService:
             # The client knows the URL and the budget, not the act; the refusal the
             # agent reads has to name the act and the source file it can fetch instead.
             raise ContentTooLargeError(eli, exc.size_bytes, limit, pdf_url, exact=exc.exact) from exc
-        except ContentTooLargeError:
-            # The only failure the agent can act on, so it is the only one that
-            # reaches the tool layer instead of being logged and hidden.
-            raise
-        except Exception as e:
-            logger.error(f"Failed to load content for {eli}: {e}")
 
     def _format_toc(self, toc_data: list | dict) -> list[dict[str, Any]]:
         """Format TOC data for output."""

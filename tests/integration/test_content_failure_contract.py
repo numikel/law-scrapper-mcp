@@ -56,11 +56,10 @@ async def test_transient_content_failure_is_a_protocol_error(failing_content_cli
 
     Message note: A4's own text asks for "a message of the `unavailable` category" —
     not the `upstream` category's `_UPSTREAM_MESSAGE`, which belongs to a different
-    exception family. Today (Tasks 1-4, before Task 6's per-category remediation
-    suffix exists) that message is `ApiUnavailableError`'s own text, e.g.
-    "API Sejmu chwilowo niedostępne (HTTP 503)". Task 6 appends a suffix to this
-    body rather than replacing it (spec D4/A12), so asserting on the existing
-    prefix should keep holding once Task 6 lands.
+    exception family. That message is `ApiUnavailableError`'s own text, e.g.
+    "API Sejmu chwilowo niedostępne (HTTP 503)", with Task 6's per-category
+    remediation sentence appended after it (spec D4/A12) rather than replacing it,
+    so asserting on the existing prefix still holds.
     """
     result = await failing_content_client.call_tool("get_act_details", {"eli": "DU/2024/1", "load_content": True})
 

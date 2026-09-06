@@ -33,7 +33,7 @@ class TestCategoryGuidance:
     def test_every_category_ends_with_its_guidance(self, exc: Exception, category: str) -> None:
         from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _public_message
 
-        message = _public_message(exc, category)
+        message = _public_message(exc, _classify_error(exc))
 
         assert message.endswith(_CATEGORY_GUIDANCE[category])
         assert category not in message
@@ -167,7 +167,7 @@ async def test_content_too_large_message_survives_sanitization() -> None:
     wording and the source URL.
     """
     from law_scrapper_mcp.client.exceptions import ContentTooLargeError
-    from law_scrapper_mcp.tools.error_handling import ToolExecutionError, handle_tool_errors
+    from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, ToolExecutionError, handle_tool_errors
 
     @handle_tool_errors
     async def failing_tool() -> None:
@@ -190,6 +190,7 @@ async def test_content_too_large_message_survives_sanitization() -> None:
     assert "przekracza limit" in message
     assert "wewnętrzny błąd" not in message
     assert "…" not in message
+    assert message.endswith(_CATEGORY_GUIDANCE["precondition"])
 
 
 def test_content_too_large_is_classified_as_precondition() -> None:

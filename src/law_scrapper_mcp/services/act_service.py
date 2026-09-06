@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Any
 
+from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ContentNotAvailableError,
@@ -43,6 +44,14 @@ class ActService:
         self._client = client
         self._doc_store = document_store
         self._content_processor = content_processor
+        # ELIs whose text the source has already said it cannot supply. The
+        # placeholder document D3 removed used to double as a negative cache;
+        # without one, every repeated `load_content=True` on a textless act would
+        # spend one or two upstream requests on an answer that cannot change
+        # before the metadata it was derived from expires (O1). Hence the same
+        # TTL as that metadata: `has_html`/`has_pdf` route the fetch, and both
+        # are re-checked together.
+        self._known_unavailable = TTLCache(max_entries=settings.cache_max_entries)
 
     async def get_details(self, eli: str, load_content: bool = False) -> ActDetailOutput:
         """Get act details, optionally loading content into document store."""
@@ -64,7 +73,7 @@ class ActService:
         has_pdf = bool(data.get("textPDF"))
 
         is_loaded = await self._doc_store.is_loaded(eli)
-        if load_content and not is_loaded:
+        if load_content and not is_loaded and await self._known_unavailable.get(eli) is None:
             try:
                 await self._load_content(eli, publisher, year, pos, has_html=has_html, has_pdf=has_pdf)
             except ContentNotAvailableError as exc:
@@ -72,6 +81,7 @@ class ActService:
                 # this call already fetched stays useful, and `content_status`
                 # below says plainly that there is no text to read (D6).
                 logger.info("No readable content for %s: %s", eli, exc)
+                await self._known_unavailable.set(eli, True, settings.cache_details_ttl)
             else:
                 is_loaded = await self._doc_store.is_loaded(eli)
         if is_loaded:
@@ -118,9 +128,9 @@ class ActService:
         indistinguishable from an act that simply has no text.
 
         A permanently empty extraction — whichever format supplied it — raises
-        `ContentNotAvailableError`, as does no format being available at all. A
-        404 on the PDF fetch does too; an HTML fetch 404 is not yet distinguished
-        from other transient failures and still propagates (D5, D6).
+        `ContentNotAvailableError`, as does no format being available at all and
+        a 404 on the fetch of either format: that is the source itself saying the
+        file is not there (D5, D6).
         """
         pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
         limit = settings.doc_store_max_size_bytes
@@ -134,7 +144,12 @@ class ActService:
             # never sits whole in memory. The post-hoc gates below stay as belt and
             # braces — they bound what the converter sees, which streaming does not.
             if has_html:
-                html = await self._client.get_act_html(publisher, year, pos, max_bytes=limit)
+                try:
+                    html = await self._client.get_act_html(publisher, year, pos, max_bytes=limit)
+                except ActNotFoundError as exc:
+                    # 404 is the source itself saying the file is not there. Every
+                    # other client error keeps its own meaning and propagates (D5).
+                    raise ContentNotAvailableError(eli, "html") from exc
                 _reject_if_too_large(eli, len(html.encode("utf-8")), limit, pdf_url)
                 # markdownify, pdfplumber and the section regex are synchronous
                 # CPU-bound work. Left in the coroutine they hold the event loop

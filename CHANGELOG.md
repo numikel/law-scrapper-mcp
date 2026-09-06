@@ -35,7 +35,8 @@ readable text; `isError=true` means the upstream is unreachable and a retry may 
 ### Changed
 
 - `ActService._load_content` no longer swallows exceptions; only a permanent absence of readable
-  text (no HTML/PDF URL, a 404 on the PDF fetch, or an empty extraction) is handled internally.
+  text (no HTML/PDF URL, a 404 on either text fetch, or an empty extraction) is handled
+  internally, and remembered for the metadata cache TTL so a repeated load does not re-fetch.
 - Hints for an act with no readable content point at the source PDF URL when the act has one,
   instead of tools that would fail against it.
 

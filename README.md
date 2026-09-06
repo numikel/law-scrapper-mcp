@@ -412,8 +412,9 @@ Retrieve detailed information about a specific legal act and optionally load its
 **`content_status`:** Outcome of the content-loading half of this call, one of:
 - `not_requested` - `load_content` was not set and the act was not already in the Document Store
 - `loaded` - content is in the Document Store, ready for `read_act_content` / `search_in_act`
-- `unavailable` - the act permanently has no readable text (no HTML/PDF source, a 404 on the PDF
-  fetch, or an empty extraction from either format); retrying will not change that
+- `unavailable` - the act permanently has no readable text (no HTML/PDF source, a 404 on either
+  text fetch, or an empty extraction from either format); retrying will not change that, and the
+  server remembers the absence for the metadata cache TTL rather than asking the API again
 
 A transient upstream failure during loading (an open circuit breaker, a timeout, an HTTP 5xx
 from `api.sejm.gov.pl`) is **not** a `content_status` value — it fails the call itself with

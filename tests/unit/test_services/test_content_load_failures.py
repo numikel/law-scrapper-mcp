@@ -134,6 +134,41 @@ class TestPermanentAbsenceIsASuccess:
         assert not await document_store.is_loaded("DU/2024/1")
 
     @respx.mock
+    async def test_missing_html_is_a_documented_absence(
+        self, service: ActService, act_detail: dict, document_store: DocumentStore
+    ) -> None:
+        """The HTML twin of A5: a 404 on text.html is the source saying "no file" (D5)."""
+        _mock_metadata(act_detail, html=True, pdf=False)
+        respx.get(f"{ACT_URL}/text.html").mock(return_value=Response(404))
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "unavailable"
+        assert result.is_loaded is False
+        assert result.title
+        assert not await document_store.is_loaded("DU/2024/1")
+
+    @respx.mock
+    async def test_permanent_absence_is_remembered(
+        self, service: ActService, act_detail: dict, document_store: DocumentStore
+    ) -> None:
+        """A repeated load of a textless act must not spend another upstream request (O1).
+
+        The placeholder document D3 removed used to double as a negative cache;
+        without a replacement every retry would re-fetch an answer that cannot
+        change before the metadata it was derived from expires.
+        """
+        _mock_metadata(act_detail, html=False, pdf=True)
+        route = respx.get(f"{ACT_URL}/text.pdf").mock(return_value=Response(404))
+
+        first = await service.get_details("DU/2024/1", load_content=True)
+        second = await service.get_details("DU/2024/1", load_content=True)
+
+        assert first.content_status == second.content_status == "unavailable"
+        assert route.call_count == 1
+        assert not await document_store.is_loaded("DU/2024/1")
+
+    @respx.mock
     async def test_empty_extraction_is_a_documented_absence(
         self, mock_client: SejmApiClient, document_store: DocumentStore, act_detail: dict
     ) -> None:

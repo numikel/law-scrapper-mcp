@@ -118,25 +118,32 @@ def _truncate(message: str) -> str:
     return message[: limit - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
 
 
+def _terminated(text: str) -> str:
+    """Close the body's clause so it does not run into the guidance sentence.
+
+    Skips whitespace-only text (nothing to terminate), text that already ends
+    in a sentence terminator, and text ending in a URL (a trailing period
+    would fuse onto the address and become a copy/linkify hazard).
+    """
+    if not text.strip():
+        return text
+    tokens = text.split()
+    if text[-1] in ".!?…" or tokens[-1].startswith(("http://", "https://")):
+        return text
+    return text + "."
+
+
 def _public_message(exc: Exception, category: str) -> str:
+    # Punctuated before truncation, not after: truncating first would require
+    # a separate case for "does the body already end on the truncation
+    # announcement", since that announcement is itself a complete parenthetical.
+    # A period appended past the cut point is simply discarded with the rest.
     if category in _CALLER_SOURCED_CATEGORIES:
-        body = _truncate(str(exc))
+        body = _truncate(_terminated(str(exc)))
     elif category == "upstream":
-        body = _UPSTREAM_MESSAGE
+        body = _terminated(_UPSTREAM_MESSAGE)
     else:
-        body = _INTERNAL_MESSAGE
-    # A truncated body already ends on the announcement suffix, which is itself
-    # a complete parenthetical — appending a period there would split it in two.
-    # A body ending in a bare URL (e.g. `ContentTooLargeError`'s PDF link) is
-    # left alone too: a period fused onto a URL is a copy-paste/auto-link hazard.
-    last_token = body.rsplit(maxsplit=1)[-1] if body else ""
-    if (
-        body
-        and not body.endswith(_TRUNCATION_SUFFIX)
-        and not last_token.startswith(("http://", "https://"))
-        and body[-1] not in ".!?…"
-    ):
-        body += "."
+        body = _terminated(_INTERNAL_MESSAGE)
     return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 
 

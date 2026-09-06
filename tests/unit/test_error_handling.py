@@ -275,10 +275,13 @@ class TestMessagePunctuation:
         assert ".." not in message
         assert message.startswith(_UPSTREAM_MESSAGE)
 
-    def test_an_empty_body_leaves_no_leading_space(self) -> None:
+    @pytest.mark.parametrize("blank", ["", "   ", "\t", "\n"])
+    def test_a_blank_body_leaves_no_leading_space_and_does_not_crash(self, blank: str) -> None:
+        """`"   ".rsplit(maxsplit=1)` used to return `[]`, crashing `[-1]` with
+        an `IndexError` that escaped `handle_tool_errors` unsanitized."""
         from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _public_message
 
-        message = _public_message(ValueError(""), "validation")
+        message = _public_message(ValueError(blank), "validation")
 
         assert message == _CATEGORY_GUIDANCE["validation"]
 
@@ -299,6 +302,34 @@ class TestMessagePunctuation:
 
         assert f"{pdf_url} " in message
         assert f"{pdf_url}." not in message
+
+
+class TestTerminated:
+    """`_terminated` in isolation, independent of category routing."""
+
+    def test_adds_a_period_when_missing(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _terminated
+
+        assert _terminated("brak kropki") == "brak kropki."
+
+    @pytest.mark.parametrize("terminator", [".", "!", "?", "…"])
+    def test_does_not_double_an_existing_terminator(self, terminator: str) -> None:
+        from law_scrapper_mcp.tools.error_handling import _terminated
+
+        text = f"już zakończone{terminator}"
+        assert _terminated(text) == text
+
+    def test_does_not_glue_a_period_onto_a_url(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _terminated
+
+        text = "Pobierz plik źródłowy: https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+        assert _terminated(text) == text
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t", "\n"])
+    def test_whitespace_only_text_passes_through_unchanged(self, blank: str) -> None:
+        from law_scrapper_mcp.tools.error_handling import _terminated
+
+        assert _terminated(blank) == blank
 
 
 class TestCallerSourcedCategories:

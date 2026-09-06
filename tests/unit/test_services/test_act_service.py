@@ -122,7 +122,15 @@ class TestActService:
         result = await service.get_details("DU/2024/1", load_content=True)
 
         assert result.is_loaded is True
+        assert result.content_status == "loaded"
         # Should not make additional HTTP requests for content
+
+        # Regression test for R2 drift: content_status reflects store state
+        # regardless of what the current call requested (load_content=False)
+        result_no_load = await service.get_details("DU/2024/1", load_content=False)
+
+        assert result_no_load.is_loaded is True
+        assert result_no_load.content_status == "loaded"
 
     @respx.mock
     async def test_get_details_load_content_pdf_fallback(self, service: ActService, act_detail: dict):

@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-4.2.0-orange.svg)
+![Version](https://img.shields.io/badge/version-4.3.0-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -195,6 +195,7 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | `3` | Test calls in half-open state |
 | `LAW_MCP_MAX_PATTERN_LENGTH` | `512` | Max `filter_results` pattern length, clamped to 64-4096 |
 | `LAW_MCP_FILTER_MAX_RECORDS` | `100` | Max records `filter_results` processes per call; floor 1, no ceiling (very high values lengthen the synchronous but linear scan) |
+| `LAW_MCP_ERROR_MESSAGE_MAX_CHARS` | `500` | Cap on error-message length for categories whose message text is built from an exception's own string (`validation`, `not_found`, `precondition`, `unavailable`), which can be of unbounded length; accepted range `80`-`10000`. Truncation is announced in the message rather than silent |
 | `LAW_MCP_ALLOWED_HOSTS` | `127.0.0.1:*, localhost:*, [::1]:*` | `Host` header allowlist for streamable-http (DNS-rebinding protection). Widening beyond loopback requires an auth mode — see "Authenticated remote deployment" |
 | `LAW_MCP_ALLOWED_ORIGINS` | `http://127.0.0.1:*, http://localhost:*, http://[::1]:*` | `Origin` header allowlist for streamable-http. Same auth-mode requirement as `LAW_MCP_ALLOWED_HOSTS` |
 | `LAW_MCP_AUTH_JWKS_URI` | unset | Override the JWKS URI discovered from `LAW_MCP_AUTH_ISSUER`'s OIDC discovery document; needed only when a provider's discovery document omits or misreports it |
@@ -407,6 +408,17 @@ Retrieve detailed information about a specific legal act and optionally load its
 - `detail_level` (string, default: "standard") - Response detail: "minimal", "standard", or "full"
 
 **Returns:** Act metadata (title, publication date, status, type, etc.), table of contents if load_content=true
+
+**`content_status`:** Outcome of the content-loading half of this call, one of:
+- `not_requested` - `load_content` was not set; no loading was attempted
+- `loaded` - content is in the Document Store, ready for `read_act_content` / `search_in_act`
+- `unavailable` - the act permanently has no readable text (no HTML/PDF source, or empty
+  extraction from either); retrying will not change that
+
+A transient upstream failure during loading (an open circuit breaker, a timeout, an HTTP 5xx
+from `api.sejm.gov.pl`) is **not** a `content_status` value — it fails the call itself with
+`isError=true`, distinct from `content_status="unavailable"`. Retrying a transient failure may
+succeed; retrying an `unavailable` act will not.
 
 **Examples:**
 ```

@@ -118,6 +118,30 @@ async def test_read_error_surfaces_as_domain_exception(client: SejmApiClient, sl
 
 @pytest.mark.asyncio
 @respx.mock
+@pytest.mark.parametrize("exc_type", [httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError])
+async def test_transport_error_message_names_the_class_and_path_not_httpx_text(
+    client: SejmApiClient, slept: list[float], exc_type: type[httpx.TransportError]
+) -> None:
+    """The message is project-authored: failure class and endpoint, never the
+    httpx text, which can quote hosts, proxies or errno detail (#61). The raw
+    exception stays reachable as `__cause__` for the DEBUG log."""
+    raw = "[Errno 111] Connection refused to https://api.sejm.gov.pl/internal?token=abc"
+    respx.get(ACT_URL).mock(side_effect=exc_type(raw))
+
+    with pytest.raises(ApiUnavailableError) as excinfo:
+        await client.get_json(ACT_PATH)
+
+    message = str(excinfo.value)
+    assert raw not in message
+    assert "Errno" not in message
+    assert exc_type.__name__ in message
+    assert f"GET {ACT_PATH}" in message
+    assert isinstance(excinfo.value.__cause__, exc_type)
+    assert excinfo.value.status_code is None
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_repeated_transport_error_counts_one_failure(
     client: SejmApiClient, breaker: CircuitBreaker, slept: list[float]
 ) -> None:

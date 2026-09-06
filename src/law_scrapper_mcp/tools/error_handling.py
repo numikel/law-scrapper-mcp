@@ -82,11 +82,13 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
 _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 
 # Categories whose message body is `str(exc)` and therefore unbounded in
-# length. `unavailable` is included even though its text is project-authored:
-# the branch below is source-shaped, not provenance-shaped, and excluding it
-# would mean two different boundaries doing almost the same job (D8).
-# `content_too_large` inherits `precondition`'s truncation behaviour unchanged
-# (D9 only splits the guidance sentence, not this boundary).
+# length. `unavailable` is included even though its text is project-authored at
+# every raise site (since #61 the transport branch no longer embeds the httpx
+# text): the branch below is source-shaped, not provenance-shaped, and excluding
+# it would mean two different boundaries doing almost the same job (D8).
+# `content_too_large` inherits `precondition`'s truncation behaviour (D9 only
+# splits the guidance sentence, not this boundary); what `_truncate` does keep
+# whole, best effort, is its trailing PDF URL (#60).
 _CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
 
 
@@ -114,16 +116,39 @@ def _status_suffix(exc: Exception) -> str:
 _TRUNCATION_SUFFIX = " […] (komunikat przycięty)"
 
 
+def _trailing_url(text: str) -> str | None:
+    """Return the last whitespace-separated token if it is a URL, else `None`.
+
+    Both `_truncate` and `_terminated` treat a trailing URL as atomic — neither
+    a period nor a cut may land on it — so the detection lives in one place.
+    """
+    tokens = text.split()
+    if tokens and tokens[-1].startswith(("http://", "https://")):
+        return tokens[-1]
+    return None
+
+
 def _truncate(message: str) -> str:
     """Bound a message this project did not author.
 
     The cut is announced rather than silent: a model reading a sentence that
     simply stops has no way to tell truncation from the real end of the text,
     and would draw conclusions from a fragment (D8).
+
+    A trailing URL is the one token the caller can act on (the source PDF of
+    an oversized act), so when the text ends in one the cut lands in the prefix
+    and the URL is kept whole. Best effort only: when even the URL plus the
+    announcement would breach the cap, the cap wins and the plain cut applies —
+    a bound that bends for a long URL is not a bound (#60).
     """
     limit = settings.error_message_max_chars
     if len(message) <= limit:
         return message
+    url = _trailing_url(message)
+    if url is not None:
+        room = limit - len(_TRUNCATION_SUFFIX) - 1 - len(url)
+        if room > 0:
+            return f"{message[:room].rstrip()}{_TRUNCATION_SUFFIX} {url}"
     return message[: limit - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
 
 
@@ -136,8 +161,7 @@ def _terminated(text: str) -> str:
     """
     if not text.strip():
         return text
-    tokens = text.split()
-    if text[-1] in ".!?…" or tokens[-1].startswith(("http://", "https://")):
+    if text[-1] in ".!?…" or _trailing_url(text) is not None:
         return text
     return text + "."
 
@@ -180,6 +204,12 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
                     exc,
                     exc_info=category == "internal",
                 )
+                # The message above is project-authored; what it was raised from
+                # need not be (an httpx transport error quotes hosts and errno
+                # text), so the cause gets the same ERROR/DEBUG split as the
+                # redacted categories' detail (#61).
+                if exc.__cause__ is not None:
+                    logger.debug("Tool %s failure cause [%s]: %r", func.__name__, category, exc.__cause__)
             raise ToolExecutionError(_public_message(exc, category)) from exc
 
     return wrapper

@@ -181,6 +181,35 @@ class TestHandleToolErrorsPublicSurface:
         assert any("failing_tool" in r.getMessage() for r in error_records)
         assert any(detail in r.getMessage() for r in debug_records)
 
+    async def test_unavailable_failure_keeps_the_transport_cause_off_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`unavailable` messages are project-authored, so ERROR may carry them
+        whole; the httpx exception chained as `__cause__` is not, and stays on
+        DEBUG like the redacted categories' detail (#61)."""
+        detail = "secret-host-detail"
+
+        @handle_tool_errors
+        async def failing_tool() -> str:
+            try:
+                raise httpx.ConnectError(detail)
+            except httpx.ConnectError as exc:
+                raise ApiUnavailableError(
+                    "Błąd połączenia z API Sejmu (ConnectError) podczas żądania GET acts/DU/2024/1"
+                ) from exc
+
+        with caplog.at_level(logging.DEBUG, logger="law_scrapper_mcp.tools.error_handling"):
+            with pytest.raises(ToolExecutionError, match="ConnectError"):
+                await failing_tool()
+
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+
+        assert error_records
+        assert all(detail not in r.getMessage() for r in error_records)
+        assert any("ConnectError" in r.getMessage() for r in error_records)
+        assert any(detail in r.getMessage() for r in debug_records)
+
 
 @pytest.mark.asyncio
 async def test_content_too_large_message_survives_sanitization() -> None:
@@ -280,6 +309,77 @@ class TestMessageTruncation:
         assert len(message) < 500
 
 
+class TestTruncationKeepsTrailingUrl:
+    """A trailing URL is the one token the caller can act on, so the cut lands
+    in the prefix instead (#60). The cap still wins when even the URL and the
+    announcement together would breach it — a bound that bends for a long URL
+    is not a bound."""
+
+    _PDF_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1716/text.pdf"
+
+    def _oversized_act(self) -> ContentTooLargeError:
+        return ContentTooLargeError(
+            eli="DU/2024/1716", size_bytes=9_000_000, limit_bytes=5_242_880, pdf_url=self._PDF_URL
+        )
+
+    def _body(self, message: str) -> str:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        return message.removesuffix(_CATEGORY_GUIDANCE["content_too_large"]).rstrip()
+
+    def test_a_trailing_url_survives_when_the_prefix_can_be_cut_instead(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from law_scrapper_mcp import config
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        monkeypatch.setattr(config.settings, "error_message_max_chars", 120)
+        body = self._body(_public_message(self._oversized_act(), "content_too_large"))
+
+        assert len(body) <= 120
+        assert body.endswith(self._PDF_URL)
+        assert _TRUNCATION_SUFFIX in body
+        assert body.startswith("Treść aktu DU/2024/1716")
+
+    def test_a_url_that_does_not_fit_beside_the_suffix_falls_back_to_the_plain_cut(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deliberate trade-off, not an accident: at the configured floor of 80
+        the URL (54 chars) plus the announcement (26 chars) already exceeds the
+        cap, so nothing of the prefix could remain. The bound is honoured and
+        the URL is lost."""
+        from law_scrapper_mcp import config
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        monkeypatch.setattr(config.settings, "error_message_max_chars", 80)
+        body = self._body(_public_message(self._oversized_act(), "content_too_large"))
+
+        assert len(body) <= 80
+        assert body.endswith(_TRUNCATION_SUFFIX)
+        assert self._PDF_URL not in body
+
+    def test_a_message_ending_in_an_overlong_url_honours_the_bound(self) -> None:
+        """A caller-sourced message can end in a URL of any length; keeping it
+        whole would hand the caller a way past the cap."""
+        from law_scrapper_mcp.config import settings
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        limit = settings.error_message_max_chars
+        exc = ValueError("adres https://example.invalid/" + "a" * (limit + 100))
+
+        message = _public_message(exc, "validation")
+        body = message.removesuffix(_CATEGORY_GUIDANCE_SENTENCE_FOR_VALIDATION).rstrip()
+
+        assert len(body) <= limit
+        assert body.endswith(_TRUNCATION_SUFFIX)
+
+    def test_a_url_ending_message_that_fits_is_untouched(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        message = _public_message(self._oversized_act(), "content_too_large")
+
+        assert _TRUNCATION_SUFFIX not in message
+        assert f"{self._PDF_URL} " in message
+
+
 class TestMessagePunctuation:
     """The body's clause is terminated before the guidance sentence starts (D4)."""
 
@@ -354,6 +454,27 @@ class TestTerminated:
         from law_scrapper_mcp.tools.error_handling import _terminated
 
         assert _terminated(blank) == blank
+
+
+class TestTrailingUrl:
+    """`_trailing_url` is shared by `_terminated` and `_truncate`."""
+
+    def test_returns_the_last_token_when_it_is_a_url(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        text = "Pobierz plik źródłowy: https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+        assert _trailing_url(text) == "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+
+    def test_returns_none_when_the_last_token_is_a_word(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        assert _trailing_url("https://example.invalid jest niedostępny") is None
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_returns_none_for_blank_text(self, blank: str) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        assert _trailing_url(blank) is None
 
 
 class TestCallerSourcedCategories:

@@ -213,7 +213,34 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "4.3.0"
+        assert settings.server_version == "4.3.1"
+
+    def test_package_version_matches_server_version(self):
+        """`law_scrapper_mcp.__version__` used to be a hardcoded string outside
+        the release script's sync set, and stayed at 3.0.0 for five releases.
+        Read from the installed distribution it cannot drift from pyproject."""
+        import law_scrapper_mcp
+
+        assert law_scrapper_mcp.__version__ == Settings().server_version
+
+    def test_package_version_falls_back_when_metadata_is_missing(self, monkeypatch):
+        """A checkout that was never installed has no honest version to claim,
+        so it says so instead of failing at import."""
+        import importlib
+        import importlib.metadata
+
+        import law_scrapper_mcp
+
+        def missing(_name: str) -> str:
+            raise importlib.metadata.PackageNotFoundError(_name)
+
+        monkeypatch.setattr(importlib.metadata, "version", missing)
+        try:
+            importlib.reload(law_scrapper_mcp)
+            assert law_scrapper_mcp.__version__ == "0.0.0+unknown"
+        finally:
+            monkeypatch.undo()
+            importlib.reload(law_scrapper_mcp)
 
 
 class TestSettingsFromEnvironment:

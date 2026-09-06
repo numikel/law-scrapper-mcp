@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.3.0, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.3.1, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -60,7 +60,7 @@ tests/
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
-│   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: precondition vs upstream vs internal
+│   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause
 │   ├── test_health_endpoint.py         # `/health` reports breaker state (unknown, closed, open, half-open) without lying
 │   ├── test_jwt_verifier.py            # OAuth 2.1 resource-server mode: signature, audience, issuer, scopes, JWKS discovery
 │   ├── test_logging_config.py          # Log contract: UTF-8 stderr, request-id correlation, timestamps, httpx loggers held at WARNING
@@ -83,7 +83,7 @@ tests/
 │   │   ├── test_facade_exports.py      # `law_scrapper_mcp.client` re-exports every public exception
 │   │   ├── test_failure_policy.py      # Pure retry/breaker classification, Retry-After parsing, `backoff()` bounds
 │   │   ├── test_rate_limiter.py        # Outbound token bucket on a fake clock: burst, deficit at large clock magnitudes, pauses, cap, mid-wait extension, cancellation
-│   │   ├── test_sejm_client_resilience.py  # Retry loop, breaker integration, slot release, translation to domain errors
+│   │   ├── test_sejm_client_resilience.py  # Retry loop, breaker integration, slot release, translation to domain errors (transport message names class + endpoint, never httpx text)
 │   │   └── test_user_agent.py          # Identity sent to api.sejm.gov.pl tracks the configured version
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading

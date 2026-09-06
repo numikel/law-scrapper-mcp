@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.models.tool_outputs import (
+    ContentStatus,
     FilterOutput,
     Hint,
     LoadedDocumentInfo,
@@ -228,16 +230,40 @@ def filter_hints(output: FilterOutput, *, filter_max_records: int) -> list[Hint]
     return hints
 
 
+def act_pdf_url(publisher: str, year: int, pos: int) -> str:
+    """Public address of the act's source PDF.
+
+    Built from the client's base URL rather than a literal so the hint cannot
+    drift away from the host the server actually talks to.
+    """
+    return f"{SejmApiClient.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
+
+
 def act_details_hints(
     eli: str,
     is_loaded: bool,
     has_html: bool,
     *,
     just_loaded: bool = False,
+    content_status: ContentStatus = ContentStatus.NOT_REQUESTED,
+    pdf_url: str | None = None,
 ) -> list[Hint]:
-    """Generate hints for act details."""
+    """Generate hints for act details.
+
+    `content_status` decides the shape of the list. The pre-cluster-10 version
+    keyed off `not is_loaded and has_html`, which is also the state left behind
+    by a load that cannot succeed — so it steered the model straight back into
+    the call that had just come up empty (F33).
+    """
     hints = []
-    if not is_loaded and has_html:
+    if content_status is ContentStatus.UNAVAILABLE:
+        # One hint, no tool: every tool this server offers for this act would
+        # fail, and the only remaining route to the text leaves the server (A11).
+        source = f" Pobierz plik źródłowy: {pdf_url}" if pdf_url else ""
+        hints.append(
+            Hint(message=(f"Akt {eli} nie ma czytelnej treści w API — ponowne ładowanie niczego nie zmieni.{source}"))
+        )
+    elif not is_loaded and has_html:
         hints.append(
             Hint(
                 message="Załaduj pełną treść aby czytać sekcje lub przeszukiwać akt.",

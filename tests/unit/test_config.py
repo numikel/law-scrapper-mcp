@@ -213,7 +213,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "4.2.0"
+        assert settings.server_version == "4.3.0"
 
 
 class TestSettingsFromEnvironment:
@@ -423,6 +423,22 @@ class TestShutdownGrace:
 
         with pytest.raises(ValidationError):
             Settings()
+
+
+class TestErrorMessageMaxChars:
+    def test_error_message_max_chars_default(self) -> None:
+        """The cap exists and is a context budget, not a security boundary (D8)."""
+        assert Settings().error_message_max_chars == 500
+
+    @pytest.mark.parametrize("value", ["79", "10001"])
+    def test_error_message_max_chars_outside_the_band_is_rejected(self, monkeypatch, value: str) -> None:
+        monkeypatch.setenv("LAW_MCP_ERROR_MESSAGE_MAX_CHARS", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_error_message_max_chars_from_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("LAW_MCP_ERROR_MESSAGE_MAX_CHARS", "1000")
+        assert Settings().error_message_max_chars == 1000
 
 
 class TestLogLevel:

@@ -19,6 +19,7 @@ from law_scrapper_mcp.client.exceptions import (
     InvalidEliError,
     SejmApiError,
 )
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.logging_config import request_id_var
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
@@ -35,7 +36,7 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ResultSetNotFoundError: "precondition",
     ResultSetTooLargeError: "precondition",
     ContentNotAvailableError: "not_found",
-    ContentTooLargeError: "precondition",
+    ContentTooLargeError: "content_too_large",
     ApiUnavailableError: "unavailable",
     SejmApiError: "upstream",
     httpx.TimeoutException: "upstream",
@@ -44,8 +45,31 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 }
 
 # `SejmApiError` embeds the upstream response body, so this category must never
-# fall through to `str(exc)`.
-_UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbuj ponownie za chwilę."
+# fall through to `str(exc)`. The retry advice lives in `_CATEGORY_GUIDANCE`, not
+# here, so that every category's closing sentence is written in one place.
+_UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie."
+
+_INTERNAL_MESSAGE = "Wystąpił wewnętrzny błąd narzędzia."
+
+# One fixed sentence per category, appended to every public message (D4). Fixed,
+# because it enters the caller's context on every failure (O7); a sentence rather
+# than the category name, because the name would read as leaked internals and
+# would freeze an undocumented protocol in a free-text field.
+#
+# `content_too_large` is split out of `precondition` rather than sharing its
+# "do a step first" wording (D9): `ContentTooLargeError` has no prior step —
+# the act is simply too large, and the one actionable remedy (fetch the source
+# file) is already the last sentence of the body. Reusing `precondition`'s
+# guidance there would misdirect the model toward a step that does not exist.
+_CATEGORY_GUIDANCE: dict[str, str] = {
+    "not_found": "Ten zasób nie występuje w rejestrze — sprawdź identyfikator przed ponowieniem.",
+    "validation": "Popraw parametr wywołania i spróbuj ponownie.",
+    "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
+    "content_too_large": "Ponowne wywołanie niczego nie zmieni — pobierz treść z podanego adresu.",
+    "unavailable": "Ponów wywołanie za chwilę.",
+    "upstream": "Ponów wywołanie za chwilę.",
+    "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",
+}
 
 # Categories whose exception text this project did not author, and which can
 # therefore echo back what the caller submitted. `validation` messages quote
@@ -56,6 +80,14 @@ _UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbu
 # an internal bug rather than caller input — narrowing that classification is
 # out of scope here, and redacting it costs only log detail.
 _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
+
+# Categories whose message body is `str(exc)` and therefore unbounded in
+# length. `unavailable` is included even though its text is project-authored:
+# the branch below is source-shaped, not provenance-shaped, and excluding it
+# would mean two different boundaries doing almost the same job (D8).
+# `content_too_large` inherits `precondition`'s truncation behaviour unchanged
+# (D9 only splits the guidance sentence, not this boundary).
+_CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
 
 
 class ToolExecutionError(Exception):
@@ -79,12 +111,49 @@ def _status_suffix(exc: Exception) -> str:
     return "" if status is None else f" (HTTP {status})"
 
 
+_TRUNCATION_SUFFIX = " […] (komunikat przycięty)"
+
+
+def _truncate(message: str) -> str:
+    """Bound a message this project did not author.
+
+    The cut is announced rather than silent: a model reading a sentence that
+    simply stops has no way to tell truncation from the real end of the text,
+    and would draw conclusions from a fragment (D8).
+    """
+    limit = settings.error_message_max_chars
+    if len(message) <= limit:
+        return message
+    return message[: limit - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
+
+
+def _terminated(text: str) -> str:
+    """Close the body's clause so it does not run into the guidance sentence.
+
+    Skips whitespace-only text (nothing to terminate), text that already ends
+    in a sentence terminator, and text ending in a URL (a trailing period
+    would fuse onto the address and become a copy/linkify hazard).
+    """
+    if not text.strip():
+        return text
+    tokens = text.split()
+    if text[-1] in ".!?…" or tokens[-1].startswith(("http://", "https://")):
+        return text
+    return text + "."
+
+
 def _public_message(exc: Exception, category: str) -> str:
-    if category == "internal":
-        return "Wystąpił wewnętrzny błąd narzędzia. Spróbuj ponownie."
-    if category == "upstream":
-        return _UPSTREAM_MESSAGE
-    return str(exc)
+    # Punctuated before truncation, not after: truncating first would require
+    # a separate case for "does the body already end on the truncation
+    # announcement", since that announcement is itself a complete parenthetical.
+    # A period appended past the cut point is simply discarded with the rest.
+    if category in _CALLER_SOURCED_CATEGORIES:
+        body = _truncate(_terminated(str(exc)))
+    elif category == "upstream":
+        body = _terminated(_UPSTREAM_MESSAGE)
+    else:
+        body = _terminated(_INTERNAL_MESSAGE)
+    return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 
 
 def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:  # noqa: UP047

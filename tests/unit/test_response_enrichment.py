@@ -1,8 +1,21 @@
 """Tests for search/browse response hint generation."""
 
-from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, FilterOutput, Hint, ResultSetScope, SetScope
+from law_scrapper_mcp.models.tool_outputs import (
+    ActSummaryOutput,
+    ContentStatus,
+    FilterOutput,
+    Hint,
+    ResultSetScope,
+    SetScope,
+)
 from law_scrapper_mcp.services.pagination import paginate_items
-from law_scrapper_mcp.services.response_enrichment import filter_hints, metadata_hints, search_hints
+from law_scrapper_mcp.services.response_enrichment import (
+    act_details_hints,
+    act_pdf_url,
+    filter_hints,
+    metadata_hints,
+    search_hints,
+)
 
 
 def _page_scope(stored: int = 20, corpus: int = 1_984, offset: int = 0) -> ResultSetScope:
@@ -347,3 +360,84 @@ def test_the_inconclusive_hint_names_no_tool() -> None:
     )
 
     assert filter_hints(output, filter_max_records=100)[0].tool is None
+
+
+def test_unavailable_content_hints_lead_nowhere_dead() -> None:
+    """No hint may send the model back through a door that is shut (A10).
+
+    The old hint fired on `not is_loaded and has_html` — precisely the state a
+    failed or impossible load leaves behind — so the model was invited to repeat
+    the call that had just produced nothing.
+    """
+    hints = act_details_hints(
+        "DU/2024/1",
+        is_loaded=False,
+        has_html=True,
+        content_status=ContentStatus.UNAVAILABLE,
+        pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
+    )
+
+    tools = [hint.tool for hint in hints]
+    assert "read_act_content" not in tools
+    assert "search_in_act" not in tools
+    assert not any(hint.tool == "get_act_details" and (hint.parameters or {}).get("load_content") for hint in hints)
+
+
+def test_unavailable_content_keeps_the_relationship_hint() -> None:
+    """Relationship analysis reads metadata, not text, so it survives UNAVAILABLE.
+
+    Per the brief's own design note: this is the one suggestion that still works
+    when the act has no readable content.
+    """
+    hints = act_details_hints(
+        "DU/2024/1",
+        is_loaded=False,
+        has_html=True,
+        content_status=ContentStatus.UNAVAILABLE,
+        pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
+    )
+
+    tools = [hint.tool for hint in hints]
+    assert "analyze_act_relationships" in tools
+
+
+def test_unavailable_content_hint_points_at_the_source_pdf() -> None:
+    """Exactly one hint explains the absence and hands over the source URL (A11)."""
+    pdf_url = "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+
+    hints = act_details_hints(
+        "DU/2024/1",
+        is_loaded=False,
+        has_html=False,
+        content_status=ContentStatus.UNAVAILABLE,
+        pdf_url=pdf_url,
+    )
+
+    explaining = [hint for hint in hints if pdf_url in hint.message]
+    assert len(explaining) == 1
+    assert explaining[0].tool is None
+
+
+def test_loaded_content_still_offers_the_reading_tools() -> None:
+    """The `loaded` path keeps every hint it had before this cluster."""
+    hints = act_details_hints(
+        "DU/2024/1",
+        is_loaded=True,
+        has_html=True,
+        content_status=ContentStatus.LOADED,
+    )
+
+    tools = [hint.tool for hint in hints]
+    assert "read_act_content" in tools
+    assert "search_in_act" in tools
+
+
+def test_not_requested_still_offers_to_load() -> None:
+    """A metadata-only call keeps the invitation to load content (O3)."""
+    hints = act_details_hints("DU/2024/1", is_loaded=False, has_html=True)
+
+    assert any(hint.tool == "get_act_details" and (hint.parameters or {}).get("load_content") for hint in hints)
+
+
+def test_act_pdf_url_is_the_public_source_address() -> None:
+    assert act_pdf_url("DU", 2024, 1) == "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"

@@ -50,6 +50,7 @@ class TestActService:
         assert result.has_html is True
         assert result.has_pdf is True
         assert result.is_loaded is False
+        assert result.content_status == "not_requested"
 
     @respx.mock
     async def test_get_details_with_structure(self, service: ActService, act_detail: dict, act_structure: list):
@@ -95,6 +96,7 @@ class TestActService:
         result = await service.get_details("DU/2024/1", load_content=True)
 
         assert result.is_loaded is True
+        assert result.content_status == "loaded"
         assert await document_store.is_loaded("DU/2024/1")
 
     @respx.mock
@@ -120,11 +122,26 @@ class TestActService:
         result = await service.get_details("DU/2024/1", load_content=True)
 
         assert result.is_loaded is True
+        assert result.content_status == "loaded"
         # Should not make additional HTTP requests for content
 
+        # Regression test for R2 drift: content_status reflects store state
+        # regardless of what the current call requested (load_content=False)
+        result_no_load = await service.get_details("DU/2024/1", load_content=False)
+
+        assert result_no_load.is_loaded is True
+        assert result_no_load.content_status == "loaded"
+
     @respx.mock
-    async def test_get_details_load_content_pdf_fallback(self, service: ActService, act_detail: dict):
-        """Test loading PDF content when HTML is not available."""
+    async def test_unparseable_pdf_is_not_loaded(self, service: ActService, act_detail: dict):
+        """An unparseable PDF is a parse failure, treated the same as an absence.
+
+        `%PDF-1.4 fake pdf` isn't valid PDF structure, so `pdf_to_text` fails to
+        extract anything and returns `""` — a different scenario from a genuinely
+        empty document (see `test_empty_extraction_is_a_documented_absence` in
+        test_content_load_failures.py), but one that lands on the same
+        `ContentNotAvailableError` path today.
+        """
         # Modify act_detail to not have HTML
         act_detail_no_html = act_detail.copy()
         act_detail_no_html["textHTML"] = None
@@ -139,8 +156,11 @@ class TestActService:
 
         result = await service.get_details("DU/2024/1", load_content=True)
 
-        # Content should be loaded (even if PDF extraction fails)
+        # `%PDF-1.4 fake pdf` extracts to nothing, which is now a stated absence
+        # rather than a placeholder document (D3).
         assert result.has_pdf is True
+        assert result.content_status == "unavailable"
+        assert result.is_loaded is False
 
     @respx.mock
     async def test_get_details_handles_missing_content(self, service: ActService, act_detail: dict):
@@ -158,6 +178,7 @@ class TestActService:
 
         assert result.has_html is False
         assert result.has_pdf is False
+        assert result.content_status == "unavailable"
 
     @respx.mock
     async def test_get_details_from_url_eli(self, service: ActService, act_detail: dict):

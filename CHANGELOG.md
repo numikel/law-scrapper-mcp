@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-09-06
+
+See [docs/changelogs/v4.3.0.md](docs/changelogs/v4.3.0.md) for details.
+
+Failed content loading now looks like a failure: a transient upstream problem during
+`get_act_details(load_content=True)` now fails the call itself instead of surfacing as a
+successful, textless response. A new regression test also pins the existing guarantee that any
+domain exception surfaces as a protocol error rather than a success body.
+
+### BREAKING — content loading failures are protocol errors
+
+`get_act_details(eli=..., load_content=True)` used to return a successful response with
+`is_loaded=false` whenever loading failed. Such calls now fail with `isError=true`. A
+**successful** response with `content_status="unavailable"` means the act permanently has no
+readable text; `isError=true` means the upstream is unreachable and a retry may succeed.
+
+### Added
+
+- `content_status` field on `get_act_details` output (`not_requested`, `loaded`, `unavailable`),
+  part of the tool's `outputSchema` and `structuredContent`.
+- `LAW_MCP_ERROR_MESSAGE_MAX_CHARS` (default `500`, range 80-10000) caps the length of error
+  messages built from an exception's own text; truncation is announced in the message.
+- Every tool error message now ends with a fixed one-sentence remediation hint, one per error
+  category.
+
+### Changed
+
+- `ActService._load_content` no longer swallows exceptions; only a permanent absence of readable
+  text (no HTML/PDF URL, a 404 on either text fetch, or an empty extraction) is handled
+  internally, and remembered for the metadata cache TTL so a repeated load does not re-fetch.
+- Hints for an act with no readable content point at the source PDF URL when the act has one,
+  instead of tools that would fail against it.
+
+### Removed
+
+- The placeholder documents stored for acts with no readable content — they made `is_loaded=true`
+  untrue and were matched by `search_in_act`.
+
+### Fixed
+
+- A failure to load content is no longer indistinguishable from an act without text.
+- `validation`, `not_found`, `precondition`, `content_too_large` and `unavailable` error messages
+  are now length-bounded.
+
 ## [4.2.0] - 2026-09-02
 
 See [docs/changelogs/v4.2.0.md](docs/changelogs/v4.2.0.md) for details.

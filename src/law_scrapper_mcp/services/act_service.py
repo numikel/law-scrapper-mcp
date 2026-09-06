@@ -66,7 +66,7 @@ class ActService:
         is_loaded = await self._doc_store.is_loaded(eli)
         if load_content and not is_loaded:
             try:
-                await self._load_content(eli, publisher, year, pos, has_html, has_pdf)
+                await self._load_content(eli, publisher, year, pos, has_html=has_html, has_pdf=has_pdf)
             except ContentNotAvailableError as exc:
                 # A permanent absence is information, not a failure: the metadata
                 # this call already fetched stays useful, and `content_status`
@@ -105,7 +105,9 @@ class ActService:
             content_status=content_status,
         )
 
-    async def _load_content(self, eli: str, publisher: str, year: int, pos: int, has_html: bool, has_pdf: bool) -> None:
+    async def _load_content(
+        self, eli: str, publisher: str, year: int, pos: int, *, has_html: bool, has_pdf: bool
+    ) -> None:
         """Load act content into the document store.
 
         Failure is never silent. A transient upstream problem — an open breaker, a
@@ -115,10 +117,10 @@ class ActService:
         The previous `except Exception: logger.error(...)` made every one of those
         indistinguishable from an act that simply has no text.
 
-        Permanent absence (no format at all, a 404 on the only available format,
-        or an extraction that yields nothing) is the one outcome that is not a
-        failure — it raises `ContentNotAvailableError` instead of propagating or
-        stashing a placeholder sentence in its place (D5, D6).
+        A permanently empty extraction — whichever format supplied it — raises
+        `ContentNotAvailableError`, as does no format being available at all. A
+        404 on the PDF fetch does too; an HTML fetch 404 is not yet distinguished
+        from other transient failures and still propagates (D5, D6).
         """
         pdf_url = f"{self._client.BASE_URL}/acts/{publisher}/{year}/{pos}/text.pdf"
         limit = settings.doc_store_max_size_bytes
@@ -140,6 +142,8 @@ class ActService:
                 # `ContentProcessor`: `DocumentStore` relies on the absence of
                 # `await` in its critical sections (see its class docstring).
                 markdown = await asyncio.to_thread(self._content_processor.html_to_markdown, html)
+                if not markdown.strip():
+                    raise ContentNotAvailableError(eli, "html")
             else:
                 try:
                     pdf_bytes = await self._client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=limit)

@@ -133,8 +133,15 @@ class TestActService:
         assert result_no_load.content_status == "loaded"
 
     @respx.mock
-    async def test_get_details_load_content_pdf_fallback(self, service: ActService, act_detail: dict):
-        """Test loading PDF content when HTML is not available."""
+    async def test_unparseable_pdf_is_not_loaded(self, service: ActService, act_detail: dict):
+        """An unparseable PDF is a parse failure, treated the same as an absence.
+
+        `%PDF-1.4 fake pdf` isn't valid PDF structure, so `pdf_to_text` fails to
+        extract anything and returns `""` — a different scenario from a genuinely
+        empty document (see `test_empty_extraction_is_a_documented_absence` in
+        test_content_load_failures.py), but one that lands on the same
+        `ContentNotAvailableError` path today.
+        """
         # Modify act_detail to not have HTML
         act_detail_no_html = act_detail.copy()
         act_detail_no_html["textHTML"] = None

@@ -155,6 +155,29 @@ class TestPermanentAbsenceIsASuccess:
         assert not await document_store.is_loaded("DU/2024/1")
 
     @respx.mock
+    async def test_empty_html_extraction_is_a_documented_absence(
+        self, mock_client: SejmApiClient, document_store: DocumentStore, act_detail: dict
+    ) -> None:
+        """The symmetric HTML case: an empty extraction is an absence, not a load (I1)."""
+
+        class EmptyProcessor(ContentProcessor):
+            def html_to_markdown(self, html: str) -> str:
+                return "   \n  "
+
+        service = ActService(
+            client=mock_client,
+            document_store=document_store,
+            content_processor=EmptyProcessor(),
+        )
+        _mock_metadata(act_detail, html=True, pdf=False)
+        respx.get(f"{ACT_URL}/text.html").mock(return_value=Response(200, text="<html><body></body></html>"))
+
+        result = await service.get_details("DU/2024/1", load_content=True)
+
+        assert result.content_status == "unavailable"
+        assert not await document_store.is_loaded("DU/2024/1")
+
+    @respx.mock
     async def test_neither_format_present_sends_no_request(
         self, service: ActService, act_detail: dict, document_store: DocumentStore
     ) -> None:

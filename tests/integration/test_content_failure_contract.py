@@ -65,11 +65,11 @@ async def test_transient_content_failure_is_a_protocol_error(failing_content_cli
     result = await failing_content_client.call_tool("get_act_details", {"eli": "DU/2024/1", "load_content": True})
 
     assert result.is_error is True
+    assert result.structured_content is None
     payload = str(result.content)
     assert "content_status" not in payload
     assert "Ustawa testowa" not in payload
-    assert "niedostępne" in payload
-    assert "503" in payload
+    assert "niedostępne (HTTP 503)" in payload
 
 
 async def test_tool_failures_are_protocol_errors_not_success_bodies(mcp_client: Any) -> None:
@@ -82,7 +82,7 @@ async def test_tool_failures_are_protocol_errors_not_success_bodies(mcp_client: 
     result = await mcp_client.call_tool("read_act_content", {"eli": "DU/2024/1"})
 
     assert result.is_error is True
-    assert result.structured_content is None or "error" not in (result.structured_content or {})
+    assert result.structured_content is None
 
 
 async def test_a_successful_call_still_carries_no_error_key(mcp_client: Any) -> None:

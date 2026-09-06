@@ -120,10 +120,22 @@ def _truncate(message: str) -> str:
     The cut is announced rather than silent: a model reading a sentence that
     simply stops has no way to tell truncation from the real end of the text,
     and would draw conclusions from a fragment (D8).
+
+    A trailing URL is the one token the caller can act on (the source PDF of
+    an oversized act), so when the text ends in one the cut lands in the prefix
+    and the URL is kept whole. Best effort only: when even the URL plus the
+    announcement would breach the cap, the cap wins and the plain cut applies —
+    a bound that bends for a long URL is not a bound (#60).
     """
     limit = settings.error_message_max_chars
     if len(message) <= limit:
         return message
+    tokens = message.split()
+    if tokens and tokens[-1].startswith(("http://", "https://")):
+        url = tokens[-1]
+        room = limit - len(_TRUNCATION_SUFFIX) - 1 - len(url)
+        if room > 0:
+            return f"{message[:room].rstrip()}{_TRUNCATION_SUFFIX} {url}"
     return message[: limit - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
 
 

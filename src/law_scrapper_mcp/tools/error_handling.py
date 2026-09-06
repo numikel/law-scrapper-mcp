@@ -85,8 +85,9 @@ _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 # length. `unavailable` is included even though its text is project-authored:
 # the branch below is source-shaped, not provenance-shaped, and excluding it
 # would mean two different boundaries doing almost the same job (D8).
-# `content_too_large` inherits `precondition`'s truncation behaviour unchanged
-# (D9 only splits the guidance sentence, not this boundary).
+# `content_too_large` inherits `precondition`'s truncation behaviour (D9 only
+# splits the guidance sentence, not this boundary); what `_truncate` does keep
+# whole, best effort, is its trailing PDF URL (#60).
 _CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
 
 
@@ -114,6 +115,18 @@ def _status_suffix(exc: Exception) -> str:
 _TRUNCATION_SUFFIX = " […] (komunikat przycięty)"
 
 
+def _trailing_url(text: str) -> str | None:
+    """Return the last whitespace-separated token if it is a URL, else `None`.
+
+    Both `_truncate` and `_terminated` treat a trailing URL as atomic — neither
+    a period nor a cut may land on it — so the detection lives in one place.
+    """
+    tokens = text.split()
+    if tokens and tokens[-1].startswith(("http://", "https://")):
+        return tokens[-1]
+    return None
+
+
 def _truncate(message: str) -> str:
     """Bound a message this project did not author.
 
@@ -130,9 +143,8 @@ def _truncate(message: str) -> str:
     limit = settings.error_message_max_chars
     if len(message) <= limit:
         return message
-    tokens = message.split()
-    if tokens and tokens[-1].startswith(("http://", "https://")):
-        url = tokens[-1]
+    url = _trailing_url(message)
+    if url is not None:
         room = limit - len(_TRUNCATION_SUFFIX) - 1 - len(url)
         if room > 0:
             return f"{message[:room].rstrip()}{_TRUNCATION_SUFFIX} {url}"
@@ -148,8 +160,7 @@ def _terminated(text: str) -> str:
     """
     if not text.strip():
         return text
-    tokens = text.split()
-    if text[-1] in ".!?…" or tokens[-1].startswith(("http://", "https://")):
+    if text[-1] in ".!?…" or _trailing_url(text) is not None:
         return text
     return text + "."
 

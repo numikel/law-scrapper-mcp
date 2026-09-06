@@ -427,6 +427,27 @@ class TestTerminated:
         assert _terminated(blank) == blank
 
 
+class TestTrailingUrl:
+    """`_trailing_url` is shared by `_terminated` and `_truncate`."""
+
+    def test_returns_the_last_token_when_it_is_a_url(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        text = "Pobierz plik źródłowy: https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+        assert _trailing_url(text) == "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf"
+
+    def test_returns_none_when_the_last_token_is_a_word(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        assert _trailing_url("https://example.invalid jest niedostępny") is None
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_returns_none_for_blank_text(self, blank: str) -> None:
+        from law_scrapper_mcp.tools.error_handling import _trailing_url
+
+        assert _trailing_url(blank) is None
+
+
 class TestCallerSourcedCategories:
     """D8's truncation boundary is source-shaped, not an implicit `else`."""
 

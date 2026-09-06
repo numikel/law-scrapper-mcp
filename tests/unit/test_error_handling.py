@@ -11,6 +11,9 @@ from law_scrapper_mcp.client.exceptions import ActNotFoundError, ApiUnavailableE
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 from law_scrapper_mcp.tools.error_handling import ToolExecutionError, _classify_error, handle_tool_errors
 
+# Bound to the value under test so the assertion does not restate the wording.
+_CATEGORY_GUIDANCE_SENTENCE_FOR_VALIDATION = "Popraw parametr wywołania i spróbuj ponownie."
+
 
 class TestCategoryGuidance:
     """Each category tells the caller what to do next (A12, D4).
@@ -205,3 +208,76 @@ def test_content_too_large_is_classified_as_precondition() -> None:
     )
 
     assert _classify_error(error) == "precondition"
+
+
+class TestMessageTruncation:
+    """`str(exc)` messages are bounded; project-authored ones are not (A13, A16, D8)."""
+
+    def test_long_validation_message_is_truncated(self) -> None:
+        from law_scrapper_mcp.config import settings
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        limit = settings.error_message_max_chars
+        exc = ValueError("A" * (limit * 3))
+
+        message = _public_message(exc, "validation")
+        body = message.removesuffix(_CATEGORY_GUIDANCE_SENTENCE_FOR_VALIDATION).rstrip()
+
+        assert len(body) <= limit
+        assert body.endswith(_TRUNCATION_SUFFIX)
+
+    def test_a_short_message_is_left_alone(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _TRUNCATION_SUFFIX, _public_message
+
+        message = _public_message(ValueError("krótki komunikat"), "validation")
+
+        assert "krótki komunikat" in message
+        assert _TRUNCATION_SUFFIX not in message
+
+    def test_upstream_body_never_reaches_the_message(self) -> None:
+        """A 40 kB upstream body is excluded by category, not by length (A16, F39)."""
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        body = "<html>" + ("x" * 40_000) + "</html>"
+        exc = SejmApiError(f"HTTP 500: {body}", status_code=500, url="https://api.sejm.gov.pl/eli/acts")
+
+        message = _public_message(exc, "upstream")
+
+        assert "x" * 100 not in message
+        assert len(message) < 300
+
+    def test_the_limit_is_configurable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from law_scrapper_mcp import config
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        monkeypatch.setattr(config.settings, "error_message_max_chars", 80)
+        message = _public_message(ValueError("B" * 500), "validation")
+
+        assert len(message) < 500
+
+
+class TestMessagePunctuation:
+    """The body's clause is terminated before the guidance sentence starts (D4)."""
+
+    def test_a_body_without_terminal_punctuation_gets_one(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        message = _public_message(ValueError("brak kropki"), "validation")
+
+        assert "brak kropki. Popraw parametr" in message
+
+    def test_a_body_that_already_ends_in_a_terminator_is_not_doubled(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _UPSTREAM_MESSAGE, _public_message
+
+        exc = SejmApiError("HTTP 500: body", status_code=500, url="https://api.sejm.gov.pl/eli/acts")
+        message = _public_message(exc, "upstream")
+
+        assert ".." not in message
+        assert message.startswith(_UPSTREAM_MESSAGE)
+
+    def test_an_empty_body_leaves_no_leading_space(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _public_message
+
+        message = _public_message(ValueError(""), "validation")
+
+        assert message == _CATEGORY_GUIDANCE["validation"]

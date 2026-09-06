@@ -258,6 +258,13 @@ class Settings(BaseSettings):
     max_pattern_length: int = 512
     filter_max_records: int = 100
 
+    # Error messages. The cap is a context budget, not a security boundary: the
+    # categories it covers are built from `str(exc)`, which quotes caller input of
+    # unbounded length, and every character lands in the caller's context window.
+    # Configurable rather than a module constant because that budget differs
+    # between models and deployments (D8).
+    error_message_max_chars: int = Field(default=500, ge=80, le=10_000)
+
     @property
     def effective_max_pattern_length(self) -> int:
         """Return max pattern length clamped to the allowed range"""

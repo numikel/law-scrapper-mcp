@@ -19,6 +19,7 @@ from law_scrapper_mcp.client.exceptions import (
     InvalidEliError,
     SejmApiError,
 )
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.logging_config import request_id_var
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 
@@ -95,14 +96,34 @@ def _status_suffix(exc: Exception) -> str:
     return "" if status is None else f" (HTTP {status})"
 
 
+_TRUNCATION_SUFFIX = " […] (komunikat przycięty)"
+
+
+def _truncate(message: str) -> str:
+    """Bound a message this project did not author.
+
+    The cut is announced rather than silent: a model reading a sentence that
+    simply stops has no way to tell truncation from the real end of the text,
+    and would draw conclusions from a fragment (D8).
+    """
+    limit = settings.error_message_max_chars
+    if len(message) <= limit:
+        return message
+    return message[: limit - len(_TRUNCATION_SUFFIX)] + _TRUNCATION_SUFFIX
+
+
 def _public_message(exc: Exception, category: str) -> str:
     if category == "internal":
         body = _INTERNAL_MESSAGE
     elif category == "upstream":
         body = _UPSTREAM_MESSAGE
     else:
-        body = str(exc)
-    return f"{body} {_CATEGORY_GUIDANCE[category]}"
+        body = _truncate(str(exc))
+    # A truncated body already ends on the announcement suffix, which is itself
+    # a complete parenthetical — appending a period there would split it in two.
+    if body and not body.endswith(_TRUNCATION_SUFFIX) and body[-1] not in ".!?…":
+        body += "."
+    return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 
 
 def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:  # noqa: UP047

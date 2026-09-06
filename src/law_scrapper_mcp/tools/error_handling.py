@@ -44,8 +44,24 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 }
 
 # `SejmApiError` embeds the upstream response body, so this category must never
-# fall through to `str(exc)`.
-_UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Spróbuj ponownie za chwilę."
+# fall through to `str(exc)`. The retry advice lives in `_CATEGORY_GUIDANCE`, not
+# here, so that every category's closing sentence is written in one place.
+_UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie."
+
+_INTERNAL_MESSAGE = "Wystąpił wewnętrzny błąd narzędzia."
+
+# One fixed sentence per category, appended to every public message (D4). Fixed,
+# because it enters the caller's context on every failure (O7); a sentence rather
+# than the category name, because the name would read as leaked internals and
+# would freeze an undocumented protocol in a free-text field.
+_CATEGORY_GUIDANCE: dict[str, str] = {
+    "not_found": "Ten zasób nie występuje w rejestrze — sprawdź identyfikator przed ponowieniem.",
+    "validation": "Popraw parametr wywołania i spróbuj ponownie.",
+    "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
+    "unavailable": "Ponów wywołanie za chwilę.",
+    "upstream": "Ponów wywołanie za chwilę.",
+    "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",
+}
 
 # Categories whose exception text this project did not author, and which can
 # therefore echo back what the caller submitted. `validation` messages quote
@@ -81,10 +97,12 @@ def _status_suffix(exc: Exception) -> str:
 
 def _public_message(exc: Exception, category: str) -> str:
     if category == "internal":
-        return "Wystąpił wewnętrzny błąd narzędzia. Spróbuj ponownie."
-    if category == "upstream":
-        return _UPSTREAM_MESSAGE
-    return str(exc)
+        body = _INTERNAL_MESSAGE
+    elif category == "upstream":
+        body = _UPSTREAM_MESSAGE
+    else:
+        body = str(exc)
+    return f"{body} {_CATEGORY_GUIDANCE[category]}"
 
 
 def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:  # noqa: UP047

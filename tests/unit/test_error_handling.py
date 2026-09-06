@@ -12,6 +12,44 @@ from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, Resul
 from law_scrapper_mcp.tools.error_handling import ToolExecutionError, _classify_error, handle_tool_errors
 
 
+class TestCategoryGuidance:
+    """Each category tells the caller what to do next (A12, D4).
+
+    The category name itself stays out of the message: naming it would freeze
+    an undocumented protocol in a text field and leak implementation detail.
+    """
+
+    @pytest.mark.parametrize(
+        ("exc", "category"),
+        [
+            (ActNotFoundError("DU/2024/1"), "not_found"),
+            (ValueError("zły parametr"), "validation"),
+            (ResultSetNotFoundError("rs_1"), "precondition"),
+            (ApiUnavailableError("down", status_code=503), "unavailable"),
+            (SejmApiError("HTTP 500: body", status_code=500), "upstream"),
+            (KeyError("boom"), "internal"),
+        ],
+    )
+    def test_every_category_ends_with_its_guidance(self, exc: Exception, category: str) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _public_message
+
+        message = _public_message(exc, category)
+
+        assert message.endswith(_CATEGORY_GUIDANCE[category])
+        assert category not in message
+
+    def test_guidance_covers_every_category_the_classifier_can_return(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _ERROR_CATEGORIES
+
+        assert set(_ERROR_CATEGORIES.values()) | {"internal"} == set(_CATEGORY_GUIDANCE)
+
+    def test_transient_and_permanent_guidance_differ(self) -> None:
+        """The whole point of D4: 'retry' must not read like 'does not exist'."""
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        assert _CATEGORY_GUIDANCE["unavailable"] != _CATEGORY_GUIDANCE["not_found"]
+
+
 class TestClassifyError:
     """ResultSetTooLargeError must classify as precondition"""
 
@@ -144,10 +182,14 @@ async def test_content_too_large_message_survives_sanitization() -> None:
         await failing_tool()
 
     message = str(excinfo.value)
+    # A14, as amended by D4: the URL survives in full and nothing is truncated.
+    # It is no longer the last text in the message, because `precondition` — like
+    # every other category — now carries a remediation sentence (A12).
     assert "DU/2024/1" in message
     assert "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf" in message
     assert "przekracza limit" in message
     assert "wewnętrzny błąd" not in message
+    assert "…" not in message
 
 
 def test_content_too_large_is_classified_as_precondition() -> None:

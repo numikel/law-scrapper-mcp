@@ -47,7 +47,7 @@ class TestTransientFailuresPropagate:
     async def test_open_breaker_propagates(
         self, service: ActService, act_detail: dict, document_store: DocumentStore
     ) -> None:
-        """An open circuit breaker rejects before any request leaves (A1)."""
+        """A non-httpx exception (what an open breaker raises) survives the retry loop and propagates (A1)."""
         _mock_metadata(act_detail, html=True, pdf=True)
         respx.get(f"{ACT_URL}/text.html").mock(
             side_effect=ApiUnavailableError("Circuit breaker otwarty", status_code=503)
@@ -64,10 +64,8 @@ class TestTransientFailuresPropagate:
         _mock_metadata(act_detail, html=True, pdf=True)
         respx.get(f"{ACT_URL}/text.html").mock(side_effect=httpx.TimeoutException("read timed out"))
 
-        with pytest.raises(Exception) as excinfo:
+        with pytest.raises(ApiUnavailableError):
             await service.get_details("DU/2024/1", load_content=True)
-
-        assert not isinstance(excinfo.value, ValueError)
 
     @respx.mock
     async def test_html_5xx_propagates(self, service: ActService, act_detail: dict) -> None:

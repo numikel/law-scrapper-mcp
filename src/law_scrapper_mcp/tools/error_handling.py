@@ -36,7 +36,7 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ResultSetNotFoundError: "precondition",
     ResultSetTooLargeError: "precondition",
     ContentNotAvailableError: "not_found",
-    ContentTooLargeError: "precondition",
+    ContentTooLargeError: "content_too_large",
     ApiUnavailableError: "unavailable",
     SejmApiError: "upstream",
     httpx.TimeoutException: "upstream",
@@ -55,10 +55,17 @@ _INTERNAL_MESSAGE = "Wystąpił wewnętrzny błąd narzędzia."
 # because it enters the caller's context on every failure (O7); a sentence rather
 # than the category name, because the name would read as leaked internals and
 # would freeze an undocumented protocol in a free-text field.
+#
+# `content_too_large` is split out of `precondition` rather than sharing its
+# "do a step first" wording (D9): `ContentTooLargeError` has no prior step —
+# the act is simply too large, and the one actionable remedy (fetch the source
+# file) is already the last sentence of the body. Reusing `precondition`'s
+# guidance there would misdirect the model toward a step that does not exist.
 _CATEGORY_GUIDANCE: dict[str, str] = {
     "not_found": "Ten zasób nie występuje w rejestrze — sprawdź identyfikator przed ponowieniem.",
     "validation": "Popraw parametr wywołania i spróbuj ponownie.",
     "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
+    "content_too_large": "Ponowne wywołanie niczego nie zmieni — pobierz treść z podanego adresu.",
     "unavailable": "Ponów wywołanie za chwilę.",
     "upstream": "Ponów wywołanie za chwilę.",
     "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",
@@ -78,7 +85,9 @@ _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 # length. `unavailable` is included even though its text is project-authored:
 # the branch below is source-shaped, not provenance-shaped, and excluding it
 # would mean two different boundaries doing almost the same job (D8).
-_CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "unavailable"})
+# `content_too_large` inherits `precondition`'s truncation behaviour unchanged
+# (D9 only splits the guidance sentence, not this boundary).
+_CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
 
 
 class ToolExecutionError(Exception):

@@ -7,7 +7,12 @@ import logging
 import httpx
 import pytest
 
-from law_scrapper_mcp.client.exceptions import ActNotFoundError, ApiUnavailableError, SejmApiError
+from law_scrapper_mcp.client.exceptions import (
+    ActNotFoundError,
+    ApiUnavailableError,
+    ContentTooLargeError,
+    SejmApiError,
+)
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
 from law_scrapper_mcp.tools.error_handling import ToolExecutionError, _classify_error, handle_tool_errors
 
@@ -28,6 +33,12 @@ class TestCategoryGuidance:
             (ActNotFoundError("DU/2024/1"), "not_found"),
             (ValueError("zły parametr"), "validation"),
             (ResultSetNotFoundError("rs_1"), "precondition"),
+            (
+                ContentTooLargeError(
+                    eli="DU/2024/1", size_bytes=9_000_000, limit_bytes=5_242_880, pdf_url="https://example/text.pdf"
+                ),
+                "content_too_large",
+            ),
             (ApiUnavailableError("down", status_code=503), "unavailable"),
             (SejmApiError("HTTP 500: body", status_code=500), "upstream"),
             (KeyError("boom"), "internal"),
@@ -51,6 +62,16 @@ class TestCategoryGuidance:
         from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
 
         assert _CATEGORY_GUIDANCE["unavailable"] != _CATEGORY_GUIDANCE["not_found"]
+
+    def test_content_too_large_has_its_own_guidance_distinct_from_precondition(self) -> None:
+        """`ContentTooLargeError` has no prior step to perform — reusing
+        `precondition`'s "do a step first" wording would misdirect the model,
+        since the actionable remedy (fetch the source file) is already the
+        last sentence of the body, not something a retry could satisfy."""
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        assert _CATEGORY_GUIDANCE["content_too_large"] != _CATEGORY_GUIDANCE["precondition"]
+        assert "krok" not in _CATEGORY_GUIDANCE["content_too_large"]
 
 
 class TestClassifyError:
@@ -185,18 +206,21 @@ async def test_content_too_large_message_survives_sanitization() -> None:
         await failing_tool()
 
     message = str(excinfo.value)
-    # A14, as amended by D4: the URL survives in full and nothing is truncated.
-    # It is no longer the last text in the message, because `precondition` — like
-    # every other category — now carries a remediation sentence (A12).
+    # A14, as amended by D4/D9: the URL survives in full and nothing is truncated.
+    # It is no longer the last text in the message, because every category now
+    # carries a remediation sentence (A12) — but `ContentTooLargeError` gets its
+    # own `content_too_large` category rather than sharing `precondition`'s
+    # "do a prior step" wording, which does not describe this situation (there
+    # is no prior step; the file is simply too large).
     assert "DU/2024/1" in message
     assert "https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf" in message
     assert "przekracza limit" in message
     assert "wewnętrzny błąd" not in message
     assert "…" not in message
-    assert message.endswith(_CATEGORY_GUIDANCE["precondition"])
+    assert message.endswith(_CATEGORY_GUIDANCE["content_too_large"])
 
 
-def test_content_too_large_is_classified_as_precondition() -> None:
+def test_content_too_large_is_classified_as_content_too_large() -> None:
     from law_scrapper_mcp.client.exceptions import ContentTooLargeError
     from law_scrapper_mcp.tools.error_handling import _classify_error
 
@@ -207,7 +231,7 @@ def test_content_too_large_is_classified_as_precondition() -> None:
         pdf_url="https://api.sejm.gov.pl/eli/acts/DU/2024/1/text.pdf",
     )
 
-    assert _classify_error(error) == "precondition"
+    assert _classify_error(error) == "content_too_large"
 
 
 class TestMessageTruncation:
@@ -298,7 +322,7 @@ class TestMessagePunctuation:
             pdf_url=pdf_url,
         )
 
-        message = _public_message(exc, "precondition")
+        message = _public_message(exc, "content_too_large")
 
         assert f"{pdf_url} " in message
         assert f"{pdf_url}." not in message

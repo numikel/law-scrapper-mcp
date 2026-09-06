@@ -47,8 +47,8 @@ readable text; `isError=true` means the upstream is unreachable and a retry may 
 ### Fixed
 
 - A failure to load content is no longer indistinguishable from an act without text.
-- `validation`, `not_found`, `precondition` and `unavailable` error messages are now
-  length-bounded.
+- `validation`, `not_found`, `precondition`, `content_too_large` and `unavailable` error messages
+  are now length-bounded.
 
 ## [4.2.0] - 2026-09-02
 

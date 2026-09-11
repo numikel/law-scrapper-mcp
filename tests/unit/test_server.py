@@ -58,7 +58,7 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
     assert len(tools) == 13
     for tool in tools:
         assert tool.output_schema is not None
-        assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
+        assert set(tool.output_schema["properties"]) == {"data", "hints"}
         assert set(tool.output_schema["properties"]) != {"result"}
 
 

@@ -119,7 +119,7 @@ class TestToolInputSchemaDescriptions:
             tool = by_name[name]
             assert set(tool.input_schema["properties"]) == expected_arguments
             assert tool.output_schema is not None
-            assert set(tool.output_schema["properties"]) >= {"data", "hints", "metadata"}
+            assert set(tool.output_schema["properties"]) == {"data", "hints"}
             assert set(tool.output_schema["properties"]) != {"result"}
 
 

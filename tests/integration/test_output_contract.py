@@ -94,3 +94,16 @@ async def test_the_validator_can_actually_fail(mcp_client) -> None:
 
     with pytest.raises(ValidationError):
         Draft202012Validator(schema).validate(broken)
+
+
+@pytest.mark.parametrize("name", sorted(CALLS))
+async def test_no_top_level_metadata_in_schema_or_payload(mcp_client, name: str) -> None:
+    """D7: the dead `EnrichedResponse.metadata` field is gone.
+
+    Top level only: `get_system_metadata` legitimately returns `data.metadata`.
+    """
+    schema = await _schema(mcp_client, name)
+    payload = parse_tool_result(await _call(mcp_client, name))
+
+    assert "metadata" not in schema["properties"]
+    assert "metadata" not in payload

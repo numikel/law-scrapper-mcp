@@ -38,8 +38,8 @@ CALLS: dict[str, tuple[tuple[str, dict[str, Any]] | None, dict[str, Any]]] = {
     "track_legal_changes": (None, {"date_from": "2024-01-01", "date_to": "2024-12-31"}),
     "calculate_legal_date": (None, {"days": 1, "base_date": "2026-01-01"}),
     "compare_acts": (None, {"eli_a": "DU/2024/1", "eli_b": "DU/2024/2"}),
-    "list_result_sets": (None, {}),
-    "list_loaded_documents": (None, {}),
+    "list_result_sets": (("search_legal_acts", {"year": 2024}), {}),
+    "list_loaded_documents": (LOAD_ACT, {}),
 }
 
 
@@ -72,6 +72,7 @@ async def test_structured_content_validates_against_output_schema(mcp_client, na
 
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(payload)
+    # tripwire: a single-"result" wrapper or an x-fastmcp-wrap-result marker would mean the envelope got re-wrapped (F15, now historical since the fastmcp migration in v3.0.0).
     assert set(schema["properties"]) != {"result"}
     assert "x-fastmcp-wrap-result" not in json.dumps(schema)
 

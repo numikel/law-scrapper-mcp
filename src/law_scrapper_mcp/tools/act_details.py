@@ -10,6 +10,7 @@ from pydantic import Field
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, ContentStatus, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import act_details_hints, act_pdf_url
+from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register act details tool."""
 
-    @mcp.tool(meta={"tags": ["analysis", "details"]})
+    @mcp.tool(
+        title="Szczegóły aktu prawnego",
+        annotations=READ_ONLY_REMOTE,
+        meta={"tags": ["analysis", "details"]},
+    )
     @handle_tool_errors
     async def get_act_details(
         eli: Annotated[

@@ -64,6 +64,10 @@ upper clamp on `limit`, because the value reaches `api.sejm.gov.pl` unchanged.
 - All tool parameters use `typing.Annotated` with description strings in Polish
 - Each tool has `meta` tags for categorization and at least 5 usage examples in docstrings
 - Each tool has "Kiedy użyć" / "Kiedy NIE używać" decision tree in docstring
+- Each tool passes a Polish `title=` and one annotation preset from `tools/annotations.py`
+  (`READ_ONLY_REMOTE` when it calls `api.sejm.gov.pl`, `READ_ONLY_LOCAL` otherwise);
+  `tests/unit/test_tool_architecture.py` rejects a decorator without both. A tool that
+  writes anything needs its own annotations, not a `READ_ONLY_*` preset
 - Services layer handles business logic; tools are thin wrappers with `@handle_tool_errors`
 - Pydantic models for all API responses with `ConfigDict(extra="ignore")`
 - Configuration via environment variables with `LAW_MCP_` prefix

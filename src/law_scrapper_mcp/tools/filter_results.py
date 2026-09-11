@@ -19,6 +19,7 @@ from law_scrapper_mcp.models.tool_outputs import (
 from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
 from law_scrapper_mcp.services.response_enrichment import filter_hints, result_sets_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_LOCAL
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register filter results tool."""
 
-    @mcp.tool(meta={"tags": ["utility", "filter"]})
+    @mcp.tool(
+        title="Filtrowanie wyników wyszukiwania",
+        annotations=READ_ONLY_LOCAL,
+        meta={"tags": ["utility", "filter"]},
+    )
     @handle_tool_errors
     async def filter_results(
         result_set_id: Annotated[
@@ -180,7 +185,11 @@ def register(mcp: MCPServer[AppContext]) -> None:
             hints=filter_hints(output, filter_max_records=settings.effective_filter_max_records),
         )
 
-    @mcp.tool(meta={"tags": ["utility", "filter"]})
+    @mcp.tool(
+        title="Zestawy wyników w pamięci",
+        annotations=READ_ONLY_LOCAL,
+        meta={"tags": ["utility", "filter"]},
+    )
     @handle_tool_errors
     async def list_result_sets(
         ctx: Context[AppContext],

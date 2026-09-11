@@ -51,6 +51,20 @@ EXPECTED_TOOLS = sorted(
     ]
 )
 
+# Written out by hand on purpose (spec A2): importing the presets from
+# tools/annotations.py would test the code with itself.
+OPEN_WORLD_TOOLS = frozenset(
+    {
+        "search_legal_acts",
+        "browse_acts",
+        "get_act_details",
+        "compare_acts",
+        "analyze_act_relationships",
+        "track_legal_changes",
+        "get_system_metadata",
+    }
+)
+
 
 def _assert_enriched(payload: dict[str, Any]) -> None:
     """Assert that the EnrichedResponse envelope is well-formed."""
@@ -108,6 +122,37 @@ class TestListToolsMCP:
         tools = (await mcp_client.list_tools()).tools
         for tool in tools:
             assert tool.description, f"Tool '{tool.name}' is missing a description"
+
+    async def test_every_tool_is_annotated_read_only(self, mcp_client) -> None:
+        """A1: all four hints are explicit, so no client falls back to destructiveHint=true."""
+        tools = (await mcp_client.list_tools()).tools
+        for tool in tools:
+            assert tool.annotations is not None, tool.name
+            assert tool.annotations.read_only_hint is True, tool.name
+            assert tool.annotations.destructive_hint is False, tool.name
+            assert tool.annotations.idempotent_hint is True, tool.name
+
+    async def test_open_world_hint_marks_exactly_the_sejm_api_callers(self, mcp_client) -> None:
+        """A2: openWorldHint=true means the tool calls api.sejm.gov.pl."""
+        tools = (await mcp_client.list_tools()).tools
+        open_world = {tool.name for tool in tools if tool.annotations and tool.annotations.open_world_hint is True}
+        closed_world = {tool.name for tool in tools if tool.annotations and tool.annotations.open_world_hint is False}
+
+        assert open_world == OPEN_WORLD_TOOLS
+        assert closed_world == set(EXPECTED_TOOLS) - OPEN_WORLD_TOOLS
+        assert len(open_world) == 7
+        assert len(closed_world) == 6
+
+    async def test_every_tool_has_a_distinct_human_title(self, mcp_client) -> None:
+        """A5: the top-level title wins over annotations.title, so the presets stay tool-agnostic."""
+        tools = (await mcp_client.list_tools()).tools
+        titles = [tool.title for tool in tools]
+        for tool in tools:
+            assert tool.title, tool.name
+            assert tool.title.strip() == tool.title, tool.name
+            assert tool.title != tool.name, tool.name
+            assert tool.annotations is None or tool.annotations.title is None, tool.name
+        assert len(set(titles)) == len(titles)
 
 
 # ---------------------------------------------------------------------------

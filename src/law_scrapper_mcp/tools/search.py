@@ -13,6 +13,7 @@ from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, SearchOutput
 from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.response_enrichment import search_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,11 @@ DEFAULT_SEARCH_LIMIT = 20
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register search tool."""
 
-    @mcp.tool(meta={"tags": ["search"]})
+    @mcp.tool(
+        title="Wyszukiwanie aktów prawnych",
+        annotations=READ_ONLY_REMOTE,
+        meta={"tags": ["search"]},
+    )
     @handle_tool_errors
     async def search_legal_acts(
         ctx: Context[AppContext],

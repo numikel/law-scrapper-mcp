@@ -113,6 +113,7 @@ tests/
     ├── test_result_pagination.py       # Search/browse/filter/changes pagination over the wire
     ├── test_listing_pagination.py      # `list_loaded_documents` / `list_result_sets` pages
     ├── test_pagination_contract.py     # Every tool classified against the shared pagination contract
+    ├── test_output_contract.py         # structuredContent validates against outputSchema for all 13 tools (jsonschema, Draft 2020-12); the text block is the full JSON copy (spec D6).
     ├── test_stdio_transport.py         # Real STDIO subprocess
     ├── test_http_transport.py          # ASGI app from `build_http_app()`, DNS-rebinding guards, loopback subprocess, /health under load
     └── test_http_auth.py               # Bearer mode over HTTP: 401 without a token, MCP with one, /health stays open

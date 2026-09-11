@@ -29,6 +29,9 @@ dev = [
     # mcp's streamable_http_client() types http_client as httpx2.AsyncClient,
     # not httpx.AsyncClient — needed alongside httpx for the HTTP transport test.
     "httpx2>=2.5.0",
+    # tests/integration/test_output_contract.py validates structuredContent
+    # against outputSchema; jsonschema is otherwise only a transitive dependency.
+    "jsonschema>=4.25",
 ]
 
 [project.scripts]

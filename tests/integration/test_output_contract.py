@@ -7,6 +7,11 @@ contract explicit and independent of the client version.
 The text block staying a full JSON copy of structuredContent is a deliberate
 decision (spec D6, following the MCP 2026-07-28 backwards-compatibility advice),
 not an accident of the SDK.
+
+The same calls also pin `openWorldHint` to behaviour: a tool that declares
+`false` must not send a single request upstream, and one that declares `true`
+must. The hint is read from `tools/list`, so a new tool is covered as soon as it
+has an entry in CALLS.
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ import json
 from typing import Any
 
 import pytest
+import respx
+from httpx import Response
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
@@ -50,13 +57,18 @@ async def _schema(mcp_client, name: str) -> dict[str, Any]:
     return schema
 
 
-async def _call(mcp_client, name: str):
+async def _prepare(mcp_client, name: str) -> dict[str, Any]:
+    """Run the setup call, if any, and return the arguments for the tool call."""
     setup, arguments = CALLS[name]
     if setup is not None:
         setup_payload = parse_tool_result(await mcp_client.call_tool(*setup))
         if name == "filter_results":
             arguments = {**arguments, "result_set_id": setup_payload["data"]["result_set_id"]}
-    return await mcp_client.call_tool(name, arguments)
+    return arguments
+
+
+async def _call(mcp_client, name: str):
+    return await mcp_client.call_tool(name, await _prepare(mcp_client, name))
 
 
 async def test_every_tool_has_a_contract_call(mcp_client) -> None:
@@ -107,3 +119,62 @@ async def test_no_top_level_metadata_in_schema_or_payload(mcp_client, name: str)
 
     assert "metadata" not in schema["properties"]
     assert "metadata" not in payload
+
+
+# Arguments for a server that holds nothing yet; a fetch-on-miss would show up here.
+COLD_OVERRIDES: dict[str, dict[str, Any]] = {
+    "filter_results": {"result_set_id": "rs_999"},
+}
+
+
+@pytest.fixture
+def upstream(mcp_client) -> respx.models.CallList:
+    """Every request that reaches the httpx transport, whether a fixture route matches it or not.
+
+    respx records a call only once it resolves: an unrouted request raises
+    AllMockedAssertionError before it is recorded, and the tool would report
+    that as an ordinary error result. The trailing catch-all route makes such a
+    request countable. It is added after the fixture routes, so it matches only
+    what they do not.
+    """
+    respx.route().mock(return_value=Response(418))
+    return respx.calls
+
+
+async def _open_world_hint(mcp_client, name: str) -> bool:
+    tools = {tool.name: tool for tool in (await mcp_client.list_tools()).tools}
+    annotations = tools[name].annotations
+    assert annotations is not None and annotations.open_world_hint is not None, name
+    return annotations.open_world_hint
+
+
+@pytest.mark.parametrize("name", sorted(CALLS))
+async def test_open_world_hint_matches_upstream_traffic(mcp_client, upstream, name: str) -> None:
+    """On a cold server, openWorldHint=true tools reach api.sejm.gov.pl and false ones never do.
+
+    The result itself is not checked: a closed-world tool is expected to fail
+    when nothing is loaded, and that failure must not come from a fetch.
+    """
+    open_world = await _open_world_hint(mcp_client, name)
+    arguments = {**CALLS[name][1], **COLD_OVERRIDES.get(name, {})}
+
+    before = upstream.call_count
+    await mcp_client.call_tool(name, arguments)
+    requests = upstream.call_count - before
+
+    if open_world:
+        assert requests > 0, f"{name} declares openWorldHint=true but sent no request"
+    else:
+        assert requests == 0, f"{name} declares openWorldHint=false but sent {requests} request(s)"
+
+
+@pytest.mark.parametrize("name", sorted(name for name, (setup, _) in CALLS.items() if setup is not None))
+async def test_tools_that_read_server_state_stay_local_on_a_warm_server(mcp_client, upstream, name: str) -> None:
+    """A tool that works on a result set or a loaded document is closed-world and stays that way once they exist."""
+    arguments = await _prepare(mcp_client, name)
+
+    before = upstream.call_count
+    parse_tool_result(await mcp_client.call_tool(name, arguments))
+
+    assert await _open_world_hint(mcp_client, name) is False, name
+    assert upstream.call_count == before, f"{name} sent {upstream.call_count - before} request(s) on a warm server"

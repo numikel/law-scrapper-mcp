@@ -25,6 +25,7 @@ from httpx import Response
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
+from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from mcp_helpers import parse_tool_result
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
@@ -47,6 +48,11 @@ CALLS: dict[str, tuple[tuple[str, dict[str, Any]] | None, dict[str, Any]]] = {
     "compare_acts": (None, {"eli_a": "DU/2024/1", "eli_b": "DU/2024/2"}),
     "list_result_sets": (("search_legal_acts", {"year": 2024}), {}),
     "list_loaded_documents": (LOAD_ACT, {}),
+}
+
+# Arguments for a server that holds nothing yet; a fetch-on-miss would show up here.
+COLD_OVERRIDES: dict[str, dict[str, Any]] = {
+    "filter_results": {"result_set_id": "rs_999"},
 }
 
 
@@ -121,12 +127,6 @@ async def test_no_top_level_metadata_in_schema_or_payload(mcp_client, name: str)
     assert "metadata" not in payload
 
 
-# Arguments for a server that holds nothing yet; a fetch-on-miss would show up here.
-COLD_OVERRIDES: dict[str, dict[str, Any]] = {
-    "filter_results": {"result_set_id": "rs_999"},
-}
-
-
 @pytest.fixture
 def upstream(mcp_client) -> respx.models.CallList:
     """Every request that reaches the httpx transport, whether a fixture route matches it or not.
@@ -139,6 +139,33 @@ def upstream(mcp_client) -> respx.models.CallList:
     """
     respx.route().mock(return_value=Response(418))
     return respx.calls
+
+
+@pytest.fixture
+def api_client_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Every SejmApiClient fetch, including those the TTL cache answers without touching the transport.
+
+    Every public fetch method of the client delegates to one of these three.
+    """
+    calls: list[tuple[str, str]] = []
+    for method in ("get_json", "get_text", "get_bytes"):
+        original = getattr(SejmApiClient, method)
+
+        async def spy(self, path, *args, _original=original, _method=method, **kwargs):
+            calls.append((_method, path))
+            return await _original(self, path, *args, **kwargs)
+
+        monkeypatch.setattr(SejmApiClient, method, spy)
+    return calls
+
+
+async def test_an_unrouted_request_is_still_counted(mcp_client, upstream) -> None:
+    """Guard the guard: without the catch-all route in `upstream`, respx would not record this request."""
+    before = upstream.call_count
+    result = await mcp_client.call_tool("get_act_details", {"eli": "DU/2099/7"})
+
+    assert result.is_error is True
+    assert upstream.call_count - before >= 1
 
 
 async def _open_world_hint(mcp_client, name: str) -> bool:
@@ -169,12 +196,23 @@ async def test_open_world_hint_matches_upstream_traffic(mcp_client, upstream, na
 
 
 @pytest.mark.parametrize("name", sorted(name for name, (setup, _) in CALLS.items() if setup is not None))
-async def test_tools_that_read_server_state_stay_local_on_a_warm_server(mcp_client, upstream, name: str) -> None:
-    """A tool that works on a result set or a loaded document is closed-world and stays that way once they exist."""
+async def test_tools_that_read_server_state_stay_local_on_a_warm_server(
+    mcp_client, upstream, api_client_calls, name: str
+) -> None:
+    """A tool that works on a result set or a loaded document is closed-world and stays that way once they exist.
+
+    Counted at the client as well as at the transport: the setup call fills the
+    TTL cache, so a fetch it answers would never reach the transport here, yet
+    would reach api.sejm.gov.pl once the entry expires.
+    """
+    assert await _open_world_hint(mcp_client, name) is False, (
+        f"{name} needs server state (it has a setup call in CALLS) but declares openWorldHint=true; "
+        "exclude it from this test explicitly"
+    )
     arguments = await _prepare(mcp_client, name)
 
-    before = upstream.call_count
+    before, client_before = upstream.call_count, len(api_client_calls)
     parse_tool_result(await mcp_client.call_tool(name, arguments))
 
-    assert await _open_world_hint(mcp_client, name) is False, name
     assert upstream.call_count == before, f"{name} sent {upstream.call_count - before} request(s) on a warm server"
+    assert api_client_calls[client_before:] == [], f"{name} invoked the Sejm API client on a warm server"

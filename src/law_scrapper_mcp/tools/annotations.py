@@ -11,7 +11,10 @@ changes nothing outside the server, so it is not the "environment" that
 process memory. Once any of them becomes durable (disk, Redis, a shared cache),
 `readOnlyHint` and `idempotentHint` must be decided again for the tools that
 create state: search_legal_acts, browse_acts, filter_results,
-track_legal_changes and get_act_details.
+track_legal_changes and get_act_details. The reading is already weaker when
+several clients share one Streamable HTTP server: the stores are shared too, so
+one client's call can evict another client's result set or loaded document.
+That loss is recoverable by repeating the call, which is why the hints stand.
 
 `destructiveHint` and `idempotentHint` only matter when `readOnlyHint` is false,
 but both are spelled out: their protocol defaults are pessimistic, and a client

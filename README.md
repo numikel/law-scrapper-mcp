@@ -299,7 +299,7 @@ Behind a proxy, set `LAW_MCP_TRUSTED_PROXIES` (addresses or CIDRs) — otherwise
 
 Law Scrapper MCP provides 13 tools for legal research and analysis:
 
-Every tool is read-only (`readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`), and `openWorldHint=true` means the tool calls `api.sejm.gov.pl`, while `false` means it works only on data already held in the server's memory.
+Every tool is read-only (`readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`), and `openWorldHint=true` means the tool calls `api.sejm.gov.pl`, while `false` means it never does: it works on data already held in the server's memory or computes its answer locally.
 
 | Tool | Title | readOnlyHint | openWorldHint |
 |---|---|---|---|
@@ -633,6 +633,7 @@ law-scrapper-mcp/
 │   │   ├── content_processor.py   # PDF/HTML processing
 │   │   └── response_enrichment.py # Response hints
 │   └── tools/                   # MCP tool definitions
+│       ├── annotations.py       # Shared ToolAnnotations presets (READ_ONLY_REMOTE / READ_ONLY_LOCAL)
 │       ├── metadata.py          # get_system_metadata
 │       ├── search.py            # search_legal_acts
 │       ├── browse.py            # browse_acts

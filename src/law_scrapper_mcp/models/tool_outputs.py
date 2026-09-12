@@ -21,11 +21,10 @@ class Hint(BaseModel):
 
 
 class EnrichedResponse(BaseModel, Generic[T]):
-    """Wrapper for tool responses with hints and metadata."""
+    """Wrapper for tool responses with hints."""
 
     data: T = Field(description="The actual response data")
     hints: list[Hint] = Field(default_factory=list, description="Suggested next steps")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class ActSummaryOutput(BaseModel):

@@ -11,7 +11,7 @@ contracts, and the real MCP transports.
 | Layer | Scope | Command |
 |-------|-------|---------|
 | **1. Unit** | Models, services, stores, client, auth, HTTP middleware, config, pagination helpers, error handling | `uv run pytest tests/unit/ -v` |
-| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py -v -m integration` |
+| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py tests/integration/test_output_contract.py -v -m integration` |
 | **3. Transport integration** | Real STDIO subprocess, loopback Streamable HTTP, authenticated HTTP | `uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py tests/integration/test_http_auth.py -v -m integration` |
 
 **Full integration suite:**
@@ -113,6 +113,7 @@ tests/
     ├── test_result_pagination.py       # Search/browse/filter/changes pagination over the wire
     ├── test_listing_pagination.py      # `list_loaded_documents` / `list_result_sets` pages
     ├── test_pagination_contract.py     # Every tool classified against the shared pagination contract
+    ├── test_output_contract.py         # structuredContent validates against outputSchema for all 13 tools (jsonschema, Draft 2020-12); the text block is the full JSON copy (spec D6)
     ├── test_stdio_transport.py         # Real STDIO subprocess
     ├── test_http_transport.py          # ASGI app from `build_http_app()`, DNS-rebinding guards, loopback subprocess, /health under load
     └── test_http_auth.py               # Bearer mode over HTTP: 401 without a token, MCP with one, /health stays open
@@ -144,6 +145,7 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
 - `tests/integration/test_result_pagination.py`
 - `tests/integration/test_listing_pagination.py`
 - `tests/integration/test_pagination_contract.py`
+- `tests/integration/test_output_contract.py`
 
 ## Layer 3: transport integration
 

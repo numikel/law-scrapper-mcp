@@ -4,7 +4,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 
 ![Python version](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-4.3.1-orange.svg)
+![Version](https://img.shields.io/badge/version-4.4.0-orange.svg)
 
 <a href="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@numikel/law-scrapper-mcp/badge" alt="Law Scrapper MCP server" />
@@ -298,6 +298,24 @@ Behind a proxy, set `LAW_MCP_TRUSTED_PROXIES` (addresses or CIDRs) — otherwise
 ## Tools reference
 
 Law Scrapper MCP provides 13 tools for legal research and analysis:
+
+Every tool is read-only (`readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`), and `openWorldHint=true` means the tool calls `api.sejm.gov.pl`, while `false` means it works only on data already held in the server's memory.
+
+| Tool | Title | readOnlyHint | openWorldHint |
+|---|---|---|---|
+| `get_system_metadata` | Metadane systemu ELI | true | true |
+| `search_legal_acts` | Wyszukiwanie aktów prawnych | true | true |
+| `browse_acts` | Przeglądanie aktów z rocznika | true | true |
+| `filter_results` | Filtrowanie wyników wyszukiwania | true | false |
+| `get_act_details` | Szczegóły aktu prawnego | true | true |
+| `read_act_content` | Czytanie treści aktu | true | false |
+| `search_in_act` | Wyszukiwanie w treści aktu | true | false |
+| `analyze_act_relationships` | Powiązania aktu prawnego | true | true |
+| `track_legal_changes` | Śledzenie zmian w prawie | true | true |
+| `calculate_legal_date` | Obliczanie terminu prawnego | true | false |
+| `compare_acts` | Porównanie dwóch aktów | true | true |
+| `list_result_sets` | Zestawy wyników w pamięci | true | false |
+| `list_loaded_documents` | Dokumenty załadowane do pamięci | true | false |
 
 ### 1. get_system_metadata(category)
 

@@ -11,6 +11,7 @@ from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.tool_outputs import EnrichedResponse, MetadataOutput
 from law_scrapper_mcp.services.response_enrichment import metadata_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register metadata tool."""
 
-    @mcp.tool(meta={"tags": ["metadata"]})
+    @mcp.tool(
+        title="Metadane systemu ELI",
+        annotations=READ_ONLY_REMOTE,
+        meta={"tags": ["metadata"]},
+    )
     @handle_tool_errors
     async def get_system_metadata(
         ctx: Context[AppContext],

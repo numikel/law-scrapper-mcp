@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-09-12
+
+See [docs/changelogs/v4.4.0.md](docs/changelogs/v4.4.0.md) for details.
+
+Tool annotations and Polish titles on all 13 tools; the structured output contract is pinned by a
+test.
+
+### BREAKING
+
+- `metadata` is removed from every tool result and `outputSchema`. It was always `{}`.
+
+### Added
+
+- `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` on every tool;
+  `openWorldHint=true` marks the seven tools that call `api.sejm.gov.pl`.
+- A Polish `title` on every tool and a README table of tool properties.
+
 ## [4.3.1] - 2026-09-06
 
 See [docs/changelogs/v4.3.1.md](docs/changelogs/v4.3.1.md) for details.

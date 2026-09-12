@@ -213,7 +213,7 @@ class TestSettingsDefaults:
         """Test default server info."""
         settings = Settings()
         assert settings.server_name == "law-scrapper-mcp"
-        assert settings.server_version == "4.3.1"
+        assert settings.server_version == "4.4.0"
 
     def test_package_version_matches_server_version(self):
         """`law_scrapper_mcp.__version__` used to be a hardcoded string outside

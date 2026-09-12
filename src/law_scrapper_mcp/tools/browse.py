@@ -18,6 +18,7 @@ from law_scrapper_mcp.services.pagination import (
 )
 from law_scrapper_mcp.services.pagination import effective_limit as clamp_limit
 from law_scrapper_mcp.services.response_enrichment import search_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,11 @@ DEFAULT_BROWSE_LIMIT = 20
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register browse tool."""
 
-    @mcp.tool(meta={"tags": ["search", "browse"]})
+    @mcp.tool(
+        title="Przeglądanie aktów z rocznika",
+        annotations=READ_ONLY_REMOTE,
+        meta={"tags": ["search", "browse"]},
+    )
     @handle_tool_errors
     async def browse_acts(
         publisher: Annotated[

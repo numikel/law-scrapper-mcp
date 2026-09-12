@@ -179,21 +179,27 @@ class TestToolOutputModels:
         """Test EnrichedResponse model creation."""
         data = {"test": "value"}
         hint = Hint(message="Test hint")
-        response = EnrichedResponse(data=data, hints=[hint], metadata={"count": 1})
+        response = EnrichedResponse(data=data, hints=[hint])
         assert response.data == data
         assert len(response.hints) == 1
         assert response.hints[0].message == "Test hint"
-        assert response.metadata == {"count": 1}
 
     def test_enriched_response_serialization(self):
         """Test EnrichedResponse serialization to dict."""
         data = {"test": "value"}
-        response = EnrichedResponse(data=data, hints=[], metadata={"count": 1})
+        response = EnrichedResponse(data=data, hints=[])
         serialized = response.model_dump()
-        assert "data" in serialized
-        assert "hints" in serialized
-        assert "metadata" in serialized
+        assert set(serialized) == {"data", "hints"}
         assert serialized["data"] == data
+
+    def test_enriched_response_has_no_metadata_field(self):
+        """D7: the envelope carries data and hints only.
+
+        BaseModel ignores unknown keyword arguments, so a stale
+        `EnrichedResponse(metadata=...)` call would not fail on its own; this
+        assertion is what catches the field coming back.
+        """
+        assert set(EnrichedResponse.model_fields) == {"data", "hints"}
 
     def test_act_summary_output(self):
         """Test ActSummaryOutput model."""

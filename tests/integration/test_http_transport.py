@@ -144,6 +144,21 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     assert any("Nieprawidłowy format ELI" in message for message in failure_messages)
 
 
+def test_tools_list_serializes_annotation_hints_in_camel_case(asgi_app) -> None:
+    """A4: the alias generator reaches the wire; hosts only read the camelCase keys."""
+    with TestClient(asgi_app) as client:
+        listed = _rpc(client, "tools/list", {}, 1)
+
+    assert listed.status_code == 200
+    tools = listed.json()["result"]["tools"]
+    assert len(tools) == 13
+    for tool in tools:
+        hints = tool["annotations"]
+        assert set(hints) >= {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}, tool["name"]
+        assert not any("_" in key for key in hints), tool["name"]
+        assert tool["title"], tool["name"]
+
+
 def test_forged_host_header_is_rejected(asgi_app) -> None:
     """A Host header outside the loopback allowlist must be rejected with 421.
 

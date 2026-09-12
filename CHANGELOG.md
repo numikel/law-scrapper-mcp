@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-09-12
+
+See [docs/changelogs/v4.4.0.md](docs/changelogs/v4.4.0.md) for details.
+
+Tool annotations and Polish titles on all 13 tools; the structured output contract is pinned by a
+test.
+
+### BREAKING
+
+- `metadata` is removed from every tool result and `outputSchema`. It was always `{}`.
+
+### Added
+
+- `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` on every tool;
+  `openWorldHint=true` marks the seven tools that call `api.sejm.gov.pl`.
+- A Polish `title` on every tool and a README table of tool properties.
+
+### Security
+
+- Locked `httpx2` (a runtime dependency of `mcp`) moves from 2.10.0 to 2.12.0, closing
+  GHSA-8xx6-hgc6-gc2m (high), GHSA-pf96-p4fj-6566 and GHSA-h4x7-gw46-3wm6.
+
 ## [4.3.1] - 2026-09-06
 
 See [docs/changelogs/v4.3.1.md](docs/changelogs/v4.3.1.md) for details.

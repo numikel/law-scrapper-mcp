@@ -10,6 +10,7 @@ from pydantic import Field
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import CompareOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import compare_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register compare acts tool."""
 
-    @mcp.tool(meta={"tags": ["analysis", "compare"]})
+    @mcp.tool(
+        title="Porównanie dwóch aktów",
+        annotations=READ_ONLY_REMOTE,
+        meta={"tags": ["analysis", "compare"]},
+    )
     @handle_tool_errors
     async def compare_acts(
         eli_a: Annotated[

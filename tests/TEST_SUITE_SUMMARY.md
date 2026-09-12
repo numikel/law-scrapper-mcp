@@ -11,7 +11,7 @@ contracts, and the real MCP transports.
 | Layer | Scope | Command |
 |-------|-------|---------|
 | **1. Unit** | Models, services, stores, client, auth, HTTP middleware, config, pagination helpers, error handling | `uv run pytest tests/unit/ -v` |
-| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py -v -m integration` |
+| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py tests/integration/test_output_contract.py -v -m integration` |
 | **3. Transport integration** | Real STDIO subprocess, loopback Streamable HTTP, authenticated HTTP | `uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py tests/integration/test_http_auth.py -v -m integration` |
 
 **Full integration suite:**
@@ -67,13 +67,14 @@ tests/
 │   ├── test_models.py                  # ELI parsing, enums, tool I/O models, PageInfo, API response models
 │   ├── test_paginated_tool_outputs.py  # Every paginated output model requires `page_info`
 │   ├── test_rate_limit.py              # Inbound per-client token bucket in http/: 429 + Retry-After, refill, loopback-only /health exemption
+│   ├── test_readme_tool_table.py       # README tool-properties table matches the live `tools/list` (title, readOnlyHint, openWorldHint)
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
-│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting
+│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs
 │   ├── test_client/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites
@@ -113,6 +114,7 @@ tests/
     ├── test_result_pagination.py       # Search/browse/filter/changes pagination over the wire
     ├── test_listing_pagination.py      # `list_loaded_documents` / `list_result_sets` pages
     ├── test_pagination_contract.py     # Every tool classified against the shared pagination contract
+    ├── test_output_contract.py         # structuredContent validates against outputSchema for all 13 tools (jsonschema, Draft 2020-12); the text block is the full JSON copy (spec D6); `openWorldHint` matches upstream traffic on a cold and a warm server
     ├── test_stdio_transport.py         # Real STDIO subprocess
     ├── test_http_transport.py          # ASGI app from `build_http_app()`, DNS-rebinding guards, loopback subprocess, /health under load
     └── test_http_auth.py               # Bearer mode over HTTP: 401 without a token, MCP with one, /health stays open
@@ -144,6 +146,7 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
 - `tests/integration/test_result_pagination.py`
 - `tests/integration/test_listing_pagination.py`
 - `tests/integration/test_pagination_contract.py`
+- `tests/integration/test_output_contract.py`
 
 ## Layer 3: transport integration
 

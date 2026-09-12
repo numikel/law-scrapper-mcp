@@ -10,6 +10,7 @@ from pydantic import Field
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import DateOutput, EnrichedResponse
 from law_scrapper_mcp.services.response_enrichment import date_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_LOCAL
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register date calculation tool."""
 
-    @mcp.tool(meta={"tags": ["dates", "utility"]})
+    @mcp.tool(
+        title="Obliczanie terminu prawnego",
+        annotations=READ_ONLY_LOCAL,
+        meta={"tags": ["dates", "utility"]},
+    )
     @handle_tool_errors
     async def calculate_legal_date(
         ctx: Context[AppContext],

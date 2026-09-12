@@ -17,6 +17,9 @@ TOOLS_ROOT = Path(__file__).parents[2] / "src" / "law_scrapper_mcp" / "tools"
 SKIPPED_MODULES = {"__init__.py", "error_handling.py"}
 MAX_AWAITS_PER_HANDLER = 1
 HINT_FACTORIES = {"Hint"}
+PRESET_MODULE = "law_scrapper_mcp.tools.annotations"
+PRESETS = {"READ_ONLY_REMOTE", "READ_ONLY_LOCAL"}
+EXPECTED_TOOL_COUNT = 13
 
 
 def _tool_modules() -> list[Path]:
@@ -128,3 +131,80 @@ def test_the_guard_can_actually_fail() -> None:
     assert len(handlers) == 1
     assert sum(isinstance(node, ast.Await) for node in _body_nodes(handlers[0])) > MAX_AWAITS_PER_HANDLER
     assert _formatted_strings_outside_hints(handlers[0]) != []
+
+
+def _tool_decorators(tree: ast.Module) -> list[tuple[str, ast.Call]]:
+    """Return (handler name, `@mcp.tool(...)` call) for every tool in the module."""
+    found: list[tuple[str, ast.Call]] = []
+    for handler in _handlers(tree):
+        for decorator in handler.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr == "tool"
+            ):
+                found.append((handler.name, decorator))
+    return found
+
+
+def _imported_presets(tree: ast.Module) -> set[str]:
+    return {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == PRESET_MODULE
+        for alias in node.names
+    } & PRESETS
+
+
+def _decorator_problems(tree: ast.Module) -> list[str]:
+    """A tool must pick a shared preset on purpose and carry a human title."""
+    presets = _imported_presets(tree)
+    problems: list[str] = []
+    for name, decorator in _tool_decorators(tree):
+        keywords = {keyword.arg: keyword.value for keyword in decorator.keywords}
+        annotations = keywords.get("annotations")
+        if not (isinstance(annotations, ast.Name) and annotations.id in presets):
+            problems.append(f"{name}: annotations= must name a preset imported from {PRESET_MODULE}")
+        title = keywords.get("title")
+        if not (isinstance(title, ast.Constant) and isinstance(title.value, str) and title.value.strip()):
+            problems.append(f"{name}: title= must be a non-empty string literal")
+    return problems
+
+
+def test_every_tool_declares_an_annotation_preset_and_a_title() -> None:
+    """A future write tool cannot inherit read-only hints without a deliberate choice."""
+    total = 0
+    for path in _tool_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        total += len(_tool_decorators(tree))
+        problems = _decorator_problems(tree)
+        assert problems == [], f"{path.name}: {problems}"
+    assert total == EXPECTED_TOOL_COUNT
+
+
+def test_the_annotation_guard_can_actually_fail() -> None:
+    """Guard the guard: a bare decorator and an inline ToolAnnotations are both rejected."""
+    bare = ast.parse(
+        "\n".join(
+            [
+                "def register(mcp):",
+                "    @mcp.tool(meta={'tags': []})",
+                "    async def bad(ctx):",
+                "        return None",
+            ]
+        )
+    )
+    inline = ast.parse(
+        "\n".join(
+            [
+                "from mcp.types import ToolAnnotations",
+                "def register(mcp):",
+                "    @mcp.tool(title='Zły', annotations=ToolAnnotations(read_only_hint=True))",
+                "    async def bad(ctx):",
+                "        return None",
+            ]
+        )
+    )
+
+    assert len(_decorator_problems(bare)) == 2
+    assert len(_decorator_problems(inline)) == 1

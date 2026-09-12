@@ -14,6 +14,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     LoadedDocumentListOutput,
 )
 from law_scrapper_mcp.services.response_enrichment import content_hints, loaded_documents_hints
+from law_scrapper_mcp.tools.annotations import READ_ONLY_LOCAL
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,11 @@ logger = logging.getLogger(__name__)
 def register(mcp: MCPServer[AppContext]) -> None:
     """Register act content reading tool."""
 
-    @mcp.tool(meta={"tags": ["analysis", "content"]})
+    @mcp.tool(
+        title="Czytanie treści aktu",
+        annotations=READ_ONLY_LOCAL,
+        meta={"tags": ["analysis", "content"]},
+    )
     @handle_tool_errors
     async def read_act_content(
         eli: Annotated[
@@ -85,7 +90,11 @@ def register(mcp: MCPServer[AppContext]) -> None:
             hints=content_hints(eli, output.section_id is not None or output.page_info.total_count > 0),
         )
 
-    @mcp.tool(meta={"tags": ["utility", "content"]})
+    @mcp.tool(
+        title="Dokumenty załadowane do pamięci",
+        annotations=READ_ONLY_LOCAL,
+        meta={"tags": ["utility", "content"]},
+    )
     @handle_tool_errors
     async def list_loaded_documents(
         ctx: Context[AppContext],

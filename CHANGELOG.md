@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.1] - 2026-09-25
+
+See [docs/changelogs/v4.4.1.md](docs/changelogs/v4.4.1.md) for details.
+
+Dependency updates, replacing Dependabot PRs #58, #69 and #70. `tools/list` and every tool error
+text are byte-identical to 4.4.0.
+
+### Security
+
+- Locked `anyio` moves to 4.14.2 (CVE-2026-63374, CVE-2026-64847), and locked `soupsieve` to 2.10
+  (GHSA-j934-xhv5-fg8f, GHSA-gjv8-xp57-g29c).
+
+### Changed
+
+- MCP Python SDK 2.2.0. Tool error text, logs at the default level and oauth startup behave as
+  they did in 4.4.0.
+- `astral-sh/setup-uv` v10.2.0 in the CI and release workflows.
+
 ## [4.4.0] - 2026-09-12
 
 See [docs/changelogs/v4.4.0.md](docs/changelogs/v4.4.0.md) for details.

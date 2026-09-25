@@ -458,7 +458,7 @@ wheels = [
 
 [[package]]
 name = "law-scrapper-mcp"
-version = "4.4.0"
+version = "4.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "google-re2" },

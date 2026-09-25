@@ -45,7 +45,9 @@ def restore_logging_state() -> Iterator[None]:
     saved_root_level = root.level
     app_logger = logging.getLogger("law_scrapper_mcp")
     saved_app_level = app_logger.level
-    saved_http_levels = {name: logging.getLogger(name).level for name in ("httpx", "httpcore")}
+    saved_http_levels = {
+        name: logging.getLogger(name).level for name in ("httpx", "httpcore", "mcp.server.mcpserver.server")
+    }
 
     yield
 
@@ -210,3 +212,31 @@ def test_http_client_request_lines_stay_off_info(monkeypatch: pytest.MonkeyPatch
     setup_logging(level=level, format="text")
 
     assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING
+
+
+@pytest.mark.anyio
+async def test_tool_failure_detail_stays_off_stderr_through_the_sdk(
+    monkeypatch: pytest.MonkeyPatch, mcp_client
+) -> None:
+    """The caller's input in a failed call stays off stderr at INFO, end to end.
+
+    The redaction tests in `test_error_handling.py` call the decorator directly, so
+    they never see what the SDK logs on its own. Since mcp 2.2 it logs every
+    `ToolError` at INFO on `mcp.server.mcpserver.server` with the full public message,
+    which quotes the caller's input (a date here; a regex pattern or an act title
+    elsewhere) — the same F13 leak one layer up. Driven through `mcp.Client`, so an
+    SDK that moves the line to another logger fails here instead of leaking quietly.
+    """
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stream)
+    setup_logging(level="INFO", format="text")
+
+    result = await mcp_client.call_tool("calculate_legal_date", {"base_date": "SECRET-CALLER-INPUT", "days": 1})
+
+    assert result.is_error is True
+    # The caller still reads the detail; only the durable log must not carry it.
+    assert "SECRET-CALLER-INPUT" in result.content[0].text
+    output = stream.getvalue()
+    # Logging is live, so the absence below is not vacuous.
+    assert "Tool calculate_legal_date failed [validation]" in output
+    assert "SECRET-CALLER-INPUT" not in output

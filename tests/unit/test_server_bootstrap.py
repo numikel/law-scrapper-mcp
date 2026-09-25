@@ -27,7 +27,7 @@ def test_uvicorn_config_carries_the_graceful_shutdown_window() -> None:
     """The whole reason this project owns its bootstrap.
 
     `MCPServer.run_streamable_http_async` builds its own `uvicorn.Config` with
-    host, port and log level only (mcp/server/mcpserver/server.py:1082-1088),
+    host, port and log level only (mcp/server/mcpserver/server.py:1135-1141),
     so the SDK offers no channel for this option.
     """
     config = server_module.build_uvicorn_config()

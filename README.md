@@ -20,7 +20,7 @@ A comprehensive Model Context Protocol (MCP) server for accessing and analyzing 
 - **Content processing** - Automatic PDF-to-text and HTML-to-Markdown conversion
 - **Date calculations** - Specialized date utilities for legal document analysis
 - **System metadata** - Keywords, statuses, document types, and institution data
-- **Official MCP SDK** - Built with `mcp[cli]==2.0.0` and `MCPServer`; STDIO and stateless Streamable HTTP transports
+- **Official MCP SDK** - Built with `mcp[cli]==2.2.0` and `MCPServer`; STDIO and stateless Streamable HTTP transports
 - **Async HTTP client** - Efficient httpx client with retry logic and connection pooling
 - **TTL caching** - Intelligent response caching with configurable TTL
 - **Structured logging** - JSON and text log formats for easy debugging

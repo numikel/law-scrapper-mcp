@@ -125,5 +125,9 @@ def setup_logging(level: str = "INFO", format: Literal["text", "json"] = "text")
     # already redacts from its own ERROR records; letting the transport echo it
     # at INFO would reopen the same leak one layer down. Held at WARNING or the
     # configured level, whichever is stricter, so a DEBUG run stays quiet too.
-    for name in ("httpx", "httpcore"):
+    # The SDK's server logger joins them for the same reason: since mcp 2.2 it logs
+    # every failed tool call at INFO with the full public message, which quotes the
+    # caller's input this project keeps at DEBUG; its crash records are ERROR and
+    # still pass.
+    for name in ("httpx", "httpcore", "mcp.server.mcpserver.server"):
         logging.getLogger(name).setLevel(max(log_level, logging.WARNING))

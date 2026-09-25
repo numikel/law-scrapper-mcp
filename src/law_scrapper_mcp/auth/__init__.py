@@ -3,7 +3,7 @@
 The SDK mounts the entire protocol envelope itself — BearerAuthBackend,
 RequireAuthMiddleware, AuthContextMiddleware and the RFC 9728 routes — as soon
 as `MCPServer` receives both `auth` and `token_verifier`
-(mcp/server/mcpserver/server.py:158-170, :1125-1157). What is left for this
+(mcp/server/mcpserver/server.py:168-180, :1181-1218). What is left for this
 package is deciding which verifier to hand over.
 """
 
@@ -53,6 +53,11 @@ def build_auth(current: Settings) -> tuple[AuthSettings | None, TokenVerifier | 
             issuer_url=current.auth_issuer,
             resource_server_url=current.auth_resource_server_url,
             required_scopes=current.auth_required_scopes or None,
+            # Off, as the SDK's unset default already behaves in 2.x: the verifier
+            # enforces `aud` itself and never fills `AccessToken.resource`, so the
+            # SDK's resource check (on by default from mcp 3.0) would refuse every
+            # valid token. Stated explicitly, it also silences the 2.2 warning.
+            validate_token_resource=False,
         ),
         JwtTokenVerifier(
             issuer=str(current.auth_issuer),

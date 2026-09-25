@@ -84,7 +84,7 @@ def test_authenticated_tools_list_has_13_tools(bearer_app) -> None:
 
 
 def test_health_stays_unauthenticated(bearer_app) -> None:
-    """RequireAuthMiddleware wraps /mcp only (mcp/server/lowlevel/server.py:801-803)."""
+    """RequireAuthMiddleware wraps /mcp only (mcp/server/lowlevel/server.py:809-811)."""
     with TestClient(bearer_app) as client:
         assert client.get("/health").status_code == 200
 
@@ -128,3 +128,27 @@ def test_oauth_mode_builds_the_jwt_verifier() -> None:
     assert isinstance(verifier, JwtTokenVerifier)
     assert auth_settings is not None
     assert str(auth_settings.resource_server_url) == "https://mcp.example.com/mcp"
+
+
+def test_oauth_mode_states_the_token_resource_policy() -> None:
+    """mcp 2.2 warns on every oauth startup while `validate_token_resource` is unset,
+    and 3.0 turns the check on by default. `JwtTokenVerifier` never fills
+    `AccessToken.resource` — it enforces `aud` itself — so the policy is stated
+    explicitly as off: the behaviour 2.x already had, without the warning.
+    """
+    import warnings
+
+    from mcp.shared.exceptions import MCPDeprecationWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", MCPDeprecationWarning)
+        auth_settings, _ = build_auth(
+            Settings(
+                auth_mode="oauth",
+                auth_issuer="https://login.example.com/tenant/v2.0",
+                auth_audience="api://law-scrapper",
+                auth_resource_server_url="https://mcp.example.com/mcp",
+            )
+        )
+    assert auth_settings is not None
+    assert auth_settings.validate_token_resource is False

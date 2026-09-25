@@ -57,7 +57,7 @@ class _HealthState:
     """Bridges `lifespan` resources to the operational `/health` route.
 
     `custom_route` hands its handler a `Request` and nothing else
-    (mcp/server/mcpserver/server.py:975-1013), and the MCP `lifespan` serves the
+    (mcp/server/mcpserver/server.py:1022-1060), and the MCP `lifespan` serves the
     protocol session, not endpoints living beside it — so no channel connects
     the two. The bridge is built deliberately and kept narrow: it holds the
     breaker alone rather than the whole `AppContext`, it is written in exactly
@@ -275,13 +275,13 @@ def build_http_app() -> ASGIApp:
     """Build the ASGI app served over Streamable HTTP.
 
     Mirrors `MCPServer.run_streamable_http_async`
-    (mcp/server/mcpserver/server.py:1070-1089) minus the uvicorn wiring, which
+    (mcp/server/mcpserver/server.py:1121-1142) minus the uvicorn wiring, which
     this project owns so that `timeout_graceful_shutdown` can be set at all.
 
     Re-check this function against that SDK method on every `mcp` upgrade: a
     changed `streamable_http_app()` signature would surface here first. Since
     v4.0.0 that includes the auth wiring — `auth` and `token_verifier` are read
-    off the server instance (server.py:1240-1241), not passed here.
+    off the server instance (server.py:1305-1306), not passed here.
     """
     # Single derivation point for the HTTP surface (#41): the SDK reads the
     # pair off the instance inside `streamable_http_app()`, so it is derived

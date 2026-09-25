@@ -9,6 +9,7 @@ from typing import ParamSpec, TypeVar
 from uuid import uuid4
 
 import httpx
+from mcp.server.mcpserver.exceptions import ToolError
 
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
@@ -92,8 +93,14 @@ _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 _CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
 
 
-class ToolExecutionError(Exception):
-    """Public, sanitized tool execution failure."""
+class ToolExecutionError(ToolError):
+    """Public, sanitized tool execution failure.
+
+    Subclasses the SDK's `ToolError` so the SDK treats it as an anticipated failure
+    and passes its text on to the client: since mcp 2.1 an arbitrary exception
+    raised by a tool reaches the client as a bare `Error executing tool <name>`,
+    dropping the Polish message built here.
+    """
 
 
 def _classify_error(exc: Exception) -> str:
@@ -181,7 +188,7 @@ def _public_message(exc: Exception, category: str) -> str:
 
 
 def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:  # noqa: UP047
-    """Log tool failures and re-raise a sanitized ordinary exception."""
+    """Log tool failures and re-raise them as a sanitized `ToolExecutionError`."""
 
     @functools.wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:

@@ -24,6 +24,7 @@ import respx
 from httpx import Response
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
+from mcp.types import CallToolResult
 
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from mcp_helpers import parse_tool_result
@@ -60,6 +61,7 @@ async def _schema(mcp_client, name: str) -> dict[str, Any]:
     tools = {tool.name: tool for tool in (await mcp_client.list_tools()).tools}
     schema = tools[name].output_schema
     assert schema is not None, f"{name} has no outputSchema"
+    assert "properties" in schema, f"{name} outputSchema has no properties"
     return schema
 
 
@@ -73,14 +75,17 @@ async def _prepare(mcp_client, name: str) -> dict[str, Any]:
     return arguments
 
 
-async def _call(mcp_client, name: str):
+async def _call(mcp_client, name: str) -> CallToolResult:
     return await mcp_client.call_tool(name, await _prepare(mcp_client, name))
 
 
 async def test_every_tool_has_a_contract_call(mcp_client) -> None:
     listed = {tool.name for tool in (await mcp_client.list_tools()).tools}
 
-    assert listed == set(CALLS)
+    assert listed == set(CALLS), (
+        f"tools without a contract call: {sorted(listed - set(CALLS))}; "
+        f"stale CALLS entries: {sorted(set(CALLS) - listed)}"
+    )
 
 
 @pytest.mark.parametrize("name", sorted(CALLS))
@@ -100,14 +105,16 @@ async def test_text_block_is_the_full_json_copy(mcp_client, name: str) -> None:
     result = await _call(mcp_client, name)
     payload = parse_tool_result(result)
 
+    assert len(result.content) == 1
     assert result.content[0].type == "text"
     assert json.loads(result.content[0].text) == payload
 
 
-async def test_the_validator_can_actually_fail(mcp_client) -> None:
-    """Guard the guard: a payload without the required `data` must not validate."""
-    schema = await _schema(mcp_client, "calculate_legal_date")
-    payload = parse_tool_result(await _call(mcp_client, "calculate_legal_date"))
+@pytest.mark.parametrize("name", sorted(CALLS))
+async def test_the_validator_can_actually_fail(mcp_client, name: str) -> None:
+    """Guard the guard: a payload without the required `data` must not validate, for any tool."""
+    schema = await _schema(mcp_client, name)
+    payload = parse_tool_result(await _call(mcp_client, name))
     broken = {key: value for key, value in payload.items() if key != "data"}
 
     with pytest.raises(ValidationError):

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Locked `pyjwt` moves from 2.13.0 to 2.15.0, the same lock change as Dependabot PR #72. This
+  closes the 14 advisories `pip-audit` reports against 2.13.0. One of them was reproduced against
+  this server in `LAW_MCP_AUTH_MODE=oauth`: an unsigned token with a deeply nested payload made
+  `PyJWKClient.get_signing_key_from_jwt` raise `RecursionError`, which escaped
+  `JwtTokenVerifier.verify_token` instead of being rejected (GHSA-42vr-xj54-vc7v). On 2.15.0 it
+  raises `DecodeError`, which the verifier already rejects. The others: GHSA-ffc3-869f-jxw9,
+  GHSA-gvp8-978c-rx2q, GHSA-p4g4-x82p-q773, GHSA-w6j9-cwv2-h6wq, GHSA-9v7f-9g4p-ffgj,
+  GHSA-9j54-fg26-wv3r, GHSA-jwrc-g2q2-pq5p, GHSA-2gx3-rcp4-g85q, GHSA-hxm8-2xgr-2p9m,
+  GHSA-w2cx-738m-mc7w, GHSA-r6x4-923q-g947, GHSA-8wjv-2p76-3863, GHSA-x33g-cr3x-6449.
+
 ## [4.4.1] - 2026-09-25
 
 See [docs/changelogs/v4.4.1.md](docs/changelogs/v4.4.1.md) for details.

@@ -28,6 +28,7 @@ def _rows() -> dict[str, re.Match[str]]:
     for line in README.read_text(encoding="utf-8").splitlines():
         match = ROW.match(line)
         if match:
+            assert match["name"] not in rows, f"README lists `{match['name']}` in the tool table more than once"
             rows[match["name"]] = match
     return rows
 
@@ -41,7 +42,9 @@ async def test_readme_tool_table_matches_tools_list() -> None:
     for tool in tools:
         row = rows[tool.name]
         assert tool.annotations is not None
-        assert row["title"] == tool.title, tool.name
+        # Cell padding is not part of the title; compare the text and show both spellings on failure.
+        readme_title = row["title"].strip()
+        assert readme_title == tool.title, f"{tool.name}: README title {readme_title!r} != tools/list {tool.title!r}"
         assert row["read_only"] == str(tool.annotations.read_only_hint).lower(), tool.name
         assert row["open_world"] == str(tool.annotations.open_world_hint).lower(), tool.name
         assert tool.annotations.destructive_hint is False, tool.name

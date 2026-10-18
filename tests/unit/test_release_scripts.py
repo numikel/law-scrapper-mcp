@@ -103,3 +103,33 @@ class TestCheckRelease:
         sync_ok, ver = check_release.check_version_sync()
         assert sync_ok is True
         assert ver == expected_version
+        assert "uv.lock" in check_release.VERSION_FILES
+
+    def test_sync_version_writes_only_the_uv_lock_root_entry(self, tmp_path, monkeypatch):
+        """--sync-version bumps the root package entry in uv.lock and no other `version =` line."""
+        import re
+        import shutil
+
+        rerooted = {}
+        for key, (path, replace_pattern, search_pattern) in check_release.VERSION_FILES.items():
+            target = tmp_path / key
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+            rerooted[key] = (target, replace_pattern, search_pattern)
+        lock = tmp_path / "uv.lock"
+        shutil.copyfile(check_release.PROJECT_ROOT / "uv.lock", lock)
+        monkeypatch.setattr(check_release, "VERSION_FILES", rerooted)
+
+        original = lock.read_text(encoding="utf-8")
+        root_entry = re.search(r'^name = "law-scrapper-mcp"\nversion = "[^"]+"$', original, re.MULTILINE)
+        assert root_entry is not None, "uv.lock has no root package entry"
+
+        assert check_release.sync_version_across_files("9.9.9") is True
+        assert lock.read_text(encoding="utf-8") == original.replace(
+            root_entry.group(0), 'name = "law-scrapper-mcp"\nversion = "9.9.9"'
+        )
+        assert check_release.check_version_sync("9.9.9") == (True, "9.9.9")
+
+        # A lock left behind by the bump fails the check.
+        lock.write_text(original, encoding="utf-8")
+        assert check_release.check_version_sync("9.9.9") == (False, None)

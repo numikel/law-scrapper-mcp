@@ -13,13 +13,15 @@ is adapter work, not domain work.
 import ast
 from pathlib import Path
 
+from mcp_helpers import EXPECTED_TOOLS
+
 TOOLS_ROOT = Path(__file__).parents[2] / "src" / "law_scrapper_mcp" / "tools"
 SKIPPED_MODULES = {"__init__.py", "error_handling.py"}
 MAX_AWAITS_PER_HANDLER = 1
 HINT_FACTORIES = {"Hint"}
 PRESET_MODULE = "law_scrapper_mcp.tools.annotations"
 PRESETS = {"READ_ONLY_REMOTE", "READ_ONLY_LOCAL"}
-EXPECTED_TOOL_COUNT = 13
+EXPECTED_TOOL_COUNT = len(EXPECTED_TOOLS)
 
 
 def _tool_modules() -> list[Path]:

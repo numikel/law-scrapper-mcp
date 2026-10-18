@@ -8,6 +8,7 @@ from starlette.testclient import TestClient
 from law_scrapper_mcp import server as server_module
 from law_scrapper_mcp.auth import build_auth
 from law_scrapper_mcp.config import Settings
+from mcp_helpers import EXPECTED_TOOLS
 
 pytestmark = pytest.mark.integration
 
@@ -80,7 +81,7 @@ def test_authenticated_tools_list_has_13_tools(bearer_app) -> None:
     assert response.status_code == 200
     body = response.text
     assert "search_legal_acts" in body
-    assert body.count('"name"') >= 13
+    assert body.count('"name"') >= len(EXPECTED_TOOLS)
 
 
 def test_health_stays_unauthenticated(bearer_app) -> None:

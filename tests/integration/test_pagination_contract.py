@@ -20,6 +20,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     SearchInActOutput,
     SearchOutput,
 )
+from mcp_helpers import EXPECTED_TOOLS
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -60,7 +61,7 @@ async def test_every_tool_is_classified(mcp_client) -> None:  # type: ignore[no-
     assert listed == classified, (
         f"unclassified tools: {sorted(listed - classified)}; stale registry entries: {sorted(classified - listed)}"
     )
-    assert len(listed) == 13
+    assert len(listed) == len(EXPECTED_TOOLS)
 
 
 async def test_no_tool_is_classified_twice() -> None:

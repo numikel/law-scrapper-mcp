@@ -51,6 +51,9 @@ class TestGitReleaseInfo:
         assert pyproject_match is not None, "Version pattern did not match in pyproject.toml"
         expected_version = pyproject_match.group(1)
 
+        # Both scripts keep their own copy of the list; a file added to one only is the drift #65 fixed.
+        assert git_release_info.VERSION_FILES.keys() == check_release.VERSION_FILES.keys()
+
         for key, (path, pattern) in git_release_info.VERSION_FILES.items():
             assert path.exists(), f"File for {key} does not exist: {path}"
             content = path.read_text(encoding="utf-8")
@@ -99,6 +102,9 @@ class TestCheckRelease:
         pyproject_match = re.search(pyproject_pattern, pyproject_path.read_text(encoding="utf-8"), re.MULTILINE)
         assert pyproject_match is not None, "Version pattern did not match in pyproject.toml"
         expected_version = pyproject_match.group(1)
+
+        # The test-suite summary carries the version too, and went stale once (#65).
+        assert "tests/TEST_SUITE_SUMMARY.md" in check_release.VERSION_FILES
 
         sync_ok, ver = check_release.check_version_sync()
         assert sync_ok is True

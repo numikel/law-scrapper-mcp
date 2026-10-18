@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.3.1, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.4.1, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -11,7 +11,7 @@ contracts, and the real MCP transports.
 | Layer | Scope | Command |
 |-------|-------|---------|
 | **1. Unit** | Models, services, stores, client, auth, HTTP middleware, config, pagination helpers, error handling | `uv run pytest tests/unit/ -v` |
-| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py tests/integration/test_output_contract.py -v -m integration` |
+| **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_failure_contract.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py tests/integration/test_output_contract.py -v -m integration` |
 | **3. Transport integration** | Real STDIO subprocess, loopback Streamable HTTP, authenticated HTTP | `uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py tests/integration/test_http_auth.py -v -m integration` |
 
 **Full integration suite:**
@@ -142,6 +142,7 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
 
 **Key files:**
 - `tests/integration/test_tools_e2e.py`
+- `tests/integration/test_content_failure_contract.py`
 - `tests/integration/test_content_pagination.py`
 - `tests/integration/test_result_pagination.py`
 - `tests/integration/test_listing_pagination.py`

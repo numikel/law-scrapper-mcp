@@ -30,9 +30,13 @@ every preset defined that way, rejects an inline `ToolAnnotations(...)` in the
 decorator, and forces every tool to name one explicitly.
 """
 
+from typing import Final
+
 from mcp.types import ToolAnnotations
 
-READ_ONLY_REMOTE = ToolAnnotations(
+# Final documents that these instances are shared by reference across tools; it
+# stops rebinding the names, not attribute assignment on the instances.
+READ_ONLY_REMOTE: Final[ToolAnnotations] = ToolAnnotations(
     read_only_hint=True,
     destructive_hint=False,
     idempotent_hint=True,
@@ -40,7 +44,7 @@ READ_ONLY_REMOTE = ToolAnnotations(
 )
 """Read-only tool that calls api.sejm.gov.pl."""
 
-READ_ONLY_LOCAL = ToolAnnotations(
+READ_ONLY_LOCAL: Final[ToolAnnotations] = ToolAnnotations(
     read_only_hint=True,
     destructive_hint=False,
     idempotent_hint=True,

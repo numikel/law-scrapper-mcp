@@ -89,6 +89,6 @@ async def test_a_successful_call_still_carries_no_error_key(mcp_client: Any) -> 
     result = await mcp_client.call_tool("get_act_details", {"eli": "DU/2024/1"})
 
     payload = parse_tool_result(result)
-    assert set(payload) >= {"data", "hints"}
+    assert set(payload) == {"data", "hints"}
     assert "error" not in payload
     assert payload["data"]["content_status"] == "not_requested"

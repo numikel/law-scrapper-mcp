@@ -10,26 +10,9 @@ from mcp import Client
 
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.server import app, lifespan
+from mcp_helpers import EXPECTED_TOOLS
 
 pytestmark = pytest.mark.asyncio
-
-EXPECTED_TOOLS = sorted(
-    [
-        "analyze_act_relationships",
-        "browse_acts",
-        "calculate_legal_date",
-        "compare_acts",
-        "filter_results",
-        "get_act_details",
-        "get_system_metadata",
-        "list_loaded_documents",
-        "list_result_sets",
-        "read_act_content",
-        "search_in_act",
-        "search_legal_acts",
-        "track_legal_changes",
-    ]
-)
 
 
 async def test_all_tools_registered() -> None:
@@ -38,7 +21,7 @@ async def test_all_tools_registered() -> None:
         tools = (await client.list_tools()).tools
         tool_names = sorted(tool.name for tool in tools)
 
-    assert len(tool_names) == 13
+    assert len(tool_names) == len(EXPECTED_TOOLS)
     assert tool_names == EXPECTED_TOOLS
 
 
@@ -55,11 +38,10 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
     async with Client(app) as client:
         tools = (await client.list_tools()).tools
 
-    assert len(tools) == 13
+    assert len(tools) == len(EXPECTED_TOOLS)
     for tool in tools:
         assert tool.output_schema is not None
         assert set(tool.output_schema["properties"]) == {"data", "hints"}
-        assert set(tool.output_schema["properties"]) != {"result"}
 
 
 def _resolve(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:

@@ -28,7 +28,8 @@ dev = [
     "mypy>=1.14",
     # mcp's streamable_http_client() types http_client as httpx2.AsyncClient,
     # not httpx.AsyncClient — needed alongside httpx for the HTTP transport test.
-    "httpx2>=2.5.0",
+    # Floor matches the override in [tool.uv]; see the httpx2 entry there.
+    "httpx2>=2.12.0",
     # tests/integration/test_output_contract.py validates structuredContent
     # against outputSchema; jsonschema is otherwise only a transitive dependency.
     "jsonschema>=4.25",
@@ -50,6 +51,11 @@ override-dependencies = [
     "requests>=2.33.0",
     "pygments>=2.20.0",
     "click>=8.3.3",
+    # httpx2 is a runtime dependency of mcp (which asks only for >=2.5.0) and is
+    # imported at server start. 2.12.0 is the release the 4.4.0 security fix
+    # locked (docs/changelogs/v4.4.0.md); the override holds that floor for uv
+    # resolutions, and the dev extra repeats it for readers of this file.
+    "httpx2>=2.12.0",
 ]
 
 [tool.hatch.build.targets.wheel]

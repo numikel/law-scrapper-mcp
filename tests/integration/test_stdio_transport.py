@@ -13,6 +13,8 @@ import pytest
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
+from mcp_helpers import EXPECTED_TOOLS
+
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 PROJECT_ROOT = Path(__file__).parents[2]
 PROTOCOL_FLOOR = date(2026, 7, 28)
@@ -89,7 +91,7 @@ async def test_stdio_discovery_tools_success_and_error(monkeypatch: pytest.Monke
             stderr_file.close()
         Path(stderr_path).unlink(missing_ok=True)
 
-    assert len(tools) == 13
+    assert len(tools) == len(EXPECTED_TOOLS)
     assert success.is_error is False
     assert success.structured_content["data"]["calculated_date"] == "2026-01-02"
     assert failure.is_error is True

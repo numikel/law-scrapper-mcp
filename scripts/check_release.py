@@ -52,6 +52,11 @@ VERSION_FILES: dict[str, tuple[Path, str, str]] = {
         r'(^name = "law-scrapper-mcp"\nversion = ")[^"]+(")',
         r'^name = "law-scrapper-mcp"\nversion = "([^"]+)"',
     ),
+    "tests/TEST_SUITE_SUMMARY.md": (
+        PROJECT_ROOT / "tests" / "TEST_SUITE_SUMMARY.md",
+        r"(Law Scrapper MCP v)[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*",
+        r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
+    ),
 }
 
 
@@ -78,7 +83,7 @@ def sync_version_across_files(target_version: str) -> bool:
             new_content = re.sub(
                 replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE
             )
-        elif key == "CLAUDE.md":
+        elif key in ("CLAUDE.md", "tests/TEST_SUITE_SUMMARY.md"):
             new_content = re.sub(replace_pattern, r"\g<1>" + clean_version, content, count=1, flags=re.MULTILINE)
         else:
             new_content = re.sub(

@@ -29,27 +29,9 @@ from typing import Any
 
 import pytest
 
-from mcp_helpers import parse_tool_result
+from mcp_helpers import EXPECTED_TOOLS, parse_tool_result
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
-
-EXPECTED_TOOLS = sorted(
-    [
-        "analyze_act_relationships",
-        "browse_acts",
-        "calculate_legal_date",
-        "compare_acts",
-        "filter_results",
-        "get_act_details",
-        "get_system_metadata",
-        "list_loaded_documents",
-        "list_result_sets",
-        "read_act_content",
-        "search_in_act",
-        "search_legal_acts",
-        "track_legal_changes",
-    ]
-)
 
 # Written out by hand on purpose (spec A2): importing the presets from
 # tools/annotations.py would test the code with itself.
@@ -114,7 +96,7 @@ class TestListToolsMCP:
         tools = (await mcp_client.list_tools()).tools
         tool_names = sorted(tool.name for tool in tools)
 
-        assert len(tool_names) == 13
+        assert len(tool_names) == len(EXPECTED_TOOLS)
         assert tool_names == EXPECTED_TOOLS
 
     async def test_all_tools_have_descriptions(self, mcp_client) -> None:
@@ -669,7 +651,7 @@ class TestEnrichedResponseStructure:
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
         payload = parse_tool_result(result)
 
-        assert set(payload.keys()) >= {"data", "hints"}
+        assert set(payload.keys()) == {"data", "hints"}
         assert isinstance(payload["hints"], list)
 
     async def test_metadata_response_structure(self, mcp_client) -> None:

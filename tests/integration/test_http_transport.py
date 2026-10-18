@@ -18,6 +18,7 @@ from starlette.testclient import TestClient
 
 from law_scrapper_mcp import server as server_module
 from law_scrapper_mcp.config import settings
+from mcp_helpers import EXPECTED_TOOLS
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -129,7 +130,7 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     assert any(date.fromisoformat(version) >= PROTOCOL_FLOOR for version in supported_versions)
     assert PROTOCOL_FLOOR_VERSION in supported_versions
 
-    assert len(listed.json()["result"]["tools"]) == 13
+    assert len(listed.json()["result"]["tools"]) == len(EXPECTED_TOOLS)
 
     success_result = success.json()["result"]
     assert success_result["isError"] is False
@@ -151,7 +152,7 @@ def test_tools_list_serializes_annotation_hints_in_camel_case(asgi_app) -> None:
 
     assert listed.status_code == 200
     tools = listed.json()["result"]["tools"]
-    assert len(tools) == 13
+    assert len(tools) == len(EXPECTED_TOOLS)
     for tool in tools:
         hints = tool["annotations"]
         assert set(hints) >= {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}, tool["name"]
@@ -351,7 +352,7 @@ async def test_live_http_discovery_tools_success_and_error(live_http_server: str
             )
             failure = await client.call_tool("get_act_details", {"eli": "INVALID"})
 
-    assert len(tools) == 13
+    assert len(tools) == len(EXPECTED_TOOLS)
     assert success.is_error is False
     assert success.structured_content["data"]["calculated_date"] == "2026-01-02"
     assert failure.is_error is True

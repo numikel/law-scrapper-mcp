@@ -1,6 +1,6 @@
 ---
 name: prepare-release
-description: Prepare a law-scrapper-mcp release — write Keep a Changelog files, bump version across 6 locations, run release checks, and commit. Use when the user asks to prepare release vX.Y.Z or run /prepare-release.
+description: Prepare a law-scrapper-mcp release — write Keep a Changelog files, bump version across 7 locations, run release checks, and commit. Use when the user asks to prepare release vX.Y.Z or run /prepare-release.
 ---
 
 # Prepare release
@@ -59,28 +59,29 @@ Update the root `CHANGELOG.md` using `docs/templates/release-summary-template.md
 - Add a summary referencing the per-version file `docs/changelogs/vX.Y.Z.md`.
 - Keep the `[Unreleased]` section header ready for future changes.
 
-### 5. Version bump across all 6 locations
+### 5. Version bump across all 7 locations
 
-Synchronize the version number `X.Y.Z` across all 6 target files using the helper script:
+Synchronize the version number `X.Y.Z` across all 7 target files using the helper script:
 
 ```bash
 uv run python scripts/check_release.py --sync-version X.Y.Z
 ```
 
-Verify that the following 6 locations have been updated to `X.Y.Z`:
+Verify that the following 7 locations have been updated to `X.Y.Z`:
 1. `pyproject.toml` (`version = "X.Y.Z"`)
 2. `src/law_scrapper_mcp/config.py` (`server_version: str = "X.Y.Z"`)
 3. `tests/unit/test_config.py` (`assert settings.server_version == "X.Y.Z"`)
 4. `README.md` (`![Version](https://img.shields.io/badge/version-X.Y.Z-orange.svg)`)
 5. `CLAUDE.md` (`Law Scrapper MCP vX.Y.Z ...`)
 6. `uv.lock` (the root package entry: `name = "law-scrapper-mcp"` followed by `version = "X.Y.Z"`)
+7. `tests/TEST_SUITE_SUMMARY.md` (`Test suite for Law Scrapper MCP vX.Y.Z, ...`)
 
 ### 6. Self-check (must pass before commit)
 
 Run automated release verification and quality checks:
 
 ```bash
-# 1. Verify release metadata and version alignment across all 6 locations
+# 1. Verify release metadata and version alignment across all 7 locations
 uv run python scripts/check_release.py --version X.Y.Z
 
 # 2. Run code formatting and linting
@@ -94,7 +95,7 @@ uv run pytest tests/integration/ -v -m integration
 
 Checklist validation:
 - [ ] `docs/changelogs/vX.Y.Z.md` exists and contains no placeholder text (`TODO`, `TBD`).
-- [ ] Version `X.Y.Z` is strictly consistent across all 6 files.
+- [ ] Version `X.Y.Z` is strictly consistent across all 7 files.
 - [ ] Release date matches today UTC.
 - [ ] All linting, typing, and tests pass clean.
 
@@ -103,7 +104,7 @@ Checklist validation:
 Stage changed release artifacts and create a single commit:
 
 ```bash
-git add pyproject.toml src/law_scrapper_mcp/config.py tests/unit/test_config.py README.md CLAUDE.md uv.lock CHANGELOG.md docs/changelogs/vX.Y.Z.md
+git add pyproject.toml src/law_scrapper_mcp/config.py tests/unit/test_config.py README.md CLAUDE.md uv.lock tests/TEST_SUITE_SUMMARY.md CHANGELOG.md docs/changelogs/vX.Y.Z.md
 git commit -m "chore(release): prepare vX.Y.Z"
 ```
 

@@ -510,9 +510,6 @@ requires-dist = [
 ]
 provides-extras = ["dev"]
 
-[package.metadata.requires-dev]
-dev = []
-
 [[package]]
 name = "librt"
 version = "0.8.0"

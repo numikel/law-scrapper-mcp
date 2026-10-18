@@ -53,7 +53,7 @@ override-dependencies = [
     "pygments>=2.20.0",
     "click>=8.3.3",
     # httpx2 is a runtime dependency of mcp (which asks only for >=2.5.0) and is
-    # imported at server start. 2.12.0 is the version the 4.4.0 security fix
+    # imported at server start. 2.12.0 is the release the 4.4.0 security fix
     # locked (docs/changelogs/v4.4.0.md); the override holds that floor for uv
     # resolutions, and the dev extra repeats it for readers of this file.
     "httpx2>=2.12.0",

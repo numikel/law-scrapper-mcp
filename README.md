@@ -313,7 +313,7 @@ Every tool is read-only (`readOnlyHint=true`, `destructiveHint=false`, `idempote
 | `analyze_act_relationships` | Powiązania aktu prawnego | true | true |
 | `track_legal_changes` | Śledzenie zmian w prawie | true | true |
 | `calculate_legal_date` | Obliczanie terminu prawnego | true | false |
-| `compare_acts` | Porównanie dwóch aktów | true | true |
+| `compare_acts` | Porównanie metadanych dwóch aktów | true | true |
 | `list_result_sets` | Zestawy wyników w pamięci | true | false |
 | `list_loaded_documents` | Dokumenty załadowane do pamięci | true | false |
 

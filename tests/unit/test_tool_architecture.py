@@ -18,29 +18,31 @@ SKIPPED_MODULES = {"__init__.py", "error_handling.py"}
 MAX_AWAITS_PER_HANDLER = 1
 HINT_FACTORIES = {"Hint"}
 PRESET_MODULE = "law_scrapper_mcp.tools.annotations"
-PRESETS = {"READ_ONLY_REMOTE", "READ_ONLY_LOCAL"}
+PRESET_SOURCE = TOOLS_ROOT / "annotations.py"
 EXPECTED_TOOL_COUNT = 13
+
+Handler = ast.FunctionDef | ast.AsyncFunctionDef
 
 
 def _tool_modules() -> list[Path]:
     return sorted(path for path in TOOLS_ROOT.glob("*.py") if path.name not in SKIPPED_MODULES)
 
 
-def _handlers(tree: ast.Module) -> list[ast.AsyncFunctionDef]:
-    """Return every `@mcp.tool(...)`-decorated coroutine in the module."""
-    found: list[ast.AsyncFunctionDef] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.AsyncFunctionDef):
-            continue
-        for decorator in node.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "tool"
-            ):
-                found.append(node)
-                break
-    return found
+def _tool_decorator(node: Handler) -> ast.Call | None:
+    """Return the `@mcp.tool(...)` call decorating the function, or None."""
+    for decorator in node.decorator_list:
+        if (
+            isinstance(decorator, ast.Call)
+            and isinstance(decorator.func, ast.Attribute)
+            and decorator.func.attr == "tool"
+        ):
+            return decorator
+    return None
+
+
+def _handlers(tree: ast.Module) -> list[Handler]:
+    """Return every `@mcp.tool(...)`-decorated function in the module, sync or async."""
+    return [node for node in ast.walk(tree) if isinstance(node, Handler) and _tool_decorator(node) is not None]
 
 
 def _is_hint_factory(node: ast.AST) -> bool:
@@ -51,7 +53,7 @@ def _is_hint_factory(node: ast.AST) -> bool:
     return name in HINT_FACTORIES or name.endswith("_hints")
 
 
-def _body_nodes(handler: ast.AsyncFunctionDef) -> list[ast.AST]:
+def _body_nodes(handler: Handler) -> list[ast.AST]:
     """Walk the handler body only.
 
     The signature is excluded on purpose: `Field(description=f"...")` on a tool
@@ -63,7 +65,7 @@ def _body_nodes(handler: ast.AsyncFunctionDef) -> list[ast.AST]:
     return nodes
 
 
-def _formatted_strings_outside_hints(handler: ast.AsyncFunctionDef) -> list[int]:
+def _formatted_strings_outside_hints(handler: Handler) -> list[int]:
     """Line numbers of f-strings that are not part of building a hint."""
     body = _body_nodes(handler)
     allowed: set[int] = set()
@@ -132,33 +134,57 @@ def test_the_guard_can_actually_fail() -> None:
     assert sum(isinstance(node, ast.Await) for node in _body_nodes(handlers[0])) > MAX_AWAITS_PER_HANDLER
     assert _formatted_strings_outside_hints(handlers[0]) != []
 
+    # A synchronous handler must not escape the static rules.
+    sync_adapter = ast.parse(
+        "\n".join(
+            [
+                "def register(mcp):",
+                "    @mcp.tool(meta={'tags': []})",
+                "    def bad(ctx):",
+                "        return f'Znaleziono {ctx}'",
+            ]
+        )
+    )
+    sync_handlers = _handlers(sync_adapter)
+
+    assert [handler.name for handler in sync_handlers] == ["bad"]
+    assert _formatted_strings_outside_hints(sync_handlers[0]) != []
+
 
 def _tool_decorators(tree: ast.Module) -> list[tuple[str, ast.Call]]:
     """Return (handler name, `@mcp.tool(...)` call) for every tool in the module."""
-    found: list[tuple[str, ast.Call]] = []
-    for handler in _handlers(tree):
-        for decorator in handler.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "tool"
-            ):
-                found.append((handler.name, decorator))
-    return found
+    return [(handler.name, call) for handler in _handlers(tree) if (call := _tool_decorator(handler)) is not None]
 
 
-def _imported_presets(tree: ast.Module) -> set[str]:
+def _preset_names(source: str) -> frozenset[str]:
+    """Names bound at module level to a `ToolAnnotations(...)` call: the presets a tool may name."""
+    return frozenset(
+        target.id
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "ToolAnnotations"
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    )
+
+
+PRESETS = _preset_names(PRESET_SOURCE.read_text(encoding="utf-8"))
+
+
+def _imported_presets(tree: ast.Module, known: frozenset[str] = PRESETS) -> set[str]:
     return {
         alias.asname or alias.name
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and node.module == PRESET_MODULE
         for alias in node.names
-    } & PRESETS
+    } & known
 
 
-def _decorator_problems(tree: ast.Module) -> list[str]:
+def _decorator_problems(tree: ast.Module, known: frozenset[str] = PRESETS) -> list[str]:
     """A tool must pick a shared preset on purpose and carry a human title."""
-    presets = _imported_presets(tree)
+    presets = _imported_presets(tree, known)
     problems: list[str] = []
     for name, decorator in _tool_decorators(tree):
         keywords = {keyword.arg: keyword.value for keyword in decorator.keywords}
@@ -183,7 +209,10 @@ def test_every_tool_declares_an_annotation_preset_and_a_title() -> None:
 
 
 def test_the_annotation_guard_can_actually_fail() -> None:
-    """Guard the guard: a bare decorator and an inline ToolAnnotations are both rejected."""
+    """Guard the guard: a bare decorator, sync or async, and an inline ToolAnnotations are rejected.
+
+    A named preset is accepted exactly when tools/annotations.py defines it.
+    """
     bare = ast.parse(
         "\n".join(
             [
@@ -206,5 +235,43 @@ def test_the_annotation_guard_can_actually_fail() -> None:
         )
     )
 
+    sync_bare = ast.parse(
+        "\n".join(
+            [
+                "def register(mcp):",
+                "    @mcp.tool(meta={'tags': []})",
+                "    def bad(ctx):",
+                "        return None",
+            ]
+        )
+    )
+
+    annotations_source = "\n".join(
+        [
+            "from mcp.types import ToolAnnotations",
+            "READ_ONLY_LOCAL = ToolAnnotations(read_only_hint=True)",
+            "WRITE_REMOTE = ToolAnnotations(read_only_hint=False, destructive_hint=False)",
+            "NOT_A_PRESET = 1",
+            "def helper():",
+            "    NESTED = ToolAnnotations(read_only_hint=True)",
+        ]
+    )
+    write_tool = ast.parse(
+        "\n".join(
+            [
+                "from law_scrapper_mcp.tools.annotations import WRITE_REMOTE",
+                "def register(mcp):",
+                "    @mcp.tool(title='Zapis', annotations=WRITE_REMOTE)",
+                "    async def write(ctx):",
+                "        return None",
+            ]
+        )
+    )
+    with_write_preset = _preset_names(annotations_source)
+
     assert len(_decorator_problems(bare)) == 2
     assert len(_decorator_problems(inline)) == 1
+    assert len(_decorator_problems(sync_bare)) == 2
+    assert with_write_preset == {"READ_ONLY_LOCAL", "WRITE_REMOTE"}
+    assert _decorator_problems(write_tool, with_write_preset) == []
+    assert len(_decorator_problems(write_tool)) == 1

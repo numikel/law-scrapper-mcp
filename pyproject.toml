@@ -42,7 +42,6 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = []
 override-dependencies = [
     "cryptography>=48.0.1",
     "urllib3>=2.7.0",

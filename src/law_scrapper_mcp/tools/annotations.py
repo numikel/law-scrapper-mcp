@@ -24,8 +24,10 @@ destructive.
 `openWorldHint` marks the tools that call api.sejm.gov.pl.
 
 A tool that writes anything must not borrow these presets; it needs its own
-annotations, chosen on purpose. tests/unit/test_tool_architecture.py forces
-every tool to name one explicitly.
+preset, chosen on purpose and added here as a module-level
+`NAME = ToolAnnotations(...)`. tests/unit/test_tool_architecture.py accepts
+every preset defined that way, rejects an inline `ToolAnnotations(...)` in the
+decorator, and forces every tool to name one explicitly.
 """
 
 from mcp.types import ToolAnnotations

@@ -40,6 +40,11 @@ VERSION_FILES: dict[str, tuple[Path, str]] = {
         PROJECT_ROOT / "CLAUDE.md",
         r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
     ),
+    # The root package entry only, as in check_release.py.
+    "uv.lock": (
+        PROJECT_ROOT / "uv.lock",
+        r'^name = "law-scrapper-mcp"\nversion = "([^"]+)"',
+    ),
     "tests/TEST_SUITE_SUMMARY.md": (
         PROJECT_ROOT / "tests" / "TEST_SUITE_SUMMARY.md",
         r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",

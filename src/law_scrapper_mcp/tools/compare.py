@@ -20,7 +20,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
     """Register compare acts tool."""
 
     @mcp.tool(
-        title="Porównanie dwóch aktów",
+        title="Porównanie metadanych dwóch aktów",
         annotations=READ_ONLY_REMOTE,
         meta={"tags": ["analysis", "compare"]},
     )

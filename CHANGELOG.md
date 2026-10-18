@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `compare_acts` is now titled "Porównanie metadanych dwóch aktów" instead of "Porównanie dwóch
+  aktów". It compares metadata only (titles, types, statuses, dates, keywords), never the text,
+  and hosts show the title in tool pickers and approval prompts. This is the only change to
+  `tools/list` (#67).
+- `scripts/check_release.py --sync-version` also writes the root package version in `uv.lock`, and
+  the prepare-release checklist stages `uv.lock` in the release commit, so a version bump no longer
+  needs a follow-up lock commit (#67).
+- The deprecated, empty `[tool.uv] dev-dependencies` key is removed from `pyproject.toml`; dev tools
+  stay in the `dev` extra. The lock loses only the matching empty `requires-dev` entry (#67).
+- `scripts/check_release.py` and `scripts/git_release_info.py` also track the version in
+  `tests/TEST_SUITE_SUMMARY.md`, which had gone stale at 4.3.1, and the prepare-release checklist
+  stages it. Both scripts now check the same seven files, `uv.lock` included, and a test keeps their
+  lists identical (#65).
+- Test-suite hardening from the 4.4.0 review (#65): one shared list of expected tools, guard tests
+  that check messages instead of counts, exact envelope checks. No change to the server's
+  behaviour.
+
 ### Security
 
 - Locked `pyjwt` moves from 2.13.0 to 2.15.0, the same lock change as Dependabot PR #72. This
@@ -21,15 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `httpx2>=2.12.0` is now a `[tool.uv]` override and the floor of the dev extra (#65). Until now
   only the lock held 2.12.0, the version the 4.4.0 security fix moved to; `pyproject.toml` still
   admitted the older releases through `mcp`'s `httpx2>=2.5.0`. The locked version is unchanged.
-
-### Changed
-
-- `scripts/check_release.py` and `scripts/git_release_info.py` also track the version in
-  `tests/TEST_SUITE_SUMMARY.md`, which had gone stale at 4.3.1. Both scripts now check six files,
-  and a test keeps their lists identical (#65).
-- Test-suite hardening from the 4.4.0 review (#65): one shared list of expected tools, guard tests
-  that check messages instead of counts, exact envelope checks. No change to the server's
-  behaviour.
 
 ## [4.4.1] - 2026-09-25
 

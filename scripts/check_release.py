@@ -19,7 +19,7 @@ from pathlib import Path
 # Project root directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Files containing version numbers with their update and search regex patterns
+# Files containing the version number, with their update and search regex patterns
 VERSION_FILES: dict[str, tuple[Path, str, str]] = {
     "pyproject.toml": (
         PROJECT_ROOT / "pyproject.toml",
@@ -46,6 +46,12 @@ VERSION_FILES: dict[str, tuple[Path, str, str]] = {
         r"(Law Scrapper MCP v)[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*",
         r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
     ),
+    # The root package entry only; the name line keeps every dependency's version out of reach.
+    "uv.lock": (
+        PROJECT_ROOT / "uv.lock",
+        r'(^name = "law-scrapper-mcp"\nversion = ")[^"]+(")',
+        r'^name = "law-scrapper-mcp"\nversion = "([^"]+)"',
+    ),
     "tests/TEST_SUITE_SUMMARY.md": (
         PROJECT_ROOT / "tests" / "TEST_SUITE_SUMMARY.md",
         r"(Law Scrapper MCP v)[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*",
@@ -55,7 +61,7 @@ VERSION_FILES: dict[str, tuple[Path, str, str]] = {
 
 
 def sync_version_across_files(target_version: str) -> bool:
-    """Update every file in VERSION_FILES to set version to target_version."""
+    """Update every file in VERSION_FILES to target_version."""
     clean_version = target_version.lstrip("v")
     print(f"Synchronizing version to '{clean_version}' across {len(VERSION_FILES)} files...")
     print("-" * 60)
@@ -213,7 +219,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Pre-release verification script.")
     parser.add_argument("--version", help="Version to check (e.g. 2.4.0 or v2.4.0)")
-    parser.add_argument("--sync-version", help="Automatically update all version files to specified version")
+    parser.add_argument("--sync-version", help="Automatically update every version file to specified version")
     parser.add_argument("--skip-tests", action="store_true", help="Skip running ruff, mypy, pytest")
 
     args = parser.parse_args()

@@ -4,6 +4,15 @@ The SDK client validates structured output on its own side today, but that is a
 detail of the client, not a guarantee of this repository. These tests make the
 contract explicit and independent of the client version.
 
+Known limit: the validation proves shape compatibility, not exactness. No
+outputSchema sets `additionalProperties: false` (the open `dict[str, Any]`
+fields carry `true`), so an unexpected extra key still validates. That is
+compliant with MCP, and it is why `test_no_top_level_metadata_in_schema_or_payload`
+checks separately for the one key that must stay gone. Exactness would mean
+validating against a copy of each schema with `unevaluatedProperties: false`
+injected into every object that declares `properties`; it waits on #68, which
+types those open fields.
+
 The text block staying a full JSON copy of structuredContent is a deliberate
 decision (spec D6, following the MCP 2026-07-28 backwards-compatibility advice),
 not an accident of the SDK.
@@ -12,6 +21,14 @@ The same calls also pin `openWorldHint` to behaviour: a tool that declares
 `false` must not send a single request upstream, and one that declares `true`
 must. The hint is read from `tools/list`, so a new tool is covered as soon as it
 has an entry in CALLS.
+
+Known limit: both counters see only traffic that goes through `httpx`. The
+`upstream` fixture counts requests at respx, which patches `httpx` and
+`httpcore` but not `httpx2`/`httpcore2`; the `api_client_calls` spy counts
+`SejmApiClient` fetches. Every Sejm API request a tool makes goes through
+`SejmApiClient`, so coverage is complete today. A tool that reached the network
+through another HTTP client would be neither mocked nor counted, so revisit
+both counters when a second client is introduced.
 """
 
 from __future__ import annotations

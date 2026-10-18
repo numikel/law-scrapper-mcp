@@ -27,7 +27,7 @@ SKIPPED_MODULES = {"__init__.py", "error_handling.py"}
 MAX_AWAITS_PER_HANDLER = 1
 HINT_FACTORIES = {"Hint"}
 PRESET_MODULE = "law_scrapper_mcp.tools.annotations"
-PRESETS = {"READ_ONLY_REMOTE", "READ_ONLY_LOCAL"}
+PRESET_SOURCE = TOOLS_ROOT / "annotations.py"
 EXPECTED_TOOL_COUNT = len(EXPECTED_TOOLS)
 
 # Messages and import line used by the guard-the-guard cases below.
@@ -35,26 +35,28 @@ ANNOTATIONS_PROBLEM = f"tool: annotations= must name a preset imported from {PRE
 TITLE_PROBLEM = "tool: title= must be a non-empty string literal"
 IMPORT_LOCAL = f"from {PRESET_MODULE} import READ_ONLY_LOCAL"
 
+Handler = ast.FunctionDef | ast.AsyncFunctionDef
+
 
 def _tool_modules() -> list[Path]:
     return sorted(path for path in TOOLS_ROOT.glob("*.py") if path.name not in SKIPPED_MODULES)
 
 
-def _handlers(tree: ast.Module) -> list[ast.AsyncFunctionDef]:
-    """Return every `@mcp.tool(...)`-decorated coroutine in the module."""
-    found: list[ast.AsyncFunctionDef] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.AsyncFunctionDef):
-            continue
-        for decorator in node.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "tool"
-            ):
-                found.append(node)
-                break
-    return found
+def _tool_decorator(node: Handler) -> ast.Call | None:
+    """Return the `@mcp.tool(...)` call decorating the function, or None."""
+    for decorator in node.decorator_list:
+        if (
+            isinstance(decorator, ast.Call)
+            and isinstance(decorator.func, ast.Attribute)
+            and decorator.func.attr == "tool"
+        ):
+            return decorator
+    return None
+
+
+def _handlers(tree: ast.Module) -> list[Handler]:
+    """Return every `@mcp.tool(...)`-decorated function in the module, sync or async."""
+    return [node for node in ast.walk(tree) if isinstance(node, Handler) and _tool_decorator(node) is not None]
 
 
 def _is_hint_factory(node: ast.AST) -> bool:
@@ -65,7 +67,7 @@ def _is_hint_factory(node: ast.AST) -> bool:
     return name in HINT_FACTORIES or name.endswith("_hints")
 
 
-def _body_nodes(handler: ast.AsyncFunctionDef) -> list[ast.AST]:
+def _body_nodes(handler: Handler) -> list[ast.AST]:
     """Walk the handler body only.
 
     The signature is excluded on purpose: `Field(description=f"...")` on a tool
@@ -77,7 +79,7 @@ def _body_nodes(handler: ast.AsyncFunctionDef) -> list[ast.AST]:
     return nodes
 
 
-def _formatted_strings_outside_hints(handler: ast.AsyncFunctionDef) -> list[int]:
+def _formatted_strings_outside_hints(handler: Handler) -> list[int]:
     """Line numbers of f-strings that are not part of building a hint."""
     body = _body_nodes(handler)
     allowed: set[int] = set()
@@ -89,26 +91,39 @@ def _formatted_strings_outside_hints(handler: ast.AsyncFunctionDef) -> list[int]
 
 def _tool_decorators(tree: ast.Module) -> list[tuple[str, ast.Call]]:
     """Return (handler name, `@mcp.tool(...)` call) for every tool in the module."""
-    found: list[tuple[str, ast.Call]] = []
-    for handler in _handlers(tree):
-        for decorator in handler.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "tool"
-            ):
-                found.append((handler.name, decorator))
-    return found
+    return [(handler.name, call) for handler in _handlers(tree) if (call := _tool_decorator(handler)) is not None]
 
 
-def _imported_presets(tree: ast.Module) -> set[str]:
-    """Every expression that names a shared preset in this module, in `ast.unparse` spelling.
+def _preset_names(source: str) -> frozenset[str]:
+    """Names bound at module level to a `ToolAnnotations(...)` call: the presets a tool may name.
+
+    Both `NAME = ToolAnnotations(...)` and the annotated
+    `NAME: Final[ToolAnnotations] = ToolAnnotations(...)` count; the shipped presets use the latter.
+    """
+    names: set[str] = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id == "ToolAnnotations":
+            names.update(target.id for target in targets if isinstance(target, ast.Name))
+    return frozenset(names)
+
+
+PRESETS = _preset_names(PRESET_SOURCE.read_text(encoding="utf-8"))
+
+
+def _imported_presets(tree: ast.Module, known: frozenset[str] = PRESETS) -> set[str]:
+    """Every expression that names a known preset in this module, in `ast.unparse` spelling.
 
     `from <PRESET_MODULE> import READ_ONLY_LOCAL as RO` yields the local name `RO`.
     Importing the module itself (`import <PRESET_MODULE> [as ann]` or
     `from law_scrapper_mcp.tools import annotations [as ann]`) yields
-    `<prefix>.READ_ONLY_LOCAL` and `<prefix>.READ_ONLY_REMOTE`. Relative imports are
-    not recognised; the tool modules import absolutely.
+    `<prefix>.<preset>` for every known preset. Relative imports are not
+    recognised; the tool modules import absolutely.
     """
     package, _, module = PRESET_MODULE.rpartition(".")
     references: set[str] = set()
@@ -116,18 +131,18 @@ def _imported_presets(tree: ast.Module) -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                if node.module == PRESET_MODULE and alias.name in PRESETS:
+                if node.module == PRESET_MODULE and alias.name in known:
                     references.add(alias.asname or alias.name)
                 elif node.module == package and alias.name == module:
                     prefixes.add(alias.asname or alias.name)
         elif isinstance(node, ast.Import):
             prefixes.update(alias.asname or alias.name for alias in node.names if alias.name == PRESET_MODULE)
-    return references | {f"{prefix}.{preset}" for prefix in prefixes for preset in PRESETS}
+    return references | {f"{prefix}.{preset}" for prefix in prefixes for preset in known}
 
 
-def _decorator_problems(tree: ast.Module) -> list[str]:
+def _decorator_problems(tree: ast.Module, known: frozenset[str] = PRESETS) -> list[str]:
     """A tool must pick a shared preset on purpose and carry a human title."""
-    presets = _imported_presets(tree)
+    presets = _imported_presets(tree, known)
     problems: list[str] = []
     for name, decorator in _tool_decorators(tree):
         keywords = {keyword.arg: keyword.value for keyword in decorator.keywords}
@@ -140,7 +155,7 @@ def _decorator_problems(tree: ast.Module) -> list[str]:
     return problems
 
 
-def _tool_module(imports: str, arguments: str) -> ast.Module:
+def _tool_module(imports: str, arguments: str, *, sync: bool = False) -> ast.Module:
     """Parse a module with the given import lines and one `@mcp.tool(<arguments>)` handler named `tool`."""
     return ast.parse(
         "\n".join(
@@ -148,7 +163,7 @@ def _tool_module(imports: str, arguments: str) -> ast.Module:
                 imports,
                 "def register(mcp):",
                 f"    @mcp.tool({arguments})",
-                "    async def tool(ctx):",
+                f"    {'def' if sync else 'async def'} tool(ctx):",
                 "        return None",
             ]
         )
@@ -213,6 +228,22 @@ def test_the_guard_can_actually_fail() -> None:
     assert len(handlers) == 1
     assert sum(isinstance(node, ast.Await) for node in _body_nodes(handlers[0])) > MAX_AWAITS_PER_HANDLER
     assert _formatted_strings_outside_hints(handlers[0]) != []
+
+    # A synchronous handler must not escape the static rules.
+    sync_adapter = ast.parse(
+        "\n".join(
+            [
+                "def register(mcp):",
+                "    @mcp.tool(meta={'tags': []})",
+                "    def bad(ctx):",
+                "        return f'Znaleziono {ctx}'",
+            ]
+        )
+    )
+    sync_handlers = _handlers(sync_adapter)
+
+    assert [handler.name for handler in sync_handlers] == ["bad"]
+    assert _formatted_strings_outside_hints(sync_handlers[0]) != []
 
 
 def test_every_tool_declares_an_annotation_preset_and_a_title() -> None:
@@ -282,3 +313,27 @@ def test_the_annotation_guard_can_actually_fail(imports: str, arguments: str, ex
 def test_the_annotation_guard_honours_every_way_to_name_a_preset(imports: str, annotations: str) -> None:
     """An aliased or module-qualified preset is still a preset; rejecting it would be a false positive."""
     assert _decorator_problems(_tool_module(imports, f"title='Dobry', annotations={annotations}")) == []
+
+
+def test_the_annotation_guard_covers_sync_handlers_and_named_presets() -> None:
+    """A sync handler is checked like an async one, and a named preset counts exactly when tools/annotations.py defines it."""
+    annotations_source = "\n".join(
+        [
+            "from typing import Final",
+            "from mcp.types import ToolAnnotations",
+            "READ_ONLY_LOCAL = ToolAnnotations(read_only_hint=True)",
+            "READ_ONLY_REMOTE: Final[ToolAnnotations] = ToolAnnotations(read_only_hint=True)",
+            "WRITE_REMOTE = ToolAnnotations(read_only_hint=False, destructive_hint=False)",
+            "NOT_A_PRESET = 1",
+            "ANNOTATED_ONLY: ToolAnnotations",
+            "def helper():",
+            "    NESTED = ToolAnnotations(read_only_hint=True)",
+        ]
+    )
+    with_write_preset = _preset_names(annotations_source)
+    write_tool = _tool_module(f"from {PRESET_MODULE} import WRITE_REMOTE", "title='Zapis', annotations=WRITE_REMOTE")
+
+    assert _decorator_problems(_tool_module("", "meta={'tags': []}", sync=True)) == [ANNOTATIONS_PROBLEM, TITLE_PROBLEM]
+    assert with_write_preset == {"READ_ONLY_LOCAL", "READ_ONLY_REMOTE", "WRITE_REMOTE"}
+    assert _decorator_problems(write_tool, with_write_preset) == []
+    assert _decorator_problems(write_tool) == [ANNOTATIONS_PROBLEM]

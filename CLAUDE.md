@@ -67,7 +67,9 @@ upper clamp on `limit`, because the value reaches `api.sejm.gov.pl` unchanged.
 - Each tool passes a Polish `title=` and one annotation preset from `tools/annotations.py`
   (`READ_ONLY_REMOTE` when it calls `api.sejm.gov.pl`, `READ_ONLY_LOCAL` otherwise);
   `tests/unit/test_tool_architecture.py` rejects a decorator without both. A tool that
-  writes anything needs its own annotations, not a `READ_ONLY_*` preset
+  writes anything needs its own named preset, not a `READ_ONLY_*` one: add a module-level
+  `NAME = ToolAnnotations(...)` to `tools/annotations.py` and the architecture test picks it
+  up; an inline `ToolAnnotations(...)` in the decorator is rejected
 - Services layer handles business logic; tools are thin wrappers with `@handle_tool_errors`
 - Pydantic models for all API responses with `ConfigDict(extra="ignore")`
 - Configuration via environment variables with `LAW_MCP_` prefix

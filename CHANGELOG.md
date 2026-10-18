@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GHSA-gvp8-978c-rx2q, GHSA-p4g4-x82p-q773, GHSA-w6j9-cwv2-h6wq, GHSA-9v7f-9g4p-ffgj,
   GHSA-9j54-fg26-wv3r, GHSA-jwrc-g2q2-pq5p, GHSA-2gx3-rcp4-g85q, GHSA-hxm8-2xgr-2p9m,
   GHSA-w2cx-738m-mc7w, GHSA-r6x4-923q-g947, GHSA-8wjv-2p76-3863, GHSA-x33g-cr3x-6449.
+- `httpx2>=2.12.0` is now a `[tool.uv]` override and the floor of the dev extra (#65). Until now
+  only the lock held 2.12.0, the version the 4.4.0 security fix moved to; `pyproject.toml` still
+  admitted the older releases through `mcp`'s `httpx2>=2.5.0`. The locked version is unchanged.
+
+### Changed
+
+- `scripts/check_release.py` and `scripts/git_release_info.py` also track the version in
+  `tests/TEST_SUITE_SUMMARY.md`, which had gone stale at 4.3.1. Both scripts now check six files,
+  and a test keeps their lists identical (#65).
+- Test-suite hardening from the 4.4.0 review (#65): one shared list of expected tools, guard tests
+  that check messages instead of counts, exact envelope checks. No change to the server's
+  behaviour.
 
 ## [4.4.1] - 2026-09-25
 

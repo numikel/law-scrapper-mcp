@@ -115,8 +115,11 @@ class JwtTokenVerifier:
         serialise every verification in the process behind one slow identity
         provider, and a stalled discovery would then stall all of them — the
         outage-as-lockout shape the missing circuit breaker above is careful
-        not to create. A cold race may run discovery twice; only the first
-        result is published, and the duplicate request is the cheaper wrong.
+        not to create. The price is duplicate discovery requests: every caller
+        that arrives before the client is published runs its own, and a failed
+        discovery publishes nothing, so each verification retries it while the
+        identity provider is down. Only the first result is published, and the
+        duplicates are the cheaper wrong.
         """
         async with self._lock:
             if self._client is not None:

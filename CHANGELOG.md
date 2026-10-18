@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `compare_acts` is now titled "Porównanie metadanych dwóch aktów" instead of "Porównanie dwóch
+  aktów". It compares metadata only (titles, types, statuses, dates, keywords), never the text,
+  and hosts show the title in tool pickers and approval prompts. This is the only change to
+  `tools/list` (#67).
+- `scripts/check_release.py --sync-version` also writes the root package version in `uv.lock`, and
+  the prepare-release checklist stages `uv.lock` in the release commit, so a version bump no longer
+  needs a follow-up lock commit (#67).
+- The deprecated, empty `[tool.uv] dev-dependencies` key is removed from `pyproject.toml`; dev tools
+  stay in the `dev` extra. The lock loses only the matching empty `requires-dev` entry (#67).
+
 ### Security
 
 - Locked `pyjwt` moves from 2.13.0 to 2.15.0, the same lock change as Dependabot PR #72. This

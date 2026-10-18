@@ -19,7 +19,7 @@ from pathlib import Path
 # Project root directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# 5 files containing version numbers with their update and search regex patterns
+# Files containing version numbers with their update and search regex patterns
 VERSION_FILES: dict[str, tuple[Path, str, str]] = {
     "pyproject.toml": (
         PROJECT_ROOT / "pyproject.toml",
@@ -46,13 +46,18 @@ VERSION_FILES: dict[str, tuple[Path, str, str]] = {
         r"(Law Scrapper MCP v)[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*",
         r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
     ),
+    "tests/TEST_SUITE_SUMMARY.md": (
+        PROJECT_ROOT / "tests" / "TEST_SUITE_SUMMARY.md",
+        r"(Law Scrapper MCP v)[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*",
+        r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
+    ),
 }
 
 
 def sync_version_across_files(target_version: str) -> bool:
-    """Update all 5 files to set version to target_version."""
+    """Update every file in VERSION_FILES to set version to target_version."""
     clean_version = target_version.lstrip("v")
-    print(f"Synchronizing version to '{clean_version}' across 5 files...")
+    print(f"Synchronizing version to '{clean_version}' across {len(VERSION_FILES)} files...")
     print("-" * 60)
 
     success = True
@@ -72,7 +77,7 @@ def sync_version_across_files(target_version: str) -> bool:
             new_content = re.sub(
                 replace_pattern, r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE
             )
-        elif key == "CLAUDE.md":
+        elif key in ("CLAUDE.md", "tests/TEST_SUITE_SUMMARY.md"):
             new_content = re.sub(replace_pattern, r"\g<1>" + clean_version, content, count=1, flags=re.MULTILINE)
         else:
             new_content = re.sub(
@@ -88,12 +93,12 @@ def sync_version_across_files(target_version: str) -> bool:
 
 
 def check_version_sync(expected_version: str | None = None) -> tuple[bool, str | None]:
-    """Verify version match across 5 files and validate against expected_version if provided."""
+    """Verify version match across VERSION_FILES and validate against expected_version if provided."""
     clean_expected = expected_version.lstrip("v") if expected_version else None
     versions: dict[str, str | None] = {}
     all_ok = True
 
-    print("1. Checking version synchronization across 5 files:")
+    print(f"1. Checking version synchronization across {len(VERSION_FILES)} files:")
     print("-" * 60)
 
     for key, (file_path, _, search_pattern) in VERSION_FILES.items():
@@ -128,7 +133,7 @@ def check_version_sync(expected_version: str | None = None) -> tuple[bool, str |
         return False, None
 
     detected_ver = list(found_versions)[0]
-    print(f"[OK] All 5 files are synchronized to version v{detected_ver}\n")
+    print(f"[OK] All {len(VERSION_FILES)} files are synchronized to version v{detected_ver}\n")
     return True, detected_ver
 
 
@@ -208,7 +213,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Pre-release verification script.")
     parser.add_argument("--version", help="Version to check (e.g. 2.4.0 or v2.4.0)")
-    parser.add_argument("--sync-version", help="Automatically update all 5 files to specified version")
+    parser.add_argument("--sync-version", help="Automatically update all version files to specified version")
     parser.add_argument("--skip-tests", action="store_true", help="Skip running ruff, mypy, pytest")
 
     args = parser.parse_args()

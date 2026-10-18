@@ -40,6 +40,10 @@ VERSION_FILES: dict[str, tuple[Path, str]] = {
         PROJECT_ROOT / "CLAUDE.md",
         r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
     ),
+    "tests/TEST_SUITE_SUMMARY.md": (
+        PROJECT_ROOT / "tests" / "TEST_SUITE_SUMMARY.md",
+        r"Law Scrapper MCP v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*)",
+    ),
 }
 
 CONVENTIONAL_PATTERN = re.compile(
@@ -60,7 +64,7 @@ def get_git_executable() -> str:
 
 
 def check_version_sync() -> bool:
-    """Check if all 5 project files have identical version strings."""
+    """Check if every file in VERSION_FILES has an identical version string."""
     versions: dict[str, str | None] = {}
     all_ok = True
 
@@ -93,7 +97,7 @@ def check_version_sync() -> bool:
         return False
 
     synced_version = list(found_versions)[0]
-    print(f"✓ All 5 files are synchronized to version v{synced_version}")
+    print(f"✓ All {len(VERSION_FILES)} files are synchronized to version v{synced_version}")
     return True
 
 

@@ -42,7 +42,6 @@ async def test_all_tools_have_concrete_output_schemas() -> None:
     for tool in tools:
         assert tool.output_schema is not None
         assert set(tool.output_schema["properties"]) == {"data", "hints"}
-        assert set(tool.output_schema["properties"]) != {"result"}
 
 
 def _resolve(schema: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:

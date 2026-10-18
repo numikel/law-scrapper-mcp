@@ -651,7 +651,7 @@ class TestEnrichedResponseStructure:
         result = await mcp_client.call_tool("search_legal_acts", {"year": 2024})
         payload = parse_tool_result(result)
 
-        assert set(payload.keys()) >= {"data", "hints"}
+        assert set(payload.keys()) == {"data", "hints"}
         assert isinstance(payload["hints"], list)
 
     async def test_metadata_response_structure(self, mcp_client) -> None:

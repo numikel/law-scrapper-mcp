@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Law Scrapper MCP v4.4.1 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.2.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
+Law Scrapper MCP v4.4.2 is a modular Python MCP server that exposes 13 tools for searching and analyzing Polish legal acts from the Sejm API (`api.sejm.gov.pl/eli/`). Built with the official Python MCP SDK (`mcp[cli]==2.2.0`, `MCPServer[AppContext]`), it supports STDIO (default) and stateless Streamable HTTP at `/mcp` on port 7683.
 
 ## Development commands
 
-Standard `uv` invocations (`uv sync`, `uv run pytest`, `uv run ruff check`, `uv run mypy`)
-apply as usual; see `pyproject.toml`. The non-obvious ones:
+Standard `uv` invocations (`uv sync`, `uv run pytest`, `uv run ruff check`, `uv run mypy`,
+`uv run pip-audit`) apply as usual; see `pyproject.toml`. The non-obvious ones:
 
 ```bash
 # HTTP transport is opt-in via env var, not a flag

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.4.1, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.4.2, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -251,7 +251,7 @@ GitHub Actions (`.github/workflows/ci.yml`), `lint` and `test` jobs:
 ```
 
 A `release-prep-check` job requires `docs/changelogs/v<version>.md` whenever `pyproject.toml`'s
-version changes, and an `audit` job runs `pip-audit`.
+version changes, and an `audit` job runs `pip-audit` from the dev extra (`uv run pip-audit` locally).
 A `docker` job builds the image and smoke-tests it: `/health` over streamable-http with a throwaway
 bearer token, one `initialize` round-trip over STDIO (`LAW_MCP_TRANSPORT=stdio` overriding the
 image default), and a non-root check.

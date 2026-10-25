@@ -1,6 +1,6 @@
 [project]
 name = "law-scrapper-mcp"
-version = "4.4.1"
+version = "4.4.2"
 description = "LawScrapper MCP is an MCP server to monitoring and fetching Polish law acts published by the Polish Sejm, filters them by topic. Then with AI you can summarizes their content using an LLM."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -33,6 +33,9 @@ dev = [
     # tests/integration/test_output_contract.py validates structuredContent
     # against outputSchema; jsonschema is otherwise only a transitive dependency.
     "jsonschema>=4.25",
+    # The CI `audit` job runs it against the locked environment; keeping it in
+    # the dev extra lets `uv run pip-audit` reproduce that job locally.
+    "pip-audit>=2.10.1",
 ]
 
 [project.scripts]
@@ -56,6 +59,14 @@ override-dependencies = [
     # locked (docs/changelogs/v4.4.0.md); the override holds that floor for uv
     # resolutions, and the dev extra repeats it for readers of this file.
     "httpx2>=2.12.0",
+    # pdfplumber asks only for Pillow>=12.2.0; 13.0.0 is the first release that
+    # clears the 37 advisories pip-audit reports against 12.3.0.
+    "pillow>=13.0.0",
+    # 2026.10.19 drops the emSign ECC Root CA - G3 (GHSA-6q48-6c7w-9gw2).
+    "certifi>=2026.10.19",
+    # mcp asks only for opentelemetry-api>=1.28.0; 1.45.1 fixes the tracestate
+    # header ReDoS (GHSA-xcq7-p3pf-p88h).
+    "opentelemetry-api>=1.45.1",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -7,39 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [4.4.2] - 2026-10-25
 
-- `compare_acts` is now titled "Porównanie metadanych dwóch aktów" instead of "Porównanie dwóch
-  aktów". It compares metadata only (titles, types, statuses, dates, keywords), never the text,
-  and hosts show the title in tool pickers and approval prompts. This is the only change to
-  `tools/list` (#67).
-- `scripts/check_release.py --sync-version` also writes the root package version in `uv.lock`, and
-  the prepare-release checklist stages `uv.lock` in the release commit, so a version bump no longer
-  needs a follow-up lock commit (#67).
-- The deprecated, empty `[tool.uv] dev-dependencies` key is removed from `pyproject.toml`; dev tools
-  stay in the `dev` extra. The lock loses only the matching empty `requires-dev` entry (#67).
-- `scripts/check_release.py` and `scripts/git_release_info.py` also track the version in
-  `tests/TEST_SUITE_SUMMARY.md`, which had gone stale at 4.3.1, and the prepare-release checklist
-  stages it. Both scripts now check the same seven files, `uv.lock` included, and a test keeps their
-  lists identical (#65).
-- Test-suite hardening from the 4.4.0 review (#65): one shared list of expected tools, guard tests
-  that check messages instead of counts, exact envelope checks. No change to the server's
-  behaviour.
+See [docs/changelogs/v4.4.2.md](docs/changelogs/v4.4.2.md) for details.
 
-### Security
-
-- Locked `pyjwt` moves from 2.13.0 to 2.15.0, the same lock change as Dependabot PR #72. This
-  closes the 14 advisories `pip-audit` reports against 2.13.0. One of them was reproduced against
-  this server in `LAW_MCP_AUTH_MODE=oauth`: an unsigned token with a deeply nested payload made
-  `PyJWKClient.get_signing_key_from_jwt` raise `RecursionError`, which escaped
-  `JwtTokenVerifier.verify_token` instead of being rejected (GHSA-42vr-xj54-vc7v). On 2.15.0 it
-  raises `DecodeError`, which the verifier already rejects. The others: GHSA-ffc3-869f-jxw9,
-  GHSA-gvp8-978c-rx2q, GHSA-p4g4-x82p-q773, GHSA-w6j9-cwv2-h6wq, GHSA-9v7f-9g4p-ffgj,
-  GHSA-9j54-fg26-wv3r, GHSA-jwrc-g2q2-pq5p, GHSA-2gx3-rcp4-g85q, GHSA-hxm8-2xgr-2p9m,
-  GHSA-w2cx-738m-mc7w, GHSA-r6x4-923q-g947, GHSA-8wjv-2p76-3863, GHSA-x33g-cr3x-6449.
-- `httpx2>=2.12.0` is now a `[tool.uv]` override and the floor of the dev extra (#65). Until now
-  only the lock held 2.12.0, the version the 4.4.0 security fix moved to; `pyproject.toml` still
-  admitted the older releases through `mcp`'s `httpx2>=2.5.0`. The locked version is unchanged.
+- **Security** — `pillow` 13.0.0 (37 advisories against 12.3.0, two critical), `certifi`
+  2026.10.23 (compromised eMudhra root dropped), `opentelemetry-api` 1.45.1 (`tracestate` ReDoS)
+  and `pyjwt` 2.15.0 (14 advisories). `pip-audit` reports nothing against the new lock.
+- **Tooling** — `pip-audit` joins the `dev` extra and the CI audit job runs it from the lock;
+  release scripts track `uv.lock` and `tests/TEST_SUITE_SUMMARY.md`; `compare_acts` is retitled
+  to say it compares metadata only.
 
 ## [4.4.1] - 2026-09-25
 

@@ -271,7 +271,7 @@ jobs:
         run: uv python install 3.13
       - name: Security audit
         if: needs.changes.outputs.code == 'true'
-        run: uv run --with pip-audit pip-audit
+        run: uv run --extra dev pip-audit
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

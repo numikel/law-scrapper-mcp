@@ -82,5 +82,6 @@ upper clamp on `limit`, because the value reaches `api.sejm.gov.pl` unchanged.
   Polish `CHANGELOG` entry, is a convention violation, not a style preference. Match the file's
   convention, not the nearest neighbouring lines — that is how both drifts started
 - asyncio.Lock for all in-memory stores (Cache, DocumentStore, ResultStore)
-- `docs/superpowers/` (specs and implementation plans) is **deliberately untracked** — do not
-  commit it, do not propose tracking it, and do not report it as a gap in a review or audit
+- `context/` (specs, implementation plans, reviews) is a **local, deliberately untracked**
+  workspace — do not commit it, do not propose tracking it, and do not report it as a gap in a
+  review or audit. Superpowers specs and plans go to `context/superpowers/`, not `docs/superpowers/`

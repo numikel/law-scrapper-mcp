@@ -111,3 +111,7 @@ docs/superpowers/
 
 # Agent planning workspace (.ai/plans) — untracked for the same reason
 .ai/
+# Local planning workspace (separate private checkout) — never commit
+context/
+.10x-cli.json
+.claude/skills/10x-*/

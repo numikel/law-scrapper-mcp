@@ -39,56 +39,18 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
-# Virtual environments
-.venv/
-venv/
-env/
-
-# IDE and editor files
-.cursor/
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Temporary files
-*.tmp
-*.temp
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-*.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
 .tox/
 
 # Environment
 .env
 !.env.example
 
-# Claude Code
+# Claude Code — only skills, the shared hook and settings.json are tracked
 .claude/*
 !.claude/skills/
+!.claude/hooks/
+!.claude/settings.json
+CLAUDE.local.md
 
 # Docker
 docker-compose.override.yml
@@ -100,18 +62,14 @@ docker-compose.override.yml
 # QA
 .ruff_cache/
 .mypy_cache/
-.pytest_cache/
 
 # Other
 .worktrees/
 
-# Superpowers specs/plans workspace — deliberately untracked (see CLAUDE.md)
+# Planning workspaces (specs, plans, reviews) — never commit
 docs/superpowers/
 .superpowers/
-
-# Agent planning workspace (.ai/plans) — untracked for the same reason
 .ai/
-# Local planning workspace (separate private checkout) — never commit
 context/
 .10x-cli.json
 .claude/skills/10x-*/

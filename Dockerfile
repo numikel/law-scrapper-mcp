@@ -1,7 +1,8 @@
 FROM python:3.13-slim AS builder
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv. Pinned: a floating tag lets a new uv release change the build
+# between two identical commits. Dependabot (docker ecosystem) bumps it.
+COPY --from=ghcr.io/astral-sh/uv:0.12.22 /uv /usr/local/bin/uv
 
 WORKDIR /app
 

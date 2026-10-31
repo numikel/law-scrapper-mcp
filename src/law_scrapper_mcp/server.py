@@ -368,7 +368,7 @@ def run_streamable_http() -> None:
     uvicorn.Server(build_uvicorn_config()).run()
 
 
-def main():
+def main() -> None:
     """Entry point for the server."""
     setup_logging(settings.log_level, settings.log_format)
     log_remote_bind_warning(settings, logger)

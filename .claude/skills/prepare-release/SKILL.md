@@ -81,17 +81,13 @@ Verify that the following 7 locations have been updated to `X.Y.Z`:
 Run automated release verification and quality checks:
 
 ```bash
-# 1. Verify release metadata and version alignment across all 7 locations
+# Verifies version alignment across all 7 locations and the changelog, then runs
+# the CI lint/test gates: ruff check + ruff format --check on src and tests, mypy,
+# unit tests and the integration suite (-m integration).
 uv run python scripts/check_release.py --version X.Y.Z
-
-# 2. Run code formatting and linting
-uv run ruff check src/
-uv run mypy src/law_scrapper_mcp/
-
-# 3. Run test suite
-uv run pytest tests/unit/ -v
-uv run pytest tests/integration/ -v -m integration
 ```
+
+MCP conformance, the Docker smoke tests and `pip-audit` run only in CI.
 
 Checklist validation:
 - [ ] `docs/changelogs/vX.Y.Z.md` exists and contains no placeholder text (`TODO`, `TBD`).

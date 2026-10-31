@@ -145,8 +145,7 @@ class SearchService:
         # `totalCount` is the size of the corpus, `count` the size of the returned page.
         # Reading `count` here made a search matching 1984 acts report twenty, and with it
         # `was_truncated=False` and no pagination hint at all — the model was told "that is
-        # everything there is". The product decision Klaster 8 deferred was taken in
-        # Klaster 9 (D1): context/superpowers/specs/2026-09-01-klaster-9.md.
+        # everything there is". The total therefore comes from `totalCount`, the corpus size.
         #
         # The fallback chain is not decoration. Responses without `totalCount` keep their
         # previous meaning, which is what lets every existing pagination test pass

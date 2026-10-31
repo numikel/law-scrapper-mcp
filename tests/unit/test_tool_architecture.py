@@ -13,6 +13,13 @@ The same parse enforces the decorator convention from CLAUDE.md: every
 `@mcp.tool(...)` passes a non-empty literal `title=` and an `annotations=` preset
 imported from `tools/annotations.py`, so a future write tool cannot inherit
 read-only hints without a deliberate choice.
+
+The layer guard parses every module under `models/`, `client/`, `services/` and
+`tools/` and checks that imports point only towards the layers beneath:
+`tools/` reaches `services/` and `models/` but not `client/`, and `httpx` stays
+in `client/`. Relative imports are resolved, so rewriting an import as
+`from ..client import x` does not slip past it. Root modules (`config.py`,
+`context.py`, `logging_config.py`) belong to no layer and stay open to all.
 """
 
 import ast
@@ -34,6 +41,19 @@ EXPECTED_TOOL_COUNT = len(EXPECTED_TOOLS)
 ANNOTATIONS_PROBLEM = f"tool: annotations= must name a preset imported from {PRESET_MODULE}"
 TITLE_PROBLEM = "tool: title= must be a non-empty string literal"
 IMPORT_LOCAL = f"from {PRESET_MODULE} import READ_ONLY_LOCAL"
+
+PACKAGE = "law_scrapper_mcp"
+SRC_ROOT = TOOLS_ROOT.parent
+HTTP_LIBRARY = "httpx"
+# What each layer may import; `httpx` counts as a layer of its own.
+ALLOWED_LAYER_IMPORTS = {
+    "models": frozenset({"models"}),
+    "client": frozenset({"models", "client", HTTP_LIBRARY}),
+    "services": frozenset({"models", "client", "services"}),
+    "tools": frozenset({"models", "services", "tools"}),
+}
+# error_handling.py maps client and httpx exceptions onto tool errors, so it has to name them.
+LAYER_EXCEPTIONS = {"tools/error_handling.py": frozenset({"client", HTTP_LIBRARY})}
 
 Handler = ast.FunctionDef | ast.AsyncFunctionDef
 
@@ -168,6 +188,135 @@ def _tool_module(imports: str, arguments: str, *, sync: bool = False) -> ast.Mod
             ]
         )
     )
+
+
+def _imported_modules(tree: ast.Module, package: str) -> set[str]:
+    """Absolute names of everything the module imports, relative imports resolved against `package`.
+
+    `from X import Y` yields both `X` and `X.Y`, because `Y` may itself be a
+    subpackage: `from law_scrapper_mcp import client` names the layer only in `Y`.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = package.split(".")
+                anchor = ".".join(parts[: len(parts) - node.level + 1])
+                base = f"{anchor}.{node.module}" if node.module else anchor
+            else:
+                base = node.module or ""
+            names.add(base)
+            names.update(f"{base}.{alias.name}" for alias in node.names)
+    return names
+
+
+def _import_target(name: str) -> str | None:
+    """The layer an imported name belongs to, `httpx` for the HTTP library, or None when unrestricted."""
+    parts = name.split(".")
+    if parts[0] == HTTP_LIBRARY:
+        return HTTP_LIBRARY
+    if parts[0] == PACKAGE and len(parts) > 1 and parts[1] in ALLOWED_LAYER_IMPORTS:
+        return parts[1]
+    return None
+
+
+def _layer_problems(tree: ast.Module, layer: str, filename: str) -> list[str]:
+    """One message per layer the module imports but may not."""
+    module = f"{layer}/{filename}"
+    allowed = ALLOWED_LAYER_IMPORTS[layer] | LAYER_EXCEPTIONS.get(module, frozenset())
+    targets = {_import_target(name) for name in _imported_modules(tree, f"{PACKAGE}.{layer}")}
+    return [f"{module} must not import {target}" for target in sorted(t for t in targets if t and t not in allowed)]
+
+
+def test_layers_import_only_the_layers_beneath_them() -> None:
+    """`models/` → `client/` → `services/` → `tools/`: an import pointing right inverts the layering."""
+    problems: list[str] = []
+    checked = 0
+    for layer in ALLOWED_LAYER_IMPORTS:
+        for path in sorted((SRC_ROOT / layer).glob("*.py")):
+            checked += 1
+            problems.extend(_layer_problems(ast.parse(path.read_text(encoding="utf-8")), layer, path.name))
+    assert checked > EXPECTED_TOOL_COUNT, "the layer guard found too few modules to have scanned the package"
+    assert problems == []
+
+
+@pytest.mark.parametrize(
+    ("layer", "filename", "source", "expected"),
+    [
+        pytest.param(
+            "tools",
+            "search.py",
+            "from law_scrapper_mcp.client.sejm_client import SejmApiClient",
+            ["tools/search.py must not import client"],
+            id="tool-skips-the-service-layer",
+        ),
+        pytest.param("tools", "search.py", "import httpx", ["tools/search.py must not import httpx"], id="tool-httpx"),
+        pytest.param(
+            "services",
+            "act_service.py",
+            "from law_scrapper_mcp.tools.annotations import READ_ONLY_LOCAL",
+            ["services/act_service.py must not import tools"],
+            id="service-imports-a-tool",
+        ),
+        pytest.param(
+            "client",
+            "cache.py",
+            "from ..services import act_service",
+            ["client/cache.py must not import services"],
+            id="relative-import-is-resolved",
+        ),
+        pytest.param(
+            "models",
+            "enums.py",
+            "from law_scrapper_mcp import client",
+            ["models/enums.py must not import client"],
+            id="layer-named-in-the-alias",
+        ),
+        pytest.param(
+            "services",
+            "search_service.py",
+            "import httpx\nfrom law_scrapper_mcp.tools import search",
+            ["services/search_service.py must not import httpx", "services/search_service.py must not import tools"],
+            id="every-offending-layer-reported",
+        ),
+    ],
+)
+def test_the_layer_guard_can_actually_fail(layer: str, filename: str, source: str, expected: list[str]) -> None:
+    """Guard the guard: every way a module can point an import the wrong way, checked by message."""
+    assert _layer_problems(ast.parse(source), layer, filename) == expected
+
+
+@pytest.mark.parametrize(
+    ("layer", "filename", "source"),
+    [
+        pytest.param(
+            "tools",
+            "error_handling.py",
+            "import httpx\nfrom law_scrapper_mcp.client.exceptions import SejmAPIError",
+            id="error-handling-exception",
+        ),
+        pytest.param(
+            "tools",
+            "search.py",
+            "\n".join(
+                [
+                    "from law_scrapper_mcp.config import settings",
+                    "from law_scrapper_mcp.context import get_app_context",
+                    "from law_scrapper_mcp.models.tool_outputs import EnrichedResponse",
+                    "from law_scrapper_mcp.services.pagination import paginate",
+                    "from .annotations import READ_ONLY_REMOTE",
+                ]
+            ),
+            id="tool-with-allowed-imports",
+        ),
+        pytest.param("client", "sejm_client.py", "import httpx\nfrom .cache import TTLCache", id="client-owns-httpx"),
+    ],
+)
+def test_the_layer_guard_allows_imports_that_point_down(layer: str, filename: str, source: str) -> None:
+    """Root modules, lower layers and the documented exception must not trip the guard."""
+    assert _layer_problems(ast.parse(source), layer, filename) == []
 
 
 def test_every_tool_module_reaches_the_context_only_through_the_typed_accessor() -> None:

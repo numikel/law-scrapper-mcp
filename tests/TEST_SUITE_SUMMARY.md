@@ -74,7 +74,7 @@ tests/
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
-│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset
+│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs
 │   ├── test_client/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites

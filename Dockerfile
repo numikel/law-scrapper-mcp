@@ -1,4 +1,4 @@
-FROM python:3.13-slim AS builder
+FROM python:3.15-slim AS builder
 
 # Install uv. Pinned: a floating tag lets a new uv release change the build
 # between two identical commits. Dependabot (docker ecosystem) bumps it.
@@ -15,7 +15,7 @@ COPY src/ src/
 # Install dependencies
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 # Create non-root user
 RUN groupadd -r lawmcp && useradd -r -g lawmcp -d /app -s /sbin/nologin lawmcp

@@ -198,14 +198,20 @@ def run_command(cmd: list[str], description: str) -> bool:
 
 
 def run_checks_and_tests() -> bool:
-    """Run ruff check, mypy, and pytest unit tests."""
-    print("3. Running quality gates and unit test suite:")
+    """Run the lint, format, type and test gates of the CI `lint` and `test` jobs.
+
+    Mirrors `.github/workflows/ci.yml`, so a green run here means those jobs pass too.
+    MCP conformance, the Docker smoke tests and pip-audit stay CI-only.
+    """
+    print("3. Running quality gates and test suite:")
     print("-" * 60)
 
     commands = [
-        (["uv", "run", "ruff", "check", "src/"], "Ruff linter"),
+        (["uv", "run", "ruff", "check", "src", "tests"], "Ruff linter"),
+        (["uv", "run", "ruff", "format", "--check", "src", "tests"], "Ruff format"),
         (["uv", "run", "mypy", "src/law_scrapper_mcp/"], "Mypy type checker"),
         (["uv", "run", "pytest", "tests/unit/"], "Pytest unit tests"),
+        (["uv", "run", "pytest", "tests/integration/", "-m", "integration"], "Pytest integration tests"),
     ]
 
     return all(run_command(cmd, desc) for cmd, desc in commands)
@@ -220,7 +226,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Pre-release verification script.")
     parser.add_argument("--version", help="Version to check (e.g. 2.4.0 or v2.4.0)")
     parser.add_argument("--sync-version", help="Automatically update every version file to specified version")
-    parser.add_argument("--skip-tests", action="store_true", help="Skip running ruff, mypy, pytest")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip the ruff, mypy and pytest gates")
 
     args = parser.parse_args()
 

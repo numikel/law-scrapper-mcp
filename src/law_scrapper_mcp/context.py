@@ -1,6 +1,7 @@
 """Typed application dependencies shared through the MCP lifespan."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from mcp.server.mcpserver import Context
 
@@ -38,6 +39,10 @@ class AppContext:
     relationship_service: RelationshipService
     date_service: DateService
     egress: EgressHub
+    # Runtime state of the active source modules, keyed by module name. The core does not
+    # know the value types: each module owns a typed accessor over its own entry. Defaulted
+    # and last, so existing constructions keep working (FR-004: additive only).
+    module_state: Mapping[str, object] = field(default_factory=dict)
 
 
 def get_app_context(ctx: Context[AppContext]) -> AppContext:

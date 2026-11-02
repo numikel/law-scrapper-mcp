@@ -220,7 +220,7 @@ class Settings(BaseSettings):
                 pass
         return [item.strip() for item in text.split(",") if item.strip()]
 
-    # Source modules (F-03). One variable holding an ordered token list: every installed module
+    # Source modules. One variable holding an ordered token list: every installed module
     # starts active and the tokens are applied left to right (`source_modules/discovery.py`).
     # Only the syntax is checked here; whether a name is installed is known at discovery.
     source_modules: Annotated[list[str], NoDecode] = Field(default_factory=list)

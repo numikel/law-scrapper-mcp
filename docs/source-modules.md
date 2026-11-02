@@ -150,7 +150,7 @@ Worked examples (installed: `reference`, `saos`, `woj`):
 the left-to-right pass, it is still enabled (its last token is an enable): `foo`, `-*,wojj`,
 `-*,woj,foo`, `foo,*` and `-foo,foo` are refused with a Polish message listing the installed names. An
 unknown name that ends up disabled is accepted and reported once in a WARNING: `-foo`, `foo,-foo`,
-`foo,-*`, `-*,woj,foo,-foo`. The cost, accepted by the owner: a typo in a disable token (`-saoss`) is
+`foo,-*`, `-*,woj,foo,-foo`. The cost, accepted deliberately: a typo in a disable token (`-saoss`) is
 not caught, the module stays on and only the WARNING says so.
 
 **Syntax errors** stop startup: an empty token inside a non-empty value (`woj,`, `,woj`, `woj,,saos`),

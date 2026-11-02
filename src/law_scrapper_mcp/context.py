@@ -41,7 +41,7 @@ class AppContext:
     egress: EgressHub
     # Runtime state of the active source modules, keyed by module name. The core does not
     # know the value types: each module owns a typed accessor over its own entry. Defaulted
-    # and last, so existing constructions keep working (FR-004: additive only).
+    # and last, so existing constructions keep working (the change is additive only).
     module_state: Mapping[str, object] = field(default_factory=dict)
 
 

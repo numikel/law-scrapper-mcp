@@ -1,6 +1,6 @@
 """LAW_MCP_SOURCE_MODULES: syntax, left-to-right evaluation and unknown names.
 
-The case table mirrors "Activation grammar" in the plan of the source-module-mechanism change.
+The case table mirrors the worked examples in docs/source-modules.md, section "Activation".
 Installed modules throughout: `reference`, `saos`, `woj`.
 """
 
@@ -87,18 +87,19 @@ def test_unset_variable_activates_every_installed_module(monkeypatch: pytest.Mon
 
 
 def test_bare_name_leaves_other_installed_modules_active() -> None:
-    """The risk the owner accepted: a bare name is NOT an allowlist.
+    """The accepted risk: a bare name is NOT an allowlist.
 
-    The container image bakes `-*`; an operator who overrides it with `woj` replaces that value and
-    gets every installed module. To run only `woj` the value must be `-*,woj`. This test exists so
-    the behaviour cannot change unnoticed in either direction (plan, "Activation grammar").
+    The container image is meant to bake `-*`; an operator who overrides it with `woj` replaces that
+    value and gets every installed module. To run only `woj` the value must be `-*,woj`. This test
+    exists so the behaviour cannot change unnoticed in either direction (docs/source-modules.md,
+    section "Activation").
     """
     assert resolve_activation(["woj"], INSTALLED).active == ALL
     assert resolve_activation(["-*", "woj"], INSTALLED).active == ("woj",)
 
 
 def test_image_default_runs_no_module_whatever_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The value the container image bakes (F-05) must mean "core only" for any installed set."""
+    """The value the container image is meant to bake must mean "core only" for any installed set."""
     monkeypatch.setenv("LAW_MCP_SOURCE_MODULES", "-*")
 
     tokens = Settings().source_modules

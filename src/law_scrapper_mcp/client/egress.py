@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import ssl
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import monotonic
@@ -21,10 +21,12 @@ from typing import Any
 import httpx
 
 from law_scrapper_mcp.client.cache import TTLCache
-from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
+from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker, CircuitState
 from law_scrapper_mcp.client.exceptions import (
+    SEJM_SOURCE,
     ActNotFoundError,
     ApiUnavailableError,
+    EgressRedirectRefusedError,
     ResponseTooLargeError,
     SejmApiError,
 )
@@ -67,6 +69,29 @@ class HostMessages:
     transport_failure: str
     request_error: str
     redirect_refused: str
+
+    @classmethod
+    def generic(cls, name: str) -> HostMessages:
+        """Neutral Polish wording naming the source, for a host that has no preset.
+
+        The pacing texts end at the time budget on purpose: the retry advice is the tool
+        layer's category guidance, so it is not written twice.
+        """
+        return cls(
+            breaker_open=f"Źródło {name} jest tymczasowo niedostępne (bezpiecznik otwarty)",
+            pacing_paused=(
+                f"Ruch do źródła {name} jest wstrzymany na prośbę serwera (~{{seconds}} s) — "
+                "nie zmieściłoby się w budżecie czasu operacji"
+            ),
+            pacing_queued=(
+                f"Żądanie do źródła {name} musiałoby czekać w kolejce na przepustowość (~{{seconds}} s) — "
+                "nie zmieściłoby się w budżecie czasu operacji"
+            ),
+            upstream_status=f"Źródło {name} jest chwilowo niedostępne (HTTP {{status}})",
+            transport_failure=f"Błąd połączenia ze źródłem {name} ({{error}}) podczas żądania {{method}} {{path}}",
+            request_error=f"Błędne żądanie do źródła {name}: {{detail}}",
+            redirect_refused=f"Źródło {name} przekierowało żądanie poza własny adres, więc go nie wykonano",
+        )
 
 
 # Reproduces, word for word, the texts this client used before it was made host-agnostic.
@@ -115,6 +140,12 @@ class EgressHost:
     max_redirects: int = 3
 
 
+def _origin_of(url: httpx.URL) -> str:
+    """`scheme://host[:port]` of a URL, the unit a host is identified and its cache keyed by."""
+    port = f":{url.port}" if url.port is not None else ""
+    return f"{url.scheme}://{url.host}{port}"
+
+
 async def _delay(seconds: float) -> None:
     """Sole waiting point of the retry loop.
 
@@ -145,6 +176,10 @@ class EgressClient:
     ):
         self._host = host
         self._base_url = host.base_url
+        self._origin = _origin_of(httpx.URL(host.base_url))
+        # Log label for the limiter and breaker built here. The Sejm stays unlabelled so that
+        # its log lines read exactly as they always have; an unlabelled line is the Sejm's.
+        log_name = "" if host.name == SEJM_SOURCE else host.name
         self._client: httpx.AsyncClient | None = None
         self._cache = cache
         self._semaphores = {
@@ -152,7 +187,7 @@ class EgressClient:
             RequestClass.HEAVY: asyncio.Semaphore(max_concurrent_content),
         }
         self._timeout = timeout
-        self._circuit_breaker = circuit_breaker or CircuitBreaker()
+        self._circuit_breaker = circuit_breaker or CircuitBreaker(name=log_name)
         # Prebuilt limiter accepted on the same terms as the breaker above: production
         # passes rate, burst and the pause cap, tests pass a limiter with an injected
         # clock. The deadline this class computes and the waits the limiter measures
@@ -161,17 +196,40 @@ class EgressClient:
         # clocks are never configured independently: an injected limiter lends the
         # client its clock, and a limiter built here receives the client's.
         if rate_limiter is None:
-            rate_limiter = RateLimiter(rate=rate_per_second, burst=rate_burst, max_pause=max_server_pause, clock=clock)
+            rate_limiter = RateLimiter(
+                rate=rate_per_second, burst=rate_burst, max_pause=max_server_pause, clock=clock, name=log_name
+            )
         self._rate_limiter = rate_limiter
         self._clock = rate_limiter.clock
         self._max_attempts = max_attempts
         self._retry_budget = retry_budget
         self._user_agent = user_agent
-        self._messages = host.messages if host.messages is not None else SEJM_MESSAGES
+        self._messages = host.messages if host.messages is not None else HostMessages.generic(host.name)
+
+    @property
+    def circuit_state(self) -> CircuitState:
+        """State of this host's breaker; reading it has no side effects."""
+        return self._circuit_breaker.state
+
+    async def _enforce_origin(self, request: httpx.Request) -> None:
+        """Request hook: refuse any hop that would leave this client's own origin.
+
+        `httpx` follows redirects inside its own loop, below the limiter, the slot and the
+        breaker, and calls this hook for every hop. A hop to another host would reach it
+        unpaced, carrying the query string and this client's identity, and would bypass that
+        host's own controls. Raising here stops the request before it leaves; the exception is
+        not an `httpx.HTTPError`, so the retry loop neither retries nor books it as a breaker
+        failure.
+        """
+        if _origin_of(request.url) != self._origin:
+            raise EgressRedirectRefusedError(self._messages.redirect_refused, source=self._host.name)
 
     async def start(self) -> None:
         """Initialize the HTTP client."""
         if self._client is None:
+            hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
+            if self._host.pin_origin:
+                hooks.append(self._enforce_origin)
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(connect=5.0, read=self._timeout, write=10.0, pool=10.0),
                 headers={
@@ -179,7 +237,9 @@ class EgressClient:
                     "Accept": "application/json",
                 },
                 follow_redirects=True,
+                max_redirects=self._host.max_redirects,
                 verify=self._host.verify,
+                event_hooks={"request": hooks},
             )
 
     async def close(self) -> None:
@@ -337,6 +397,7 @@ class EgressClient:
                 raise ApiUnavailableError(
                     self._messages.breaker_open,
                     status_code=503,
+                    source=self._host.name,
                 )
 
             try:
@@ -398,7 +459,11 @@ class EgressClient:
                 return response
 
         # Unreachable: the loop always exits through a return or a raise.
-        raise ApiUnavailableError(f"{self._host.name} nie odpowiedziało w ramach dozwolonych prób", status_code=503)
+        raise ApiUnavailableError(
+            f"{self._host.name} nie odpowiedziało w ramach dozwolonych prób",
+            status_code=503,
+            source=self._host.name,
+        )
 
     async def _request(
         self,
@@ -446,32 +511,37 @@ class EgressClient:
             # would describe a condition that does not exist.
             seconds = max(1, round(exc.wait))
             template = self._messages.pacing_paused if exc.paused else self._messages.pacing_queued
-            raise ApiUnavailableError(template.format(seconds=seconds), status_code=503) from exc
+            raise ApiUnavailableError(
+                template.format(seconds=seconds), status_code=503, source=self._host.name
+            ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             url = str(exc.request.url)
             if status == 404:
-                raise ActNotFoundError(path) from exc
+                raise ActNotFoundError(path, source=self._host.name) from exc
             if 500 <= status <= 599:
                 raise ApiUnavailableError(
                     self._messages.upstream_status.format(status=status),
                     status_code=status,
                     url=url,
+                    source=self._host.name,
                 ) from exc
             raise SejmApiError(
                 f"HTTP {status}: {exc.response.text}",
                 status_code=status,
                 url=url,
+                source=self._host.name,
             ) from exc
         except httpx.TransportError as exc:
             # `str(exc)` is httpx-authored and can quote hosts, proxies or errno
             # text. The caller gets the failure class and the project-built
             # endpoint; the detail stays on `__cause__` for the DEBUG log (#61).
             raise ApiUnavailableError(
-                self._messages.transport_failure.format(error=type(exc).__name__, method=method, path=path)
+                self._messages.transport_failure.format(error=type(exc).__name__, method=method, path=path),
+                source=self._host.name,
             ) from exc
         except httpx.HTTPError as exc:
-            raise SejmApiError(self._messages.request_error.format(detail=exc)) from exc
+            raise SejmApiError(self._messages.request_error.format(detail=exc), source=self._host.name) from exc
 
     async def get_json(self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None) -> Any:
         """Get JSON response from API with optional caching.
@@ -487,7 +557,8 @@ class EgressClient:
         # Build cache key
         cache_key = None
         if cache_ttl is not None:
-            cache_key = f"json:{path}:{params or {}}"
+            # The origin prefix keeps two hosts from ever sharing an entry for the same path.
+            cache_key = f"{self._origin}|json:{path}:{params or {}}"
             cached = await self._cache.get(cache_key, max_age=cache_ttl)
             if cached is not None:
                 return cached

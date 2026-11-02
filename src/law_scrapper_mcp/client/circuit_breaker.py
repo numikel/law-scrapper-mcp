@@ -47,7 +47,10 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 60.0,
         half_open_max_calls: int = 3,
+        name: str = "",
     ):
+        # Only a label for log lines, so an operator can tell which host tripped.
+        self._label = f" [{name}]" if name else ""
         self._failure_threshold = failure_threshold
         self._recovery_timeout = recovery_timeout
         self._half_open_max_calls = half_open_max_calls
@@ -86,7 +89,7 @@ class CircuitBreaker:
             self._state = CircuitState.HALF_OPEN
             self._half_open_in_flight = 0
             self._half_open_successes = 0
-            logger.info("Circuit breaker transitioning to HALF_OPEN")
+            logger.info("Circuit breaker%s transitioning to HALF_OPEN", self._label)
 
         if self._state == CircuitState.CLOSED:
             return True
@@ -109,7 +112,7 @@ class CircuitBreaker:
                 self._failure_count = 0
                 self._half_open_in_flight = 0
                 self._half_open_successes = 0
-                logger.info("Circuit breaker CLOSED after successful recovery")
+                logger.info("Circuit breaker%s CLOSED after successful recovery", self._label)
         elif self._state == CircuitState.CLOSED:
             self._failure_count = 0
 
@@ -126,11 +129,12 @@ class CircuitBreaker:
         if self._state == CircuitState.HALF_OPEN:
             self._release_slot()
             self._state = CircuitState.OPEN
-            logger.warning("Circuit breaker re-OPENED from HALF_OPEN after failure")
+            logger.warning("Circuit breaker%s re-OPENED from HALF_OPEN after failure", self._label)
         elif self._failure_count >= self._failure_threshold:
             self._state = CircuitState.OPEN
             logger.warning(
-                "Circuit breaker OPENED after %d failures (threshold: %d)",
+                "Circuit breaker%s OPENED after %d failures (threshold: %d)",
+                self._label,
                 self._failure_count,
                 self._failure_threshold,
             )

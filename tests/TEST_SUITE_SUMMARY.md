@@ -47,6 +47,7 @@ tests/
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
+│   ├── edziennik/              # 11 recorded e-Dziennik ELI files (JSON, HTML, PDF); one PROVENANCE.md for the whole session
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
@@ -59,6 +60,7 @@ tests/
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
+│   ├── test_edziennik_fixtures.py      # Facts about the e-Dziennik journals pinned to `fixtures/edziennik/`: casing, inverted dates, sentinels, ignored publisher code, scan vs text PDF, catalogue vs PROVENANCE.md
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
 │   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause
 │   ├── test_health_endpoint.py         # `/health` reports breaker state (unknown, closed, open, half-open) without lying
@@ -259,6 +261,7 @@ image default), and a non-root check.
 ## Maintenance
 
 - Keep fixtures aligned with Sejm API response formats; recorded fixtures carry a `.provenance.md`
+  (recordings made in one session may share a single `PROVENANCE.md` per directory, as in `fixtures/edziennik/`)
 - Add regression tests for protocol and pagination contracts
 - Update transport tests and the conformance pin when the MCP SDK or protocol version changes
 - Add every new test file to the structure list above

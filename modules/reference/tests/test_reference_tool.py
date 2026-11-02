@@ -6,8 +6,6 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
-from law_scrapper_mcp_reference import module
-from law_scrapper_mcp_reference.state import MODULE_NAME, ReferenceState, reference_state
 from mcp import Client
 from mcp.server import MCPServer
 
@@ -15,6 +13,8 @@ from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.source_modules.contract import LoadedModule
 from law_scrapper_mcp.source_modules.discovery import discover
+from law_scrapper_mcp_reference import module
+from law_scrapper_mcp_reference.state import MODULE_NAME, ReferenceState, reference_state
 
 
 def _server() -> MCPServer[AppContext]:

@@ -10,12 +10,22 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[3] / "src" / "law_scrapper_mcp"
+REPO = Path(__file__).resolve().parents[3]
+SRC = REPO / "src" / "law_scrapper_mcp"
+MODULES = REPO / "modules"
+# The scan roots, written out. A source module is code too: if it could build its own client it
+# would bypass pacing, breaker, origin pin and identity just like a second site in `src/`.
+ROOTS = (SRC, MODULES)
 ALLOWED = SRC / "client" / "egress.py"
 # Traffic to the operator's own identity provider (OIDC discovery), not to an upstream data
 # host: it is configured by the operator, carries no user query and has nothing to pace per
 # source. Listed by file and exact count, so a second client there would fail this test too.
-OTHER_SITES = {Path("auth") / "jwt_verifier.py": 1}
+OTHER_SITES = {Path("src") / "law_scrapper_mcp" / "auth" / "jwt_verifier.py": 1}
+
+
+def roots_without_python_files(roots: tuple[Path, ...]) -> list[Path]:
+    """Roots that hold no `.py` file: a missing or renamed root would make the scan pass vacuously."""
+    return [root for root in roots if not any(root.rglob("*.py"))]
 
 
 def construction_sites(source: str) -> list[int]:
@@ -38,10 +48,26 @@ def test_the_detector_finds_both_spellings() -> None:
     assert construction_sites("import httpx\nx = httpx.Client()\n") == []
 
 
+def test_the_root_check_flags_an_empty_or_missing_root(tmp_path: Path) -> None:
+    populated = tmp_path / "populated"
+    populated.mkdir()
+    (populated / "a.py").write_text("x = 1\n", encoding="utf-8")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    missing = tmp_path / "missing"
+
+    assert roots_without_python_files((populated, empty, missing)) == [empty, missing]
+
+
+def test_every_scan_root_holds_python_files() -> None:
+    assert roots_without_python_files(ROOTS) == []
+
+
 def test_only_the_egress_module_constructs_an_httpx_async_client() -> None:
     found = {
-        path.relative_to(SRC): len(sites)
-        for path in sorted(SRC.rglob("*.py"))
+        path.relative_to(REPO): len(sites)
+        for root in ROOTS
+        for path in sorted(root.rglob("*.py"))
         if path != ALLOWED and (sites := construction_sites(path.read_text(encoding="utf-8")))
     }
 

@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import ssl
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import monotonic
+from types import MappingProxyType
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -26,6 +29,7 @@ from law_scrapper_mcp.client.exceptions import (
     SEJM_SOURCE,
     ActNotFoundError,
     ApiUnavailableError,
+    EgressConfigError,
     EgressRedirectRefusedError,
     ResponseTooLargeError,
     SejmApiError,
@@ -113,6 +117,44 @@ SEJM_MESSAGES = HostMessages(
 )
 
 
+# RFC 9110 `token`: the characters a product name or version may be made of in `User-Agent`.
+_TOKEN = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+")
+# Short label shown in logs, in agent-facing errors and on the unauthenticated `/health` route.
+_HOST_NAME = re.compile(r"[A-Za-z0-9 ._-]{1,64}")
+# The most redirect hops a host built through the hub may follow.
+MAX_MODULE_REDIRECTS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class CallerIdentity:
+    """Who generates the traffic: the module a request is made on behalf of.
+
+    Both parts end up in the `User-Agent` header as an RFC 9110 product token
+    (`module/version`), so they must be tokens: no spaces, parentheses, slashes or control
+    characters.
+
+    Attributes:
+        module: Name of the source module, for example `law-scrapper-saos`.
+        version: Version of that module.
+    """
+
+    module: str
+    version: str
+
+    def __post_init__(self) -> None:
+        for label, value in (("module", self.module), ("version", self.version)):
+            if not _TOKEN.fullmatch(value):
+                raise EgressConfigError(
+                    f"Nieprawidłowa tożsamość wywołującego: pole {label} musi być znacznikiem RFC 9110 "
+                    "(bez spacji, nawiasów, ukośników i znaków sterujących)."
+                )
+
+    @property
+    def product(self) -> str:
+        """The `module/version` product token appended to the core identity."""
+        return f"{self.module}/{self.version}"
+
+
 @dataclass(frozen=True, slots=True)
 class EgressHost:
     """What the traffic is addressed to.
@@ -138,6 +180,45 @@ class EgressHost:
     messages: HostMessages | None = None
     pin_origin: bool = True
     max_redirects: int = 3
+
+    def __post_init__(self) -> None:
+        if not _HOST_NAME.fullmatch(self.name) or self.name != self.name.strip():
+            raise EgressConfigError(
+                "Nazwa źródła musi mieć 1-64 znaków: litery, cyfry, spacja, kropka, myślnik lub podkreślenie."
+            )
+        object.__setattr__(self, "base_url", _validated_base_url(self.base_url))
+        if any(key.lower() in ("user-agent", "host") for key in self.headers):
+            raise EgressConfigError(
+                f"Nagłówki User-Agent i Host ustawia serwer, a źródło {self.name} próbuje je nadpisać."
+            )
+        object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
+        if self.max_redirects < 0:
+            raise EgressConfigError(f"Źródło {self.name}: limit przekierowań nie może być ujemny.")
+        if self.rate_per_second is not None and self.rate_per_second <= 0:
+            raise EgressConfigError(f"Źródło {self.name}: tempo żądań musi być większe od zera.")
+        if self.rate_burst is not None and self.rate_burst < 1:
+            raise EgressConfigError(f"Źródło {self.name}: pojemność kubełka musi wynosić co najmniej 1.")
+
+
+def _validated_base_url(base_url: str) -> str:
+    """Return `base_url` without a trailing slash, or raise `EgressConfigError` if it is unusable."""
+    try:
+        parts = urlsplit(base_url)
+        _ = parts.port  # raises ValueError for a malformed port
+    except ValueError as exc:
+        raise EgressConfigError("Adres źródła jest nieprawidłowy.") from exc
+    if (
+        parts.scheme not in ("http", "https")
+        or not parts.hostname
+        or parts.username is not None
+        or parts.password is not None
+        or "?" in base_url
+        or "#" in base_url
+    ):
+        raise EgressConfigError(
+            "Adres źródła musi mieć postać http(s)://host[:port][/ścieżka], bez danych logowania, zapytania i fragmentu."
+        )
+    return base_url.rstrip("/")
 
 
 def _origin_of(url: httpx.URL) -> str:
@@ -207,6 +288,16 @@ class EgressClient:
         self._messages = host.messages if host.messages is not None else HostMessages.generic(host.name)
 
     @property
+    def host(self) -> EgressHost:
+        """The host this client is bound to."""
+        return self._host
+
+    @property
+    def origin(self) -> str:
+        """`scheme://host[:port]` this client talks to; one origin has exactly one owner."""
+        return self._origin
+
+    @property
     def circuit_state(self) -> CircuitState:
         """State of this host's breaker; reading it has no side effects."""
         return self._circuit_breaker.state
@@ -235,6 +326,7 @@ class EgressClient:
                 headers={
                     "User-Agent": self._user_agent,
                     "Accept": "application/json",
+                    **self._host.headers,
                 },
                 follow_redirects=True,
                 max_redirects=self._host.max_redirects,
@@ -618,11 +710,162 @@ class EgressClient:
         return response.content
 
 
+@dataclass(frozen=True, slots=True)
+class EgressDefaults:
+    """The values every host built by the hub starts from.
+
+    Field names equal the matching `SejmApiClient` keywords. The lifespan fills them from the
+    settings, so `client/` never imports `config`. A module may ask for a lower rate or burst
+    than these, never a higher one.
+    """
+
+    timeout: float = 30.0
+    max_concurrent: int = 8
+    max_concurrent_content: int = 2
+    rate_per_second: float = 5.0
+    rate_burst: int = 10
+    max_server_pause: float = 60.0
+    max_attempts: int = 3
+    retry_budget: float = 45.0
+    user_agent: str = DEFAULT_USER_AGENT
+    failure_threshold: int = 5
+    recovery_timeout: float = 60.0
+    half_open_max_calls: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class SourceState:
+    """What the health route may say about one source: its name and breaker state, nothing else."""
+
+    name: str
+    circuit_state: CircuitState
+
+
+class EgressHub:
+    """Registry of every upstream host this process talks to.
+
+    A module asks the hub for one `EgressClient` per host and gets a client with its own
+    limiter, breaker, concurrency lanes and connection pool, so nothing one host does can slow
+    or break another. Only the `TTLCache` object is shared, and only through keys prefixed with
+    the host origin. The hub also decides what is "active": a host is active exactly when it
+    has been registered here.
+    """
+
+    def __init__(
+        self,
+        cache: TTLCache,
+        defaults: EgressDefaults | None = None,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        self._cache = cache
+        self._defaults = defaults if defaults is not None else EgressDefaults()
+        self._clock = clock
+        # Registration order is the order `/health` lists sources in.
+        self._clients: dict[str, EgressClient] = {}
+        self._owned: list[EgressClient] = []
+
+    def _claim(self, client_origin: str, name: str) -> None:
+        if client_origin in self._clients:
+            raise EgressConfigError(
+                f"Adres {client_origin} ma już właściciela ({self._clients[client_origin].host.name}); "
+                "jedno źródło obsługuje jeden adres."
+            )
+        if any(known.host.name == name for known in self._clients.values()):
+            raise EgressConfigError(f"Nazwa źródła {name} jest już zajęta.")
+
+    def client_for(self, host: EgressHost, caller: CallerIdentity) -> EgressClient:
+        """Build and register the client a module uses for one host.
+
+        Raises:
+            EgressConfigError: The origin or the name is taken, the host asks for a higher rate
+                or burst than the defaults, or it opts out of the origin pin or asks for more
+                than `MAX_MODULE_REDIRECTS` redirect hops.
+        """
+        defaults = self._defaults
+        if not host.pin_origin or host.max_redirects > MAX_MODULE_REDIRECTS:
+            raise EgressConfigError(
+                f"Źródło {host.name}: moduł nie może wyłączyć przypięcia adresu ani przekroczyć "
+                f"{MAX_MODULE_REDIRECTS} przekierowań."
+            )
+        if host.rate_per_second is not None and host.rate_per_second > defaults.rate_per_second:
+            raise EgressConfigError(f"Źródło {host.name}: tempo żądań nie może przekraczać {defaults.rate_per_second}.")
+        if host.rate_burst is not None and host.rate_burst > defaults.rate_burst:
+            raise EgressConfigError(
+                f"Źródło {host.name}: pojemność kubełka nie może przekraczać {defaults.rate_burst}."
+            )
+        client_origin = _origin_of(httpx.URL(host.base_url))
+        self._claim(client_origin, host.name)
+
+        client = EgressClient(
+            host=host,
+            cache=self._cache,
+            timeout=defaults.timeout,
+            max_concurrent=defaults.max_concurrent,
+            circuit_breaker=CircuitBreaker(
+                failure_threshold=defaults.failure_threshold,
+                recovery_timeout=defaults.recovery_timeout,
+                half_open_max_calls=defaults.half_open_max_calls,
+                name=host.name,
+            ),
+            max_attempts=defaults.max_attempts,
+            retry_budget=defaults.retry_budget,
+            user_agent=f"{defaults.user_agent} {caller.product}",
+            max_concurrent_content=defaults.max_concurrent_content,
+            rate_per_second=host.rate_per_second if host.rate_per_second is not None else defaults.rate_per_second,
+            rate_burst=host.rate_burst if host.rate_burst is not None else defaults.rate_burst,
+            max_server_pause=defaults.max_server_pause,
+            clock=self._clock,
+        )
+        self._clients[client_origin] = client
+        self._owned.append(client)
+        return client
+
+    def adopt(self, client: EgressClient) -> None:
+        """Register a client built elsewhere (the Sejm's), so its origin cannot be claimed twice.
+
+        The hub never closes an adopted client; whoever built it does.
+
+        Raises:
+            EgressConfigError: The origin or the name is already registered.
+        """
+        self._claim(client.origin, client.host.name)
+        self._clients[client.origin] = client
+
+    def source_states(self) -> tuple[SourceState, ...]:
+        """Name and breaker state of every registered host, in registration order.
+
+        Reading the breaker's `state` has no side effects, so a health probe never moves a
+        breaker.
+        """
+        return tuple(SourceState(client.host.name, client.circuit_state) for client in self._clients.values())
+
+    async def close(self) -> None:
+        """Close the clients created by `client_for`, whatever happens to any single one.
+
+        Raises:
+            ExceptionGroup: Every error the closes raised, after all of them were attempted.
+        """
+        owned, self._owned = self._owned, []
+        errors: list[Exception] = []
+        for client in owned:
+            try:
+                await client.close()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise ExceptionGroup("Nie udało się zamknąć wszystkich klientów źródeł.", errors)
+
+
 __all__ = [
     "DEFAULT_USER_AGENT",
+    "MAX_MODULE_REDIRECTS",
     "SEJM_MESSAGES",
+    "CallerIdentity",
     "EgressClient",
+    "EgressDefaults",
     "EgressHost",
+    "EgressHub",
     "HostMessages",
     "RequestClass",
+    "SourceState",
 ]

@@ -15,7 +15,15 @@ import pytest_asyncio
 import respx
 
 from law_scrapper_mcp.client.cache import TTLCache
-from law_scrapper_mcp.client.egress import EgressClient, EgressHost
+from law_scrapper_mcp.client.circuit_breaker import CircuitState
+from law_scrapper_mcp.client.egress import (
+    CallerIdentity,
+    EgressClient,
+    EgressDefaults,
+    EgressHost,
+    EgressHub,
+    SourceState,
+)
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ApiUnavailableError,
@@ -23,6 +31,7 @@ from law_scrapper_mcp.client.exceptions import (
     SejmApiError,
 )
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
+from test_client.conftest import FakeClock
 
 HOST_A = "https://a.example.test/api"
 HOST_B = "https://b.example.test/api"
@@ -261,3 +270,133 @@ async def test_a_breaker_trip_log_line_names_the_host_but_the_sejm_stays_unlabel
 
     assert module_lines == ["Circuit breaker [SAOS] OPENED after 5 failures (threshold: 5)"]
     assert sejm_lines == ["Circuit breaker OPENED after 5 failures (threshold: 5)"]
+
+
+# --- two hosts through the hub: nothing one does reaches the other ----------------------------
+
+SAOS_URL = "https://saos.example.test/api"
+OTHER_URL = "https://other.example.test/api"
+
+
+def two_host_hub(clock: FakeClock, **overrides: object) -> tuple[EgressHub, EgressClient, EgressClient]:
+    """A hub on the fake clock, one attempt per operation, with a client for each of two hosts."""
+    defaults = EgressDefaults(max_attempts=1, user_agent="law-scrapper-mcp/test", **overrides)  # type: ignore[arg-type]
+    hub = EgressHub(TTLCache(max_entries=50), defaults, clock=clock)
+    saos = hub.client_for(EgressHost(name="SAOS", base_url=SAOS_URL), CallerIdentity("law-scrapper-saos", "0.1.0"))
+    other = hub.client_for(EgressHost(name="Other", base_url=OTHER_URL), CallerIdentity("law-scrapper-other", "2.0"))
+    return hub, saos, other
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_429_pause_on_one_host_does_not_delay_the_other(clock: FakeClock, waits: list[float]) -> None:
+    respx.get(f"{SAOS_URL}/x").mock(return_value=httpx.Response(429, headers={"Retry-After": "30"}))
+    respx.get(f"{OTHER_URL}/x").mock(return_value=httpx.Response(200, json={"ok": True}))
+    hub, saos, other = two_host_hub(clock)
+    try:
+        with pytest.raises(SejmApiError):
+            await saos.get_json("x")
+
+        assert await other.get_json("x") == {"ok": True}
+        assert waits == []
+
+        # The pause is real: the host that asked for it is held back.
+        with pytest.raises(SejmApiError):
+            await saos.get_json("x")
+        assert waits == [pytest.approx(30.0)]
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_tripped_breaker_on_one_host_leaves_the_other_callable(clock: FakeClock, waits: list[float]) -> None:
+    respx.get(f"{SAOS_URL}/x").mock(return_value=httpx.Response(503))
+    respx.get(f"{OTHER_URL}/x").mock(return_value=httpx.Response(200, json={"ok": True}))
+    hub, saos, other = two_host_hub(clock)
+    try:
+        for _ in range(5):
+            with pytest.raises(ApiUnavailableError):
+                await saos.get_json("x")
+
+        assert saos.circuit_state == CircuitState.OPEN
+        assert other.circuit_state == CircuitState.CLOSED
+        assert await other.get_json("x") == {"ok": True}
+        assert hub.source_states() == (
+            SourceState("SAOS", CircuitState.OPEN),
+            SourceState("Other", CircuitState.CLOSED),
+        )
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_exhausting_one_hosts_bucket_does_not_consume_the_others(clock: FakeClock, waits: list[float]) -> None:
+    respx.get(f"{SAOS_URL}/x").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{OTHER_URL}/x").mock(return_value=httpx.Response(200, json={}))
+    hub, saos, other = two_host_hub(clock, rate_per_second=1.0, rate_burst=2)
+    try:
+        await saos.get_json("x")
+        await saos.get_json("x")
+        assert waits == []
+
+        # SAOS's bucket is empty; Other's is untouched and answers its whole burst at once.
+        await other.get_json("x")
+        await other.get_json("x")
+        assert waits == []
+
+        await saos.get_json("x")
+        assert waits == [pytest.approx(1.0)]
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_module_host_receives_exactly_the_identity_and_accept_headers(clock: FakeClock) -> None:
+    route = respx.get(f"{SAOS_URL}/x").mock(return_value=httpx.Response(200, json={}))
+    hub, saos, _other = two_host_hub(clock)
+    try:
+        await saos.get_json("x")
+    finally:
+        await hub.close()
+
+    headers = route.calls.last.request.headers
+    # What httpx adds on its own (host, encodings, connection) plus the two this project sets.
+    assert set(headers.keys()) == {"host", "accept", "accept-encoding", "connection", "user-agent"}
+    assert headers["user-agent"] == "law-scrapper-mcp/test law-scrapper-saos/0.1.0"
+    assert headers["accept"] == "application/json"
+    assert "mozilla" not in headers["user-agent"].lower()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_a_cookie_set_by_one_host_is_not_sent_to_the_other(clock: FakeClock) -> None:
+    respx.get(f"{SAOS_URL}/login").mock(
+        return_value=httpx.Response(200, json={}, headers={"Set-Cookie": "session=abc; Path=/"})
+    )
+    other_route = respx.get(f"{OTHER_URL}/x").mock(return_value=httpx.Response(200, json={}))
+    hub, saos, other = two_host_hub(clock)
+    try:
+        await saos.get_json("login")
+        await other.get_json("x")
+    finally:
+        await hub.close()
+
+    assert "cookie" not in other_route.calls.last.request.headers
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_the_other_hosts_request_goes_out_on_its_own_connection_state(clock: FakeClock) -> None:
+    hub, saos, other = two_host_hub(clock)
+    try:
+        await saos.start()
+        await other.start()
+
+        assert saos._client is not None
+        assert other._client is not None
+        assert saos._client is not other._client
+    finally:
+        await hub.close()

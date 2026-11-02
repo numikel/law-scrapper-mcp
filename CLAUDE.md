@@ -10,8 +10,11 @@ Law Scrapper MCP v4.4.2 is a modular Python MCP server that exposes 13 tools for
 # Dev tools (pytest, ruff, mypy, pip-audit) are an extra — plain `uv sync` omits them
 uv sync --extra dev
 
+# Module work (modules/*) and the lint job need the workspace members installed too
+uv sync --extra dev --all-packages
+
 # The CI lint job, in full. `ruff format --check` is the gate most often missed locally
-uv run ruff check src tests && uv run ruff format --check src tests && uv run mypy src/law_scrapper_mcp/
+uv run ruff check src tests modules && uv run ruff format --check src tests modules && uv run mypy src/law_scrapper_mcp/ modules/*/src/law_scrapper_mcp_*/
 
 # Integration tests need the marker, or they are silently skipped
 uv run pytest tests/integration/ -v -m integration
@@ -58,6 +61,8 @@ left only: `tools/` reaches `services/` and `models/`, never `client/` or `httpx
 `tools/error_handling.py`, which maps client and `httpx` exceptions), and `httpx` stays in `client/`.
 Root modules (`config.py`, `context.py`) are open to every layer. `tests/unit/test_tool_architecture.py`
 enforces this.
+
+Source modules live in `modules/<source>/`; read `docs/source-modules.md` before creating or editing one (they need `uv sync --extra dev --all-packages`).
 
 **Key patterns:**
 - **Document Store**: Acts loaded into memory for section-level reading and search

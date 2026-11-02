@@ -12,11 +12,13 @@ import httpx
 from mcp.server.mcpserver.exceptions import ToolError
 
 from law_scrapper_mcp.client.exceptions import (
+    SEJM_SOURCE,
     ActNotFoundError,
     ApiUnavailableError,
     ContentNotAvailableError,
     ContentTooLargeError,
     DocumentNotLoadedError,
+    EgressRedirectRefusedError,
     InvalidEliError,
     SejmApiError,
 )
@@ -39,6 +41,7 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
     ContentNotAvailableError: "not_found",
     ContentTooLargeError: "content_too_large",
     ApiUnavailableError: "unavailable",
+    EgressRedirectRefusedError: "source_address",
     SejmApiError: "upstream",
     httpx.TimeoutException: "upstream",
     ValueError: "validation",
@@ -51,6 +54,11 @@ _ERROR_CATEGORIES: dict[type[Exception], str] = {
 _UPSTREAM_MESSAGE = "Serwis api.sejm.gov.pl nie odpowiedział poprawnie."
 
 _INTERNAL_MESSAGE = "Wystąpił wewnętrzny błąd narzędzia."
+
+# Said about every failure of a source other than the Sejm: each source has its own pacing,
+# breaker, cache namespace and connection, so one source failing says nothing about the rest.
+# The Sejm's texts predate this sentence and stay byte-identical.
+_OTHER_SOURCES_UNAFFECTED = "Pozostałe źródła nie są objęte tym błędem."
 
 # One fixed sentence per category, appended to every public message (D4). Fixed,
 # because it enters the caller's context on every failure (O7); a sentence rather
@@ -67,6 +75,7 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
     "validation": "Popraw parametr wywołania i spróbuj ponownie.",
     "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
     "content_too_large": "Ponowne wywołanie niczego nie zmieni — pobierz treść z podanego adresu.",
+    "source_address": "Ponowne wywołanie niczego nie zmieni — adres tego źródła w module wymaga poprawy.",
     "unavailable": "Ponów wywołanie za chwilę.",
     "upstream": "Ponów wywołanie za chwilę.",
     "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",
@@ -90,7 +99,9 @@ _REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
 # `content_too_large` inherits `precondition`'s truncation behaviour (D9 only
 # splits the guidance sentence, not this boundary); what `_truncate` does keep
 # whole, best effort, is its trailing PDF URL (#60).
-_CALLER_SOURCED_CATEGORIES = frozenset({"validation", "not_found", "precondition", "content_too_large", "unavailable"})
+_CALLER_SOURCED_CATEGORIES = frozenset(
+    {"validation", "not_found", "precondition", "content_too_large", "unavailable", "source_address"}
+)
 
 
 class ToolExecutionError(ToolError):
@@ -110,6 +121,23 @@ def _classify_error(exc: Exception) -> str:
     return "internal"
 
 
+def _named_source(exc: Exception) -> str | None:
+    """Label of the non-Sejm source an error came from, or `None` for the legacy texts.
+
+    A missing source and the Sejm both mean "keep the wording this server has always used".
+    The label is the hub-validated `EgressHost.name`, never text from a remote response.
+    """
+    source = getattr(exc, "source", None)
+    return None if source is None or source == SEJM_SOURCE else str(source)
+
+
+def _upstream_message(source: str | None) -> str:
+    """Body of the `upstream` category; it never quotes the exception, whose text is remote."""
+    if source is None:
+        return _UPSTREAM_MESSAGE
+    return f"Źródło {source} nie odpowiedziało poprawnie."
+
+
 def _status_suffix(exc: Exception) -> str:
     """Render the HTTP status of an upstream failure, if it carries one.
 
@@ -118,6 +146,12 @@ def _status_suffix(exc: Exception) -> str:
     """
     status = getattr(exc, "status_code", None)
     return "" if status is None else f" (HTTP {status})"
+
+
+def _source_suffix(exc: Exception) -> str:
+    """` source=<name>` for a failure of a non-Sejm source, so an operator can tell which one."""
+    source = _named_source(exc)
+    return "" if source is None else f" source={source}"
 
 
 _TRUNCATION_SUFFIX = " […] (komunikat przycięty)"
@@ -178,12 +212,17 @@ def _public_message(exc: Exception, category: str) -> str:
     # a separate case for "does the body already end on the truncation
     # announcement", since that announcement is itself a complete parenthetical.
     # A period appended past the cut point is simply discarded with the rest.
+    source = _named_source(exc)
     if category in _CALLER_SOURCED_CATEGORIES:
         body = _truncate(_terminated(str(exc)))
     elif category == "upstream":
-        body = _terminated(_UPSTREAM_MESSAGE)
+        body = _terminated(_upstream_message(source))
     else:
         body = _terminated(_INTERNAL_MESSAGE)
+    # After the cut, so truncation can never remove it; before the guidance, so every message
+    # still ends with its category's closing sentence.
+    if source is not None and category in ("unavailable", "source_address"):
+        body = f"{body} {_OTHER_SOURCES_UNAFFECTED}"
     return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 
 
@@ -201,13 +240,16 @@ def handle_tool_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
         except Exception as exc:
             category = _classify_error(exc)
             if category in _REDACTED_DETAIL_CATEGORIES:
-                logger.error("Tool %s failed [%s]%s", func.__name__, category, _status_suffix(exc))
+                logger.error(
+                    "Tool %s failed [%s]%s%s", func.__name__, category, _source_suffix(exc), _status_suffix(exc)
+                )
                 logger.debug("Tool %s failure detail [%s]: %s", func.__name__, category, exc)
             else:
                 logger.error(
-                    "Tool %s failed [%s]: %s",
+                    "Tool %s failed [%s]%s: %s",
                     func.__name__,
                     category,
+                    _source_suffix(exc),
                     exc,
                     exc_info=category == "internal",
                 )

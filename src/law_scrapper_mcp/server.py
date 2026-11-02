@@ -17,6 +17,7 @@ from starlette.types import ASGIApp
 from law_scrapper_mcp.auth import build_auth
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker
+from law_scrapper_mcp.client.egress import EgressDefaults, EgressHub
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import log_pattern_limit_clamping, log_remote_bind_warning, settings
 from law_scrapper_mcp.context import AppContext
@@ -69,12 +70,26 @@ class _HealthState:
 
     def __init__(self) -> None:
         self._circuit_breaker: CircuitBreaker | None = None
+        self._hub: EgressHub | None = None
 
-    def set(self, circuit_breaker: CircuitBreaker) -> None:
+    def set(self, circuit_breaker: CircuitBreaker, hub: EgressHub | None = None) -> None:
         self._circuit_breaker = circuit_breaker
+        self._hub = hub
 
     def clear(self) -> None:
         self._circuit_breaker = None
+        self._hub = None
+
+    def sources(self) -> list[dict[str, str]]:
+        """Every active source by name with its circuit state, in registration order.
+
+        Name and state only, on purpose: the route is unauthenticated, so nothing about a
+        source beyond whether it is currently failing may be read from here. Empty before the
+        lifespan has registered anything and after it has ended.
+        """
+        if self._hub is None:
+            return []
+        return [{"name": state.name, "circuit_state": str(state.circuit_state)} for state in self._hub.source_states()]
 
     def snapshot(self) -> dict[str, object]:
         if self._circuit_breaker is None:
@@ -163,8 +178,28 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         recovery_timeout=settings.circuit_breaker_recovery_timeout,
         half_open_max_calls=settings.circuit_breaker_half_open_max_calls,
     )
-    _health_state.set(circuit_breaker)
     cache = TTLCache(max_entries=settings.cache_max_entries)
+    # Every upstream host the process talks to is registered here, the Sejm included, so a
+    # source module can neither take the Sejm's origin nor see its budget. The defaults a
+    # module's host starts from are the Sejm's own settings (a module may only lower them).
+    egress_hub = EgressHub(
+        cache,
+        EgressDefaults(
+            timeout=settings.api_timeout,
+            max_concurrent=settings.api_max_concurrent,
+            max_concurrent_content=settings.api_max_concurrent_content,
+            rate_per_second=settings.api_rate_per_second,
+            rate_burst=settings.api_rate_burst,
+            max_server_pause=settings.api_max_server_pause,
+            max_attempts=settings.api_max_attempts,
+            retry_budget=settings.api_retry_budget,
+            user_agent=settings.user_agent,
+            failure_threshold=settings.circuit_breaker_threshold,
+            recovery_timeout=settings.circuit_breaker_recovery_timeout,
+            half_open_max_calls=settings.circuit_breaker_half_open_max_calls,
+        ),
+    )
+    _health_state.set(circuit_breaker, egress_hub)
     client = SejmApiClient(
         cache=cache,
         timeout=settings.api_timeout,
@@ -178,6 +213,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         retry_budget=settings.api_retry_budget,
         user_agent=settings.user_agent,
     )
+    egress_hub.adopt(client)
     await client.start()
 
     document_store = DocumentStore(
@@ -215,6 +251,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         comparison_service=comparison_service,
         relationship_service=relationship_service,
         date_service=date_service,
+        egress=egress_hub,
     )
 
     try:
@@ -228,8 +265,12 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         finally:
             # Nested so a failed close still empties the cache (#31); the
             # exception itself propagates — swallowing it would hide why the
-            # shutdown was unclean.
-            await cache.clear()
+            # shutdown was unclean. The same holds for the hub: a failing close of
+            # a source module's client must not skip `cache.clear()`.
+            try:
+                await egress_hub.close()
+            finally:
+                await cache.clear()
         logger.info("Law Scrapper MCP Server stopped")
 
 
@@ -267,6 +308,7 @@ async def health(_request: Request) -> JSONResponse:
             "version": settings.server_version,
             "server": settings.server_name,
             "upstream": _health_state.snapshot(),
+            "sources": _health_state.sources(),
         }
     )
 

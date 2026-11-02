@@ -84,11 +84,16 @@ tests/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites
 │   │   ├── test_circuit_breaker.py     # CLOSED → OPEN → HALF_OPEN transitions and probe races
 │   │   ├── test_download_budget.py     # Byte budget enforced while a document body streams (#19)
+│   │   ├── test_egress_construction_guard.py # `httpx.AsyncClient` is built only in `client/egress.py` (one listed exception: OIDC discovery in `auth/jwt_verifier.py`)
+│   │   ├── test_egress_hub.py          # EgressHub: caller identity tokens, wire User-Agent, one owner per origin and name, rate ceiling a module can only lower, no pin opt-out, source states, close error collection
+│   │   ├── test_egress_isolation.py    # Per-host controls: cache namespace, origin pin and redirect cap (Sejm characterised as unpinned), host label on errors and logs, two-host isolation of 429 pause, breaker, bucket, headers and cookies
+│   │   ├── test_egress_messages.py     # Generic Polish client-side texts of a host with no preset, named after the source
 │   │   ├── test_egress_pacing.py       # Limiter wired into the client: 429 → pause, shared clock, light/heavy lanes, deadline refusal
 │   │   ├── test_facade_exports.py      # `law_scrapper_mcp.client` re-exports every public exception
 │   │   ├── test_failure_policy.py      # Pure retry/breaker classification, Retry-After parsing, `backoff()` bounds
 │   │   ├── test_rate_limiter.py        # Outbound token bucket on a fake clock: burst, deficit at large clock magnitudes, pauses, cap, mid-wait extension, cancellation
 │   │   ├── test_sejm_client_resilience.py  # Retry loop, breaker integration, slot release, translation to domain errors (transport message names class + endpoint, never httpx text)
+│   │   ├── test_sejm_message_texts.py  # Golden literals of every error text the Sejm client raises, pinned before the transport was extracted
 │   │   └── test_user_agent.py          # Identity sent to api.sejm.gov.pl tracks the configured version
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading

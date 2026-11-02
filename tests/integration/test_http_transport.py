@@ -98,6 +98,8 @@ def test_health_endpoint(asgi_app) -> None:
     # The lifespan ran inside the context manager, so the handle is populated.
     assert data["upstream"]["circuit_state"] == "closed"
     assert data["upstream"]["failure_count"] == 0
+    # The Sejm is registered with the egress hub, so it is the one active source.
+    assert data["sources"] == [{"name": "api.sejm.gov.pl", "circuit_state": "closed"}]
 
 
 def test_stateless_http_protocol_matrix(asgi_app) -> None:

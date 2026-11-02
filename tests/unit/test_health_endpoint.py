@@ -6,7 +6,10 @@ import pytest
 from starlette.testclient import TestClient
 
 from law_scrapper_mcp import server as server_module
+from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker, CircuitState
+from law_scrapper_mcp.client.egress import CallerIdentity, EgressDefaults, EgressHost, EgressHub
+from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 
 
@@ -95,3 +98,63 @@ def test_health_reports_a_half_open_breaker(client: TestClient) -> None:
 
     assert body["upstream"]["circuit_state"] == "half_open"
     assert body["upstream"]["failure_count"] == 1
+
+
+# --- `sources`: every active source by name and circuit state ---------------------------------
+
+
+def _hub_with_a_module_host(*, trip_module_breaker: bool) -> EgressHub:
+    hub = EgressHub(TTLCache(max_entries=10), EgressDefaults(user_agent="law-scrapper-mcp/test"))
+    hub.adopt(SejmApiClient(cache=TTLCache(max_entries=10)))
+    module_client = hub.client_for(
+        EgressHost(name="SAOS", base_url="https://saos.example.test/api"), CallerIdentity("law-scrapper-saos", "0.1.0")
+    )
+    if trip_module_breaker:
+        for _ in range(5):
+            module_client._circuit_breaker.release_failure()
+    return hub
+
+
+def test_health_lists_no_sources_before_the_lifespan_and_after_clear(client: TestClient) -> None:
+    assert client.get("/health").json()["sources"] == []
+
+    server_module._health_state.set(CircuitBreaker(), _hub_with_a_module_host(trip_module_breaker=False))
+    server_module._health_state.clear()
+
+    assert client.get("/health").json()["sources"] == []
+
+
+def test_health_lists_the_sejm_and_a_module_host_with_exactly_two_keys(client: TestClient) -> None:
+    server_module._health_state.set(CircuitBreaker(), _hub_with_a_module_host(trip_module_breaker=False))
+
+    body = client.get("/health").json()
+
+    assert body["sources"] == [
+        {"name": "api.sejm.gov.pl", "circuit_state": "closed"},
+        {"name": "SAOS", "circuit_state": "closed"},
+    ]
+
+
+def test_an_open_module_breaker_leaves_status_200_and_the_upstream_block_unchanged(client: TestClient) -> None:
+    server_module._health_state.set(CircuitBreaker(), _hub_with_a_module_host(trip_module_breaker=True))
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["upstream"] == {"circuit_state": "closed", "failure_count": 0}
+    assert body["sources"][1] == {"name": "SAOS", "circuit_state": "open"}
+
+
+def test_health_keeps_every_pre_existing_key_and_adds_only_sources(client: TestClient) -> None:
+    assert set(client.get("/health").json()) == {"status", "version", "server", "upstream", "sources"}
+
+
+def test_set_without_a_hub_keeps_working_and_lists_no_sources(client: TestClient) -> None:
+    server_module._health_state.set(CircuitBreaker())
+
+    body = client.get("/health").json()
+
+    assert body["upstream"]["circuit_state"] == "closed"
+    assert body["sources"] == []

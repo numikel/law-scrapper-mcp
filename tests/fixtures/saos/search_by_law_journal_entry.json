@@ -1,0 +1,167 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=0&lawJournalEntryCode=1964/296&courtType=COMMON&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=1&lawJournalEntryCode=1964/296&courtType=COMMON&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    }
+  ],
+  "items": [
+    {
+      "id": 554756,
+      "href": "https://www.saos.org.pl/api/judgments/554756",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "IX U 113/20"
+        }
+      ],
+      "judgmentType": "REGULATION",
+      "judges": [],
+      "textContent": "Sygnatura akt IX U 113/20 UZASADNIENIE Decyzją z dnia 2 grudnia 2019 r., nr (...), Zakład Ubezpieczeń Społecznych Oddział w U. stwierdził, że J. Z. jako pracownik u płatnika składek (...) Sp. z o.o. w U. nie podlega obowiązkowo ubezpieczeniom: emerytalnemu, rentowym, chorobowemu oraz wypadkowemu od 2 listopada 2018 r. W uzasadnieniu decyzji wskazano, iż umowa o pracę została zawarta pomiędzy stronami dla pozoru - nie w celu faktycznej realizacji wynikającego z treści stosunku pracy, a jedynie dla uzyskania przez ubezpieczoną świadczeń z ubezpieczenia społecznego, w związku z ciążą i macierzyństwem. Wobec tego powyższa umowa, jako zawarta dla pozoru jest nieważna. Odwołanie od powyższej decyzji do Sądu Okręgowego w Szczecinie wniosła ubezpieczona J. Z.. Następnie decyzją z 10 grudnia 2019 r",
+      "keywords": [
+        "zasiłek chorobowy",
+        "zasiłek macierzyński"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1668",
+        "id": 1668,
+        "name": "IX Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004521",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/272",
+          "id": 272,
+          "code": "15551530",
+          "name": "Sąd Rejonowy Szczecin-Centrum w Szczecinie"
+        }
+      },
+      "judgmentDate": "2026-10-23"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 1,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "JUDGMENT_DATE",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "DESC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": "1964/296",
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "COMMON",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": null,
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "2026-11-02",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 317900
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=0&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateFrom=2019-01-01&judgmentDateTo=2019-12-31&judgmentTypes=REASONS&sortingField=DATABASE_ID&sortingDirection=ASC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=1&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateFrom=2019-01-01&judgmentDateTo=2019-12-31&judgmentTypes=REASONS&sortingField=DATABASE_ID&sortingDirection=ASC"
+    }
+  ],
+  "items": [
+    {
+      "id": 369306,
+      "href": "https://www.saos.org.pl/api/judgments/369306",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 1280/18"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 1280/18 UZASADNIENIE Zakład Ubezpieczeń Społecznych I Oddział w Ł. decyzją z dnia 17 maja 2018 r. na podstawie art. 108 w związku z art.116 ust1 i art129 ust.1 ustawy z dnia 17.12.1998 r. o emeryturach i rentach z Funduszu Ubezpieczeń Społecznych (Dz. U z 2013 r., poz. 1440 ze zm.) odmówił M. Ś. wypłaty emerytury od dnia 1 października 2017 roku. W uzasadnieniu podano, ze wnioskodawczyni złożyła wniosek o podjęcie wypłaty emerytury w dniu 16 marca 2018 roku a nie 1 października 2017 roku. (decyzja k. 30 akt ZUS) Od powyższej decyzji M. Ś. odwołała się w dniu 29 maja 2018 roku i wniosła o ponowne ustalenie wysokości emerytury od października 2017 roku. W uzasadnieniu podała, ze poinformowała ZUS o stażu od dnia 11.09.2017 roku do dnia 10.08.2018 roku. ZUS uznał, że wnioskod",
+      "keywords": [
+        "emerytura"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2019-02-07"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 1,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "DATABASE_ID",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "ASC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "COMMON",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [
+        "REASONS"
+      ],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "2019-01-01",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "2019-12-31",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 600
+  }
+}

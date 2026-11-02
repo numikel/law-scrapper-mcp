@@ -1,0 +1,207 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=10&pageNumber=0&caseNumber=VIII%20U%202924/25&sortingField=DATABASE_ID&sortingDirection=ASC"
+    }
+  ],
+  "items": [
+    {
+      "id": 554697,
+      "href": "https://www.saos.org.pl/api/judgments/554697",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2924/25"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2924/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 13 października 2026 roku Sąd Okręgowy w Łodzi, VIII Wydział Pracy i Ubezpieczeń Społecznych w składzie: Przewodniczący: Sędzia SO xxxxxx xxxxxxxxx-xxxxxxxxxxxx Protokolant : st.sekr.sąd. xxxxxxxxx xxxxxxxxxx po rozpoznaniu w dniu 22 września 2026 roku w Łodzi na rozprawie sprawy z wniosku L. P. przeciwko Zakładowi Ubezpieczeń Społecznych (...) Oddziałowi w S. o wysokość emerytury na skutek odwołania L. P. od decyzji Zakładu Ubezpieczeń Społecznych (...) Oddziału w S. z dnia 29 września 2025 roku znak (...) zmienia zaskarżoną decyzję w ten sposób, że przelicza emeryturę L. P. od dnia 7 września 2025 roku przy uwzględnieniu kwoty zwaloryzowanego kapitału początkowego w wysokości 135.089,24 (sto trzydzieści pięć tysięcy ",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-13"
+    },
+    {
+      "id": 554698,
+      "href": "https://www.saos.org.pl/api/judgments/554698",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2924/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2924/25 UZASADNIENIE Decyzją z dnia 29 września 2025 roku Zakład Ubezpieczeń Społecznych (...) Oddział w L., po rozpoznaniu wniosku z dnia 9 września 2025 roku, przyznał wnioskodawcy D. P. (1) prawo do emerytury od dnia 7 września 2025 r. Do obliczenia wysokości emerytury dla wnioskodawcy Zakład uwzględnił: kwotę składek zewidencjonowanych na koncie z uwzględnieniem waloryzacji 343649,57 zł, kwotę zwaloryzowanego kapitału początkowego 1086278,91 zł, kwotę środków zewidencjonowanych na subkoncie z uwzględnieniem jej waloryzacji 138978,50 zł, średnie dalsze trwanie życia 220,80 miesięcy, wyliczona kwota emerytury wynosi 7105,56 zł. Wysokość emerytury została obliczona zgodnie z art. 26 ustawy emerytalnej: ((...),57 + (...),91 + (...),50) / 220,80 = 7105,56 zł. /decyzja k. 8 ",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-16"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 10,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "DATABASE_ID",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "ASC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": "VIII U 2924/25",
+    "courtType": {
+      "value": null,
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": null,
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 2
+  }
+}

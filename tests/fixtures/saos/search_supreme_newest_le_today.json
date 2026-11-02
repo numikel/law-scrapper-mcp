@@ -1,0 +1,286 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=3&pageNumber=0&courtType=SUPREME&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=3&pageNumber=1&courtType=SUPREME&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    }
+  ],
+  "items": [
+    {
+      "id": 245360,
+      "href": "https://www.saos.org.pl/api/judgments/245360",
+      "courtType": "SUPREME",
+      "courtCases": [
+        {
+          "caseNumber": "III KK 195/16"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "REASONS_FOR_JUDGMENT_AUTHOR",
+            "REPORTING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt III KK 195/16 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 22 czerwca 2016 r. Sąd Najwyższy w składzie: SSN xxxxx xxxxx (przewodniczący) SSN xxxxx xxxxxxxx (sprawozdawca) SSN xxxxxxx xxxxxxx Protokolant xxxxxx xxxxxxxxx na posiedzeniu w trybie art. 535 § 5 k.p.k. w sprawie M. M. skazanego z art. 244a § 1 k.k. przy zastosowaniu art. 91 § 1 k.k. po rozpoznaniu w Izbie Karnej w dniu 22 czerwca 2016 r., kasacji, wniesionej przez Ministra Sprawiedliwości – Prokuratora Generalnego na korzyść od wyroku zaocznego Sądu Rejonowego w G. z dnia 19 maja 2014 r., uchyla zaskarżony wyrok i sprawę przekazuje Sądowi Rejonowemu w G. do ponownego rozpoznania. UZASADNIENIE Wyrokiem zaocznym z dnia 19 maja 2014 r., sygn. akt II K …/14, Sąd Rejonowy w G. uznał oskarżonego M. M. za winnego popełnieni",
+      "keywords": [],
+      "personnelType": "THREE_PERSON",
+      "judgmentForm": "wyrok SN",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-22"
+    },
+    {
+      "id": 245361,
+      "href": "https://www.saos.org.pl/api/judgments/245361",
+      "courtType": "SUPREME",
+      "courtCases": [
+        {
+          "caseNumber": "III KK 198/16"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "REASONS_FOR_JUDGMENT_AUTHOR",
+            "REPORTING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt III KK 198/16 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 22 czerwca 2016 r. Sąd Najwyższy w składzie: SSN xxxxx xxxxx (przewodniczący) SSN xxxxx xxxxxxxx (sprawozdawca) SSN xxxxxxx xxxxxxx Protokolant xxxxxx xxxxxxxxx na posiedzeniu w trybie art. 535 § 5 k.p.k. w sprawie D. C. ukaranego z art. 119 § 1 k.w. po rozpoznaniu w Izbie Karnej w dniu 22 czerwca 2016 r., kasacji, wniesionej przez Rzecznika Praw Obywatelskich na korzyść od wyroku nakazowego Sądu Rejonowego w L. z dnia 27 sierpnia 2015 r., uchyla zaskarżony wyrok i przekazuje sprawę Sądowi Rejonowemu w L. do ponownego rozpoznania. UZASADNIENIE W dniu 24 sierpnia 2015 r. Komenda Powiatowa Policji w Ł. skierowała do Sądu Rejonowego w L. wniosek o ukaranie D. C. za to, że w dniu 23 lipca 2015 r. między godziną 17:20 – 20:4",
+      "keywords": [],
+      "personnelType": "THREE_PERSON",
+      "judgmentForm": "wyrok SN",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-22"
+    },
+    {
+      "id": 245363,
+      "href": "https://www.saos.org.pl/api/judgments/245363",
+      "courtType": "SUPREME",
+      "courtCases": [
+        {
+          "caseNumber": "V KK 137/16"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "REASONS_FOR_JUDGMENT_AUTHOR",
+            "PRESIDING_JUDGE",
+            "REPORTING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt V KK 137/16 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 21 czerwca 2016 r. Sąd Najwyższy w składzie: SSN xxxxxxxxxx xxxxxxxx (przewodniczący, sprawozdawca) SSN xxxxxxxxx xxxxxx SSN xxxxxxxxx xxxxxxxxxx Protokolant xxxxxxxxx xxxxx w sprawie J. K. ukaranego z art. 431 ust. 1 ustawy o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi (t.j. Dz. U. z 2012 r., poz.1356 ze zm.) po rozpoznaniu w Izbie Karnej na posiedzeniu w trybie art. 535 § 5 k.p.k. w dniu 21 czerwca 2016 r. kasacji Prokuratora Generalnego na korzyść ukaranego od wyroku nakazowego Sądu Rejonowego w N. z dnia 23 lutego 2015 r., uchyla zaskarżony wyrok w zakresie rozstrzygnięcia o karze i sprawę przekazuje Sądowi Rejonowemu, do ponownego rozpoznania. UZASADNIENIE Wyrokiem nakazowym z dnia 23 lutego 2015 r., Sąd",
+      "keywords": [],
+      "personnelType": "THREE_PERSON",
+      "judgmentForm": "wyrok SN",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-21"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 3,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "JUDGMENT_DATE",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "DESC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "SUPREME",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": null,
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "2026-11-02",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 38081
+  }
+}

@@ -1,0 +1,865 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=20&pageNumber=0&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=20&pageNumber=1&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    }
+  ],
+  "items": [
+    {
+      "id": 554971,
+      "href": "https://www.saos.org.pl/api/judgments/554971",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII P 410/23"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [],
+      "textContent": "Sygn. akt VIII P 410/23 UZASADNIENIE wyroku z dnia 11 czerwca 2026 roku W pozwie z dnia 17 lipca 2023 roku, skierowanym przeciwko Urzędowi (...) (dalej: „Urząd” lub „pozwany”), powódka (...) wniosła odwołanie od oświadczenia pozwanego w przedmiocie wypowiedzenia umowy o pracę, domagając się uznania wypowiedzenia za bezskuteczne, a w wypadku upływu okresu wypowiedzenia - przywrócenia do pracy oraz wnosząc o zasądzenie na jej rzecz kosztów procesu według norm przepisanych (pozew k. 3-22). W piśmie procesowym z dnia 23 listopada 2023 roku (data nadania pisma na poczcie) oświadczyła, że w miejsce roszczenia o przywrócenie do pracy domaga się odszkodowania kwocie 22.644 (3 x 7.548) złote (pismo k. 199-201). Odpowiadając na pozew Urząd, działając za pośrednictwem pełnomocnika będącego radcą praw",
+      "keywords": [],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1756",
+        "id": 1756,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/282",
+          "id": 282,
+          "code": "15450530",
+          "name": "Sąd Rejonowy dla Warszawy-Śródmieścia w Warszawie"
+        }
+      },
+      "judgmentDate": "2026-10-23"
+    },
+    {
+      "id": 554688,
+      "href": "https://www.saos.org.pl/api/judgments/554688",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2784/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2784/26 UZASADNIENIE Decyzją z dnia 30.06.2026 roku Prezes Kasy Rolniczego Ubezpieczenia Społecznego Oddział (...) w E. na podstawie art. 36 ust. 1 pkt 1, art. 3a, art. 5a, art. 8 ust. 1, 2 i 2a, art. 17 ust. 1 i 3, art. 39 ust. 4 ustawy z dnia 20 grudnia 1990 r. o ubezpieczeniu społecznym rolników (Dz.U. z 2025 r. poz. 1770) stwierdził ustanie ubezpieczenia społecznego rolników w zakresie: I. ubezpieczenia wypadkowego, chorobowego i macierzyńskiego dla: 1) A. W. od 2018-05-24 do 2019-02-17 oraz od 2021-04-01 do nadal II. ubezpieczenia emerytalno-rentowego dla: 1)  A. W. od 2018-05-24 do 2019-02-17 oraz od 2021-04-01 do nadal oraz ustanie obowiązku opłacania składek za ww. osobę od wymienionego dnia. W uzasadnieniu KRUS wskazał, że w wyniku przeprowadzonego postępowania wy",
+      "keywords": [
+        "podleganie ubezpieczeniom społecznym"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    },
+    {
+      "id": 554709,
+      "href": "https://www.saos.org.pl/api/judgments/554709",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII Ua 43/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII Ua 43/26 UZASADNIENIE Zaskarżonym wyrokiem z dnia 27 kwietnia 2026 roku Sąd Rejonowy dla Łodzi - Śródmieścia w Łodzi, X Wydział Pracy i Ubezpieczeń Społecznych w sprawie sygn. akt XU 142/26 z wniosku S. L. (1) przeciwko Zakładowi Ubezpieczeń Społecznych Oddział w L. o zasiłek chorobowy na skutek odwołania S. L. (2) od decyzji Zakładu Ubezpieczeń Społecznych Oddział w L. z dnia 19 grudnia 2025 roku znak (...) (...) (...) (...) (...) zmienił zaskarżoną decyzję i przyznał S. L. (1) prawo do zasiłku chorobowego za okres od dnia 2 czerwca 2025 roku do dnia 29 września 2025 roku, oddalił odwołanie w pozostałym zakresie. Powyższe orzeczenie zapadło w oparciu o następujące ustalenia faktyczne S. L. (1) jest osobą prowadzącą działalność gospodarczą i z tego tytułu podlega dobrowolnem",
+      "keywords": [
+        "zasiłek chorobowy"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    },
+    {
+      "id": 554677,
+      "href": "https://www.saos.org.pl/api/judgments/554677",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2330/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "UZASADNIENIE Decyzją z dnia 28 kwietnia 2026 r. Zakład Ubezpieczeń Społecznych (...) Oddział w S. - wykonując wyrok Sądu Okręgowego z dnia 18 lutego 2026 r. ustalił dla D. E. prawo do renty socjalnej od 1 sierpnia 2024 r., tj. od daty wskazanej w wyroku Sądu do 9 września 2024 r. W uzasadnieniu organ rentowy podał, że renta socjalna nie przysługuje ubezpieczonej od 10 września 2024 r., ponieważ pobiera ona rentę z tytułu niezdolności do pracy. Podniósł, że zgodnie z art. 7 ustawy z dnia 27 czerwca 2023 r. o rencie socjalnej - renta socjalna nie przysługuje osobie uprawnionej do emerytury, uposażenia w stanie spoczynku, renty z tytułu niezdolności do pracy, renty inwalidzkiej lub pobierającej świadczenie o charakterze rentowym z instytucji zagranicznych, renty strukturalnej, a także osobie ",
+      "keywords": [
+        "renta socjalna"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    },
+    {
+      "id": 554672,
+      "href": "https://www.saos.org.pl/api/judgments/554672",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2204/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2204/26 UZASADNIENIE Decyzją z dnia 28 kwietnia 2026 r. Zakład Ubezpieczeń Społecznych (...) Oddział w N., po rozpatrzeniu wniosku z dnia 10 kwietnia 2026 roku odmówił X. I. prawa do wypłaty dodatkowego rocznego świadczenia pieniężnego w kwietniu 2026 roku, podnosząc, że do dodatkowego rocznego świadczenia pieniężnego uprawnione są osoby, które w dniu 31 marca 2026 roku mają prawo między innymi do renty rodzinnej, określonej w ustawie emerytalnej oraz pobrały świadczenie wypłacone za marzec danego roku lub za część tego miesiąca. Z uwagi na to, że dodatkowe roczne świadczenie pieniężne wypłacane jest wraz z rentą rodzinną wypłacaną za kwiecień danego roku, dla jego wypłaty konieczne jest także istnienie prawa świadczenia w kwietniu danego roku. W związku z tym, że ubezpiec",
+      "keywords": [
+        "dodatki do emerytur i rent"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-21"
+    },
+    {
+      "id": 554698,
+      "href": "https://www.saos.org.pl/api/judgments/554698",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2924/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2924/25 UZASADNIENIE Decyzją z dnia 29 września 2025 roku Zakład Ubezpieczeń Społecznych (...) Oddział w L., po rozpoznaniu wniosku z dnia 9 września 2025 roku, przyznał wnioskodawcy D. P. (1) prawo do emerytury od dnia 7 września 2025 r. Do obliczenia wysokości emerytury dla wnioskodawcy Zakład uwzględnił: kwotę składek zewidencjonowanych na koncie z uwzględnieniem waloryzacji 343649,57 zł, kwotę zwaloryzowanego kapitału początkowego 1086278,91 zł, kwotę środków zewidencjonowanych na subkoncie z uwzględnieniem jej waloryzacji 138978,50 zł, średnie dalsze trwanie życia 220,80 miesięcy, wyliczona kwota emerytury wynosi 7105,56 zł. Wysokość emerytury została obliczona zgodnie z art. 26 ustawy emerytalnej: ((...),57 + (...),91 + (...),50) / 220,80 = 7105,56 zł. /decyzja k. 8 ",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-16"
+    },
+    {
+      "id": 554705,
+      "href": "https://www.saos.org.pl/api/judgments/554705",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 4076/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 4076/25 UZASADNIENIE Decyzją z dnia 31 października 2025 r., znak: (...), Zakład Ubezpieczeń Społecznych (...) Oddział w Z., po rozpoznaniu wniosku z dnia 24 czerwca 2025 r., na podstawie art. 24 ustawy z dnia 17 grudnia 1998 r. o emeryturach i rentach z Funduszu Ubezpieczeń Społecznych, przyznał ubezpieczonemu O. K. od dnia 1 czerwca 2025 r. prawo do emerytury. Wysokość świadczenia została obliczona zgodnie z art. 26 ww. ustawy na kwotę 1406,71 zł brutto miesięcznie, przy przyjęciu, że kwota składek zewidencjonowanych na koncie skarżącego wyniosła 91 136,04 zł, kwota zwaloryzowanego kapitału początkowego wynosiła 149 552,39 zł, a średnie dalsze trwanie życia to 171,10 miesięcy. Jednocześnie organ rentowy zawiesił wypłatę przyznanej emerytury powszechnej z uwagi na zbieg p",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-15"
+    },
+    {
+      "id": 554691,
+      "href": "https://www.saos.org.pl/api/judgments/554691",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2814/24"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2814/24 UZASADNIENIE Decyzja z 7.10.2024 r. Zakład Ubezpieczeń Społecznych Oddział w A., na podstawie art. 83 ust. 1 pkt 1, art. 6 ust. 1 pkt 5, art. 12 ust. 1, art. 13 pkt 4 ustawy z dnia 13 października 1998r. o systemie ubezpieczeń społecznych (Dz.U. z 2024 r. poz. 497 z późn. zm.) stwierdził, że M. R. jako osoba prowadząca pozarolniczą działalność gospodarczą podlegał obowiązkowo ubezpieczeniom: emerytalnemu, rentowym i wypadkowemu od 1 lipca 2007 r. do (...) r. W uzasadnieniu tej decyzji ZUS wyjaśnił, że decyzją z 16 października 2023 r. nr (...), znak: (...)-28 (...) Oddział w A. określił wysokość zobowiązań z tytułu nieopłaconych składek za okres od marca 2011 r. do grudnia 2020 r. na obowiązkowe ubezpieczenia społeczne, ubezpieczenie zdrowotne, fundusz pracy oraz f",
+      "keywords": [
+        "podleganie ubezpieczeniom społecznym"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-14"
+    },
+    {
+      "id": 554684,
+      "href": "https://www.saos.org.pl/api/judgments/554684",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2518/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygnatura akt: VIII U 2518/25 UZASADNIENIE Decyzją z dnia 8.05. 2026 r. Zakład Ubezpieczeń Społecznych (...) Oddział w U. odmówił Z. Z. prawa do ponownego ustalenia wysokości emerytury, podnosząc, że wyrok Trybunału Konstytucyjnego z dnia 4.06.2024 roku nie jest przesłanką do uchylenia lub zmiany decyzji na podstawie art. 114 ustawy emerytalnej. (decyzja w aktach ZUS) Odwołanie od w/w decyzji wniosła ubezpieczona, poprzez profesjonalnego pełnomocnika zarzucając naruszenie art. 190 ust. 4 Konstytucji RP w związku z przepisami ustawy z dnia 17.12.1998 roku o emeryturach i rentach z FUS, tj art. 114 ust 1 pkt 1 i 6, art. 133 ust. 1 pkt 2, art. 194j. Ponadto naruszenie art. 25 ust 1b ustawy o emeryturach i rentach z FUS w zawiązku z art. 67 ust.1 Konstytucji RP. W konsekwencji wniosła o zmianę",
+      "keywords": [
+        "emerytura"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-14"
+    },
+    {
+      "id": 554689,
+      "href": "https://www.saos.org.pl/api/judgments/554689",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2803/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2803/26 UZASADNIENIE Decyzją z dnia 15.07.2026 roku Zakład Ubezpieczeń Społecznych (...) Oddział w J. odmówił wznowienia postepowania w sprawie ponownego ustalenia wysokości emerytury B. B.. W uzasadnieniu organ rentowy wskazał, że 4 czerwca 2024 r., Trybunał Konstytucyjny wydał wyrok w sprawie dotyczącej obliczenia emerytury poprzez pomniejszenie podstawy obliczenia emerytur z wieku powszechnego o kwotę pobranych wcześniej emerytur. Trybunał uznał, że przepis ustawy na to pozwalający w zakresie, w jakim dotyczy osób, które złożyły wniosek o przyznanie świadczeń, o których mowa w tym przepisie, przed 6 czerwca 2012 r., jest niezgodny z przepisami Konstytucji. W konkluzji ZUS stwierdził, że w związku z tym, że wyrok Trybunału z 4 czerwca 2024r. nie został ogłoszony w Dzienn",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-13"
+    },
+    {
+      "id": 554673,
+      "href": "https://www.saos.org.pl/api/judgments/554673",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2286/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        }
+      ],
+      "textContent": "UZASADNIENIE Decyzją z dnia 12 czerwca 2025 r . Zakład Ubezpieczeń Społecznych - (...) Oddział w P. stwierdził, że miesięczna podstawa wymiaru składek F. W. z tytułu wykonywania umowy o pracę u płatnika składek (...) sp. z o.o. w lipcu 2020 r. na ubezpieczenia społeczne wynosi 11 576,00 zł, a na ubezpieczenie zdrowotne wynosi 10 116,50 zł, zaś składka na ubezpieczenie zdrowotne wynosi 896,08 zł. W uzasadnieniu organ rentowy wyjaśnił, że płatnik składek zawarł umowy cywilnoprawne z F. W., w tym również umowę cywilnoprawną nazwaną umową o dzieło w dniu 8 czerwca 2020 roku nr (...) na okres od 8 czerwca 2020 roku do dnia 20 lipca 2020 roku, w której przedmiotem były prace programistyczne w portalach C. i S.. Podał, że w ramach umowy wykonawca dodał do portalu nowy mechanizm certyfikatów zgodn",
+      "keywords": [
+        "podstawa wymiaru składki"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-13"
+    },
+    {
+      "id": 554697,
+      "href": "https://www.saos.org.pl/api/judgments/554697",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2924/25"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2924/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 13 października 2026 roku Sąd Okręgowy w Łodzi, VIII Wydział Pracy i Ubezpieczeń Społecznych w składzie: Przewodniczący: Sędzia SO xxxxxx xxxxxxxxx-xxxxxxxxxxxx Protokolant : st.sekr.sąd. xxxxxxxxx xxxxxxxxxx po rozpoznaniu w dniu 22 września 2026 roku w Łodzi na rozprawie sprawy z wniosku L. P. przeciwko Zakładowi Ubezpieczeń Społecznych (...) Oddziałowi w S. o wysokość emerytury na skutek odwołania L. P. od decyzji Zakładu Ubezpieczeń Społecznych (...) Oddziału w S. z dnia 29 września 2025 roku znak (...) zmienia zaskarżoną decyzję w ten sposób, że przelicza emeryturę L. P. od dnia 7 września 2025 roku przy uwzględnieniu kwoty zwaloryzowanego kapitału początkowego w wysokości 135.089,24 (sto trzydzieści pięć tysięcy ",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-13"
+    },
+    {
+      "id": 554657,
+      "href": "https://www.saos.org.pl/api/judgments/554657",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 1275/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 1275/25 UZASADNIENIE Decyzją z dnia 9.10.2024 r. Zakład Ubezpieczeń Społecznych Oddział w I., po rozpatrzeniu wniosku z dnia 29.07.2024 r. oraz dodatkowych dokumentów złożonych w dniu 18.09.2024 r., odmówił H. P. prawa do rekompensaty argumentując, że wnioskodawca nie udokumentował do dnia 1.01.2009 r. wymaganego prawem stażu co najmniej 15 lat pracy wykonywanej stale i w pełnym wymiarze czasu w szczególnych warunkach. Zakład podał, że do okresu pracy wykonywanej w warunkach szczególnych nie uwzględniono ubezpieczonemu okresu zatrudnienia w (...) (...) w I. na stanowiskach: starszego asystenta, zastępcy ordynatora oraz p.o. ordynatora w (...) (...) i (...), ponieważ z przedłożonych dokumentów, tj. świadectwa pracy z dnia 13.09.2024 r. oraz angaży i zakresów czynności, wyni",
+      "keywords": [
+        "praca w szczególnych warunkach"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-12"
+    },
+    {
+      "id": 554704,
+      "href": "https://www.saos.org.pl/api/judgments/554704",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 3861/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 3861/25 UZASADNIENIE Decyzjami z tego samego dnia, tj. z 15.10.2025 r., Zakład Ubezpieczeń Społecznych (...) Oddział w M., na podstawie art. 83 ust. 1 pkt 3 w zw. z art. 4 pkt 9, art. 18 ust. 1 i 2, art. 20 ust. 1 ustawy z dnia 13 października 1998 r. o systemie ubezpieczeń społecznych (Dz. U. z 2025 r. poz. 350) oraz w zw. z art. 81 ust. 1,5 i 6 ustawy z dnia 27 sierpnia 2004 r. o świadczeniach opieki zdrowotnej finansowanych ze środków publicznych (Dz. U. z 2024 r. poz. 146, ze zm.), stwierdził, że z tytułu umowy o pracę zawartej z płatnikiem składek - (...) Spółką z o.o. z/s w M.: 1)  dla Z. N. podstawa wymiaru składek za 12/2022 r. na obowiązkowe ubezpieczenia emerytalne, rentowe, chorobowe, wypadkowe wynosi 1.116,28 zł, na ubezpieczenie zdrowotne wynosi 963,24 zł, a s",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-12"
+    },
+    {
+      "id": 554670,
+      "href": "https://www.saos.org.pl/api/judgments/554670",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2198/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygnatura akt VIII U 2198/26 UZASADNIENIE Decyzją z dnia 8 kwietnia 2026 roku, Dyrektor Wojskowego Biura Emerytalnego w J. przyznał G. S. emeryturę wojskową od 1 lutego 2026 roku, uwzględniając 15,00 % zwiększenie wysługi emerytalnej za pełnienia służby w strefie działań wojennych. (decyzja k. 49-51 akt (...)) G. S. złożył odwołanie od tej decyzji, wnosząc o podwyższenie zwiększenia jego emerytury wojskowej o 0,5 % za każdy rozpoczęty miesiąc pełnienia służby w strefie działań wojennych, tj. z 15,00 % do 16,00 %. Odwołujący wniósł o przyjęcie, że pełnił służbę wojskową: ⚫ od 23 kwietnia 2008 roku do 16 kwietnia 2009 roku w Polskim Kontyngencie Wojskowym w Tymczasowych Siłach Organizacji Narodów Zjednoczonych w (...) (...) – 13 rozpoczętych miesięcy, ⚫ od 3 maja 2010 roku do 23 października",
+      "keywords": [
+        "wysokość emerytury"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-12"
+    },
+    {
+      "id": 554651,
+      "href": "https://www.saos.org.pl/api/judgments/554651",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 1045/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 1045/26 UZASADNIENIE Decyzją z dnia 16.02.2026 roku Zakład Ubezpieczeń Społecznych (...) Oddział w H. po rozpatrzeniu wniosku z dnia 02.02.2026 roku odmówił N. D. prawa do rekompensaty z tytułu pracy w szczególnych warunkach lub w szczególnym charakterze z uwagi na brak dokumentów potwierdzających wykonywanie pracy w szczególnych warunkach lub w szczególnym charakterze. (decyzja – k. nieponumerowane strony plik (...) załączonych do sprawy akt organu rentowego) Nie podzielając treści w/w decyzji N. D. złożył odwołanie wnosząc o jej zmianę poprzez przyznanie prawa do rekompensaty z tytułu pracy w szczególnych warunkach. (odwołanie – k. 3-7) Kolejną decyzją z dnia 13.03.2026 roku Zakład Ubezpieczeń Społecznych (...) Oddział w H. po rozpatrzeniu wniosku z dnia 25.02.2026 roku ",
+      "keywords": [
+        "praca w szczególnych warunkach"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-12"
+    },
+    {
+      "id": 554678,
+      "href": "https://www.saos.org.pl/api/judgments/554678",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2330/26"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 8 października 2026 roku Sąd Okręgowy w Łodzi – VIII Wydział Pracy i Ubezpieczeń Społecznych w składzie następującym: Przewodnicząca – Sędzia SO xxxxxxx xxxxx Protokolantka - sekr. sąd. xxxxxxx xxxxx po rozpoznaniu w dniu 8 października 2026 roku na rozprawie sprawy T. Ł. przeciwko Zakładowi Ubezpieczeń Społecznych – (...) Oddziałowi w E. o rentę socjalną na skutek odwołania T. Ł. od decyzji Zakładu Ubezpieczeń Społecznych – (...) Oddziału w E. z dnia 28 kwietnia 2026 roku znak (...) zmienia zaskarżoną decyzję w ten sposób, że ustala prawo T. Ł. do renty socjalnej także na dalszy okres po 9 września 2024 roku – na stałe. SSO xxxxxxx xxxxx",
+      "keywords": [
+        "renta socjalna"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-08"
+    },
+    {
+      "id": 554687,
+      "href": "https://www.saos.org.pl/api/judgments/554687",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2784/26"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2784/26 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 8 października 2026 roku Sąd Okręgowy w Łodzi VIII Wydział Pracy i Ubezpieczeń Społecznych w składzie Przewodnicząca sędzia SO xxxxxxxxx xxxxxxxx Protokolant sekretarz xxxxx (...) po rozpoznaniu w dniu 1 października 2026 roku w Łodzi na rozprawie sprawy z odwołania B. K. od decyzji Prezesa Kasy Rolniczego Ubezpieczenia Społecznego (...) w A. z dnia 30 czerwca 2026 roku znak (...) o podleganie ubezpieczeniu społecznemu rolników oddala odwołanie sędzia xxxxxxxxx xxxxxxxx",
+      "keywords": [
+        "podleganie ubezpieczeniom społecznym"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-08"
+    },
+    {
+      "id": 554660,
+      "href": "https://www.saos.org.pl/api/judgments/554660",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 1630/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 1630/26 UZASADNIENIE Decyzją z dnia 3.03.2026 roku Zakład Ubezpieczeń Społecznych (...) Oddział w P. po rozpatrzeniu wniosku F. R. z dnia 12.01.2026 r. odmówił mu prawa do emerytury pomostowej. W uzasadnieniu decyzji organ rentowy wskazał, że wnioskodawcy odmówiono przyznania emerytury pomostowej ponieważ: - nie udowodnił okresu pracy w szczególnych warunkach wynoszącego co najmniej 15 lat, - po dniu 31.12.2008 r. nie wykonywał prac w szczególnych warunkach lub o szczególnym charakterze, w rozumieniu art.3 ust. l i 3 ustawy o emeryturach pomostowych. ZUS do pracy w warunkach szczególnych uznał okres od 1.07.1995 r. do 23.11.2003 r. (z wyłączeniem zwolnień lekarskich), tj. 8 lat, 1 miesiąc i 12 dni. ZUS nie zaliczył do pracy wykonywanej w warunkach szczególnych okresów: - o",
+      "keywords": [
+        "emerytura pomostowa"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-07"
+    },
+    {
+      "id": 554710,
+      "href": "https://www.saos.org.pl/api/judgments/554710",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII Ua 43/26"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII Ua upr 43/26 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 6 października 2026 roku Sąd Okręgowy w Łodzi VIII Wydział Pracy i Ubezpieczeń Społecznych w składzie: Przewodnicząca: Sędzia xxxx xxxxxxxxxx po rozpoznaniu w dniu 6 października 2026 roku w Łodzi na posiedzeniu niejawnym sprawy M. C. przeciwko Zakładowi Ubezpieczeń Społecznych (...) w C. o zasiłek chorobowy na skutek apelacji organu rentowego od wyroku Sądu Rejonowego dla Łodzi-Śródmieścia w Łodzi X Wydziału Pracy i Ubezpieczeń Społecznych z dnia 27 kwietnia 2026 roku w sprawie sygn. akt X U 142/26 oddala apelację.",
+      "keywords": [
+        "zasiłek chorobowy"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-06"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 20,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "JUDGMENT_DATE",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "DESC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "COMMON",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "2026-11-02",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 26891
+  }
+}

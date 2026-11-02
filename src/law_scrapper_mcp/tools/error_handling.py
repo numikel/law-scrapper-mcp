@@ -75,7 +75,7 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
     "validation": "Popraw parametr wywołania i spróbuj ponownie.",
     "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
     "content_too_large": "Ponowne wywołanie niczego nie zmieni — pobierz treść z podanego adresu.",
-    "source_address": "Ponowne wywołanie niczego nie zmieni — adres tego źródła w module wymaga poprawy.",
+    "source_address": "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, że konfiguracja adresu tego źródła jest błędna.",
     "unavailable": "Ponów wywołanie za chwilę.",
     "upstream": "Ponów wywołanie za chwilę.",
     "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",

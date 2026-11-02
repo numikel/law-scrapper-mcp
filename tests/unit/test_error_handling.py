@@ -554,7 +554,8 @@ class TestNamedSource:
                 ),
                 "Źródło SAOS przekierowało żądanie poza własny adres, więc go nie wykonano. "
                 "Pozostałe źródła nie są objęte tym błędem. "
-                "Ponowne wywołanie niczego nie zmieni — adres tego źródła w module wymaga poprawy.",
+                "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, "
+                "że konfiguracja adresu tego źródła jest błędna.",
                 id="redirect-refused",
             ),
             pytest.param(

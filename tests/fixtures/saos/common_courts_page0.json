@@ -1,0 +1,5127 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/dump/commonCourts?pageSize=100&pageNumber=0"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/dump/commonCourts?pageSize=100&pageNumber=1"
+    }
+  ],
+  "items": [
+    {
+      "id": 1,
+      "name": "Sąd Apelacyjny we Wrocławiu",
+      "type": "APPEAL",
+      "code": "15500000",
+      "parentCourt": null,
+      "divisions": [
+        {
+          "id": 1,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 2,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 3,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Sąd Okręgowy w Jeleniej Górze",
+      "type": "REGIONAL",
+      "code": "15500500",
+      "parentCourt": {
+        "id": 1
+      },
+      "divisions": [
+        {
+          "id": 4,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 5,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 6,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 7,
+          "name": "IV Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0002039",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 8,
+          "name": "VI Wydział Karny Odwoławczy",
+          "code": "0003006",
+          "type": "Karny"
+        },
+        {
+          "id": 9,
+          "name": "VII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Sąd Rejonowy w Bolesławcu",
+      "type": "DISTRICT",
+      "code": "15500505",
+      "parentCourt": {
+        "id": 2
+      },
+      "divisions": [
+        {
+          "id": 10,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 11,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 12,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 13,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Sąd Rejonowy w Jeleniej Górze",
+      "type": "DISTRICT",
+      "code": "15500510",
+      "parentCourt": {
+        "id": 2
+      },
+      "divisions": [
+        {
+          "id": 14,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 15,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 16,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 17,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 18,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Sąd Rejonowy w Lubaniu",
+      "type": "DISTRICT",
+      "code": "15500520",
+      "parentCourt": {
+        "id": 2
+      },
+      "divisions": [
+        {
+          "id": 19,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 20,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 21,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 22,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 23,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Lwówku Śląskim",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 24,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Lwówku Śląskim",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 25,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Lwówku Śląskim",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Sąd Rejonowy w Zgorzelcu",
+      "type": "DISTRICT",
+      "code": "15500530",
+      "parentCourt": {
+        "id": 2
+      },
+      "divisions": [
+        {
+          "id": 26,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 27,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 28,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 29,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Sąd Okręgowy w Legnicy",
+      "type": "REGIONAL",
+      "code": "15501000",
+      "parentCourt": {
+        "id": 1
+      },
+      "divisions": [
+        {
+          "id": 30,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 31,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 32,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 33,
+          "name": "IV Wydział Karny Odwoławczy",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 34,
+          "name": "V Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 35,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Sąd Rejonowy w Głogowie",
+      "type": "DISTRICT",
+      "code": "15501005",
+      "parentCourt": {
+        "id": 7
+      },
+      "divisions": [
+        {
+          "id": 36,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 37,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 38,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 39,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Sąd Rejonowy w Legnicy",
+      "type": "DISTRICT",
+      "code": "15501015",
+      "parentCourt": {
+        "id": 7
+      },
+      "divisions": [
+        {
+          "id": 40,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 41,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 42,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 43,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 44,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 45,
+          "name": "VII Wydział Cywilny",
+          "code": "0003503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 46,
+          "name": "VIII Wydział Karny",
+          "code": "0004006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Sąd Rejonowy w Lubinie",
+      "type": "DISTRICT",
+      "code": "15501020",
+      "parentCourt": {
+        "id": 7
+      },
+      "divisions": [
+        {
+          "id": 47,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 48,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 49,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 50,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Sąd Rejonowy w Złotoryi",
+      "type": "DISTRICT",
+      "code": "15501025",
+      "parentCourt": {
+        "id": 7
+      },
+      "divisions": [
+        {
+          "id": 51,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 52,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 53,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 54,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Jaworze",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 55,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Jaworze",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 56,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Jaworze",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Sąd Okręgowy w Opolu",
+      "type": "REGIONAL",
+      "code": "15501500",
+      "parentCourt": {
+        "id": 1
+      },
+      "divisions": [
+        {
+          "id": 57,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 58,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 59,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 60,
+          "name": "IV Wydział Penitencjarny",
+          "code": "0002039",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 61,
+          "name": "V Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 62,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 63,
+          "name": "VII Wydział Karny Odwoławczy",
+          "code": "0003506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Sąd Rejonowy w Brzegu",
+      "type": "DISTRICT",
+      "code": "15501505",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 64,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 65,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 66,
+          "name": "III Wydział Rodzinny",
+          "code": "0001509",
+          "type": "Cywilny Rodzinny"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Sąd Rejonowy w Kędzierzynie-Koźlu",
+      "type": "DISTRICT",
+      "code": "15501515",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 67,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 68,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 69,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 70,
+          "name": "VI Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Sąd Rejonowy w Kluczborku",
+      "type": "DISTRICT",
+      "code": "15501520",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 71,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 72,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 73,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 74,
+          "name": "V Zamiejscowy Wydział Cywilny",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 75,
+          "name": "VI Zamiejscowy Wydział Karny",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 76,
+          "name": "VII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Sąd Rejonowy w Nysie",
+      "type": "DISTRICT",
+      "code": "15501525",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 77,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 78,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 79,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 80,
+          "name": "VI Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Sąd Rejonowy w Opolu",
+      "type": "DISTRICT",
+      "code": "15501535",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 81,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 82,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 83,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 84,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 85,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 86,
+          "name": "VII Wydział Karny",
+          "code": "0003506",
+          "type": "Karny"
+        },
+        {
+          "id": 87,
+          "name": "IX Wydział Cywilny",
+          "code": "0004503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Sąd Rejonowy w Prudniku",
+      "type": "DISTRICT",
+      "code": "15501540",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 88,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 89,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 90,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 91,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Głubczycach",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 92,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Głubczycach",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 93,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Głubczycach",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Sąd Rejonowy w Strzelcach Opolskich",
+      "type": "DISTRICT",
+      "code": "15501545",
+      "parentCourt": {
+        "id": 12
+      },
+      "divisions": [
+        {
+          "id": 94,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 95,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 96,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Sąd Okręgowy w Świdnicy",
+      "type": "REGIONAL",
+      "code": "15502000",
+      "parentCourt": {
+        "id": 1
+      },
+      "divisions": [
+        {
+          "id": 97,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 98,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 99,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 100,
+          "name": "IV Wydział Karny Odwoławczy",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 101,
+          "name": "V Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0002539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 102,
+          "name": "VII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Sąd Rejonowy w Dzierżoniowie",
+      "type": "DISTRICT",
+      "code": "15502005",
+      "parentCourt": {
+        "id": 20
+      },
+      "divisions": [
+        {
+          "id": 103,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 104,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 105,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 106,
+          "name": "VI Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 107,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Sąd Rejonowy w Kłodzku",
+      "type": "DISTRICT",
+      "code": "15502010",
+      "parentCourt": {
+        "id": 20
+      },
+      "divisions": [
+        {
+          "id": 108,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 109,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 110,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 111,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 112,
+          "name": "VI Wydział Karny",
+          "code": "0003006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Sąd Rejonowy w Świdnicy",
+      "type": "DISTRICT",
+      "code": "15502015",
+      "parentCourt": {
+        "id": 20
+      },
+      "divisions": [
+        {
+          "id": 113,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 114,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 115,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 116,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 117,
+          "name": "VI Wydział Karny",
+          "code": "0003006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Sąd Rejonowy w Wałbrzychu",
+      "type": "DISTRICT",
+      "code": "15502020",
+      "parentCourt": {
+        "id": 20
+      },
+      "divisions": [
+        {
+          "id": 118,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 119,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 120,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 121,
+          "name": "IV Wydział Rodzinny i Nieletnich",
+          "code": "0002012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 122,
+          "name": "V Wydział Pracy",
+          "code": "0002515",
+          "type": "Pracy"
+        },
+        {
+          "id": 123,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 124,
+          "name": "VIII Wydział Cywilny",
+          "code": "0004003",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Sąd Rejonowy w Ząbkowicach Śląskich",
+      "type": "DISTRICT",
+      "code": "15502025",
+      "parentCourt": {
+        "id": 20
+      },
+      "divisions": [
+        {
+          "id": 125,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 126,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 127,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 128,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Sąd Okręgowy we Wrocławiu",
+      "type": "REGIONAL",
+      "code": "15502500",
+      "parentCourt": {
+        "id": 1
+      },
+      "divisions": [
+        {
+          "id": 129,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 130,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 131,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 132,
+          "name": "IV Wydział Karny Odwoławczy",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 133,
+          "name": "V Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0002539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 134,
+          "name": "VII Wydział Pracy",
+          "code": "0003515",
+          "type": "Pracy"
+        },
+        {
+          "id": 135,
+          "name": "VIII Wydział Ubezpieczeń Społecznych",
+          "code": "0004018",
+          "type": "Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 136,
+          "name": "IX Wydział Ubezpieczeń Społecznych",
+          "code": "0004518",
+          "type": "Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 137,
+          "name": "X Wydział Gospodarczy",
+          "code": "0005027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 138,
+          "name": "XIII Wydział Cywilny Rodzinny",
+          "code": "0006509",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 139,
+          "name": "XI Wydział Cywilny",
+          "code": "0005503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 140,
+          "name": "XII Wydział Pracy",
+          "code": "0006015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "Sąd Rejonowy w Oleśnicy",
+      "type": "DISTRICT",
+      "code": "15502510",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 141,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 142,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 143,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001509",
+          "type": "Cywilny Rodzinny"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "name": "Sąd Rejonowy w Oławie",
+      "type": "DISTRICT",
+      "code": "15502515",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 144,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 145,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 146,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 147,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Strzelinie",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 148,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Strzelinie",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 149,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Strzelinie",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Sąd Rejonowy w Środzie Śląskiej",
+      "type": "DISTRICT",
+      "code": "15502525",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 150,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 151,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 152,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 153,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Wołowie",
+          "code": "0520003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 154,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Wołowie",
+          "code": "1020006",
+          "type": "Karny"
+        },
+        {
+          "id": 155,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Wołowie",
+          "code": "1520012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "name": "Sąd Rejonowy w Trzebnicy",
+      "type": "DISTRICT",
+      "code": "15502530",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 156,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 157,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 158,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 159,
+          "name": "V Zamiejscowy Wydział Cywilny z siedzibą w Miliczu",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 160,
+          "name": "VI Zamiejscowy Wydział Karny z siedzibą w Miliczu",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 161,
+          "name": "VII Wydział Rodzinny i Nieletnich z siedzibą w Miliczu",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "name": "Sąd Rejonowy dla Wrocławia-Fabrycznej we Wrocławiu",
+      "type": "DISTRICT",
+      "code": "15502540",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 162,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 163,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 164,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 165,
+          "name": "IV Wydział Gospodarczy",
+          "code": "0002027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 166,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 167,
+          "name": "VI Wydział Krajowego Rejestru Sądowego",
+          "code": "0003036",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 168,
+          "name": "VII Wydział Gospodarczy Rejestru Zastawów",
+          "code": "0003533",
+          "type": "Gospodarczy Rejestru Zastawów"
+        },
+        {
+          "id": 169,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 170,
+          "name": "IX Wydział Krajowego Rejestru Sądowego",
+          "code": "0004536",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 171,
+          "name": "X Wydział Karny",
+          "code": "0005006",
+          "type": "Karny"
+        },
+        {
+          "id": 172,
+          "name": "XI Wydział Cywilny",
+          "code": "0005503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 173,
+          "name": "XII Wydział Karny",
+          "code": "0006006",
+          "type": "Karny"
+        },
+        {
+          "id": 174,
+          "name": "XIV Wydział Cywilny",
+          "code": "0007003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 175,
+          "name": "XV Wydział Gospodarczy",
+          "code": "0007527",
+          "type": "Gospodarczy"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "name": "Sąd Rejonowy dla Wrocławia-Krzyków we Wrocławiu",
+      "type": "DISTRICT",
+      "code": "15502545",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 176,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 177,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 178,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 179,
+          "name": "V Wydział Karny",
+          "code": "0002506",
+          "type": "Karny"
+        },
+        {
+          "id": 180,
+          "name": "VI Wydział Cywilny",
+          "code": "0003003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 181,
+          "name": "VII Wydział Karny",
+          "code": "0003506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Sąd Rejonowy dla Wrocławia-Śródmieścia we Wrocławiu",
+      "type": "DISTRICT",
+      "code": "15502550",
+      "parentCourt": {
+        "id": 26
+      },
+      "divisions": [
+        {
+          "id": 182,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 183,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 184,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 185,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 186,
+          "name": "V Wydział Karny",
+          "code": "0002506",
+          "type": "Karny"
+        },
+        {
+          "id": 187,
+          "name": "VI Wydział Karny",
+          "code": "0003006",
+          "type": "Karny"
+        },
+        {
+          "id": 188,
+          "name": "VIII Wydział Cywilny",
+          "code": "0004003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 189,
+          "name": "IX Wydział Cywilny",
+          "code": "0004503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 190,
+          "name": "X Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0005021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 1815,
+          "name": "VII Wydział Cywilny",
+          "code": "0003503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Sąd Apelacyjny w Białymstoku",
+      "type": "APPEAL",
+      "code": "15050000",
+      "parentCourt": null,
+      "divisions": [
+        {
+          "id": 191,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 192,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 193,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "Sąd Okręgowy w Białymstoku",
+      "type": "REGIONAL",
+      "code": "15050500",
+      "parentCourt": {
+        "id": 34
+      },
+      "divisions": [
+        {
+          "id": 194,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 195,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 196,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 197,
+          "name": "IV Wydział Penitencjarny",
+          "code": "0002039",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 198,
+          "name": "V Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 199,
+          "name": "VII Wydział Gospodarczy",
+          "code": "0003527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 200,
+          "name": "VIII Wydział Karny Odwoławczy",
+          "code": "0004006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "Sąd Rejonowy w Białymstoku",
+      "type": "DISTRICT",
+      "code": "15050505",
+      "parentCourt": {
+        "id": 35
+      },
+      "divisions": [
+        {
+          "id": 201,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 202,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 203,
+          "name": "II Wydział Cywilny Sekcja Egzekucyjna",
+          "code": "0001103",
+          "type": "Cywilny"
+        },
+        {
+          "id": 204,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 205,
+          "name": "III Wydział Karny Sekcja ds. Nadzoru nad Postępowaniem Przygotowawczym",
+          "code": "0001606",
+          "type": "Karny"
+        },
+        {
+          "id": 206,
+          "name": "IV Wydział Rodzinny i Nieletnich",
+          "code": "0002012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 207,
+          "name": "V Wydział Rodzinny i Nieletnich",
+          "code": "0002512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 208,
+          "name": "VI Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 209,
+          "name": "VII Wydział Karny",
+          "code": "0003506",
+          "type": "Karny"
+        },
+        {
+          "id": 210,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 211,
+          "name": "XI Wydział Cywilny",
+          "code": "0005503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 212,
+          "name": "XIII Wydział Karny",
+          "code": "0006506",
+          "type": "Karny"
+        },
+        {
+          "id": 213,
+          "name": "XV Wydział Karny",
+          "code": "0007506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "Sąd Rejonowy w Bielsku Podlaskim",
+      "type": "DISTRICT",
+      "code": "15050510",
+      "parentCourt": {
+        "id": 35
+      },
+      "divisions": [
+        {
+          "id": 214,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 215,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 216,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 217,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 218,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Hajnówce",
+          "code": "0523506",
+          "type": "Karny"
+        },
+        {
+          "id": 219,
+          "name": "VIII Zamiejscowy Wydział Karny z siedzibą w Siemiatyczach",
+          "code": "1024006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "name": "Sąd Rejonowy w Sokółce",
+      "type": "DISTRICT",
+      "code": "15050515",
+      "parentCourt": {
+        "id": 35
+      },
+      "divisions": [
+        {
+          "id": 220,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 221,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 222,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 223,
+          "name": "IV Wydział Ksiąg Wieczystych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Sąd Okręgowy w Łomży",
+      "type": "REGIONAL",
+      "code": "15051000",
+      "parentCourt": {
+        "id": 34
+      },
+      "divisions": [
+        {
+          "id": 224,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 225,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 226,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "name": "Sąd Rejonowy w Łomży",
+      "type": "DISTRICT",
+      "code": "15051005",
+      "parentCourt": {
+        "id": 39
+      },
+      "divisions": [
+        {
+          "id": 227,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 228,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 229,
+          "name": "III Wydział Rodzinny",
+          "code": "0001509",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 230,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 233,
+          "name": "VIII Zamiejscowy Wydział Cywilny w Grajewie",
+          "code": "1024003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 234,
+          "name": "IX Zamiejscowy Wydział Karny w Grajewie",
+          "code": "1524506",
+          "type": "Karny"
+        },
+        {
+          "id": 235,
+          "name": "X Zamiejscowy Wydział Rodzinny w Grajewie",
+          "code": "2025009",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 1819,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 2224,
+          "name": "VII Zamiejscowy Wydział Karny w Kolnie",
+          "code": "3520006",
+          "type": "Karny"
+        },
+        {
+          "id": 232,
+          "name": "VII Zamiejscowy Wydział Karny w Kolnie",
+          "code": "0523506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Sąd Rejonowy w Zambrowie",
+      "type": "DISTRICT",
+      "code": "15051010",
+      "parentCourt": {
+        "id": 39
+      },
+      "divisions": [
+        {
+          "id": 236,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 237,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 238,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 239,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 240,
+          "name": "VI Zamiejscowy Wydział Cywilny w Wysokiem Mazowieckiem",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 241,
+          "name": "VII Zamiejscowy Wydział Karny w Wysokiem Mazowieckiem",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 242,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich w Wysokiem Mazowieckiem",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "name": "Sąd Okręgowy w Olsztynie",
+      "type": "REGIONAL",
+      "code": "15051500",
+      "parentCourt": {
+        "id": 34
+      },
+      "divisions": [
+        {
+          "id": 243,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 244,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 245,
+          "name": "III Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 246,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 247,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 248,
+          "name": "VI Wydział Cywilny Rodzinny",
+          "code": "0003009",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 249,
+          "name": "VII Wydział Karny Odwoławczy",
+          "code": "0003506",
+          "type": "Karny"
+        },
+        {
+          "id": 250,
+          "name": "VIII Wydział Wizytacyjny",
+          "code": "0004057",
+          "type": "Wizytacyjny"
+        },
+        {
+          "id": 251,
+          "name": "IX Wydział Cywilny Odwoławczy",
+          "code": "0004503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "name": "Sąd Rejonowy w Bartoszycach",
+      "type": "DISTRICT",
+      "code": "15051505",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 252,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 253,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 254,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 255,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 256,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 257,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Lidzbarku Warmińskim",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 258,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Lidzbarku Warmińskim",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 259,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Lidzbarku Warmińskim",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "name": "Sąd Rejonowy w Giżycku",
+      "type": "DISTRICT",
+      "code": "15051510",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 260,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 261,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 262,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 263,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 264,
+          "name": "V Zamiejscowy Wydział Karny w Węgorzewie",
+          "code": "0522506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "name": "Sąd Rejonowy w Kętrzynie",
+      "type": "DISTRICT",
+      "code": "15051515",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 265,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 266,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 267,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 269,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 2225,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 268,
+          "name": "IV Wydział Pracy",
+          "code": "0002021",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "name": "Sąd Rejonowy w Mrągowie",
+      "type": "DISTRICT",
+      "code": "15051520",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 270,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 271,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 272,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 273,
+          "name": "IV Wydział Ksiąg Wieczystych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 274,
+          "name": "V Zamiejscowy Wydział Cywilny",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 275,
+          "name": "VI Zamiejscowy Wydział Karny",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 276,
+          "name": "VII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 277,
+          "name": "VIII Zamiejscowy Wydział Pracy",
+          "code": "2024015",
+          "type": "Pracy"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "name": "Sąd Rejonowy w Olsztynie",
+      "type": "DISTRICT",
+      "code": "15051525",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 278,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 279,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 280,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 281,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 282,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 283,
+          "name": "VII Wydział Karny",
+          "code": "0003506",
+          "type": "Karny"
+        },
+        {
+          "id": 284,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 285,
+          "name": "IX Wydział Karny",
+          "code": "0004506",
+          "type": "Karny"
+        },
+        {
+          "id": 286,
+          "name": "X Wydział Cywilny",
+          "code": "0005003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 287,
+          "name": "XI Zamiejscowy Wydział Cywilny",
+          "code": "0525503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 288,
+          "name": "XII Zamiejscowy Wydział Karny",
+          "code": "1026006",
+          "type": "Karny"
+        },
+        {
+          "id": 289,
+          "name": "XIII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "1526512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "name": "Sąd Rejonowy w Szczytnie",
+      "type": "DISTRICT",
+      "code": "15051530",
+      "parentCourt": {
+        "id": 42
+      },
+      "divisions": [
+        {
+          "id": 290,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 291,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 292,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 293,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 294,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 295,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Piszu",
+          "code": "0523003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 296,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Piszu",
+          "code": "1023506",
+          "type": "Karny"
+        },
+        {
+          "id": 297,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Piszu",
+          "code": "1524012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "name": "Sąd Okręgowy w Suwałkach",
+      "type": "REGIONAL",
+      "code": "15052000",
+      "parentCourt": {
+        "id": 34
+      },
+      "divisions": [
+        {
+          "id": 298,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 299,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 300,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "name": "Sąd Rejonowy w Augustowie",
+      "type": "DISTRICT",
+      "code": "15052005",
+      "parentCourt": {
+        "id": 49
+      },
+      "divisions": [
+        {
+          "id": 301,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 302,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 303,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 304,
+          "name": "IV Wydział Ksiąg Wieczytych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 305,
+          "name": "V Zamiejscowy Wydział Cywilny z siedzibą w Sejnach",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 306,
+          "name": "VI Zamiejscowy Wydział Karny z siedzibą w Sejnach",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 307,
+          "name": "VII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Sejnach",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "name": "Sąd Rejonowy w Ełku",
+      "type": "DISTRICT",
+      "code": "15052010",
+      "parentCourt": {
+        "id": 49
+      },
+      "divisions": [
+        {
+          "id": 308,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 309,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 310,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 311,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 312,
+          "name": "V Wydział Ksiąg Wieczytych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "name": "Sąd Rejonowy w Olecku",
+      "type": "DISTRICT",
+      "code": "15052015",
+      "parentCourt": {
+        "id": 49
+      },
+      "divisions": [
+        {
+          "id": 313,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 314,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 315,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "name": "Sąd Rejonowy w Suwałkach",
+      "type": "DISTRICT",
+      "code": "15052020",
+      "parentCourt": {
+        "id": 49
+      },
+      "divisions": [
+        {
+          "id": 316,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 317,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 318,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 319,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 320,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 321,
+          "name": "VI Wydział Ksiąg Wieczystych",
+          "code": "0003024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 322,
+          "name": "VII Wydział Karny",
+          "code": "0003506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "name": "Sąd Okręgowy w Ostrołęce",
+      "type": "REGIONAL",
+      "code": "15052500",
+      "parentCourt": {
+        "id": 34
+      },
+      "divisions": [
+        {
+          "id": 323,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 324,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 325,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "name": "Sąd Rejonowy w Ostrołęce",
+      "type": "DISTRICT",
+      "code": "15052505",
+      "parentCourt": {
+        "id": 54
+      },
+      "divisions": [
+        {
+          "id": 326,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 327,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 328,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 329,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 330,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 331,
+          "name": "VI Wydział Ksiąg Wieczystych",
+          "code": "0003024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "name": "Sąd Rejonowy w Ostrowi Mazowieckiej",
+      "type": "DISTRICT",
+      "code": "15052510",
+      "parentCourt": {
+        "id": 54
+      },
+      "divisions": [
+        {
+          "id": 332,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 333,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 334,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 335,
+          "name": "V Wydział Ksiąg Wieczytych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "name": "Sąd Rejonowy w Przasnyszu",
+      "type": "DISTRICT",
+      "code": "15052515",
+      "parentCourt": {
+        "id": 54
+      },
+      "divisions": [
+        {
+          "id": 336,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 337,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 338,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 339,
+          "name": "IV Wydział Ksiąg Wieczytych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "name": "Sąd Rejonowy w Wyszkowie",
+      "type": "DISTRICT",
+      "code": "15052520",
+      "parentCourt": {
+        "id": 54
+      },
+      "divisions": [
+        {
+          "id": 340,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 341,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 342,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 343,
+          "name": "V Zamiejscowy Wydział Cywilny",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 344,
+          "name": "VI Zamiejscowy Wydział Karny",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 345,
+          "name": "VII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "name": "Sąd Apelacyjny w Gdańsku",
+      "type": "APPEAL",
+      "code": "15100000",
+      "parentCourt": null,
+      "divisions": [
+        {
+          "id": 346,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 347,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 348,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 349,
+          "name": "V Wydział Cywilny",
+          "code": "0002503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "name": "Sąd Okręgowy w Bydgoszczy",
+      "type": "REGIONAL",
+      "code": "15100500",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 350,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 351,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 352,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 353,
+          "name": "IV Wydział Karny Odwoławczy",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 354,
+          "name": "V Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0002539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 355,
+          "name": "VI Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 356,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 357,
+          "name": "IX Wydział Wizytacyjny",
+          "code": "0004557",
+          "type": "Wizytacyjny"
+        },
+        {
+          "id": 358,
+          "name": "X Wydział Cywilny Rodzinny",
+          "code": "0005009",
+          "type": "Cywilny Rodzinny"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "name": "Sąd Rejonowy w Bydgoszczy",
+      "type": "DISTRICT",
+      "code": "15100505",
+      "parentCourt": {
+        "id": 60
+      },
+      "divisions": [
+        {
+          "id": 359,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 360,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 361,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 362,
+          "name": "IV Wydział Karny",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 363,
+          "name": "V Wydział Rodzinny i Nieletnich",
+          "code": "0002512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 364,
+          "name": "VI Wydział Rodzinny i Nieletnich",
+          "code": "0003012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 365,
+          "name": "VII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 366,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 367,
+          "name": "X Wydział Ksiąg Wieczystych",
+          "code": "0005024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 368,
+          "name": "XI Wydział Karny",
+          "code": "0005506",
+          "type": "Karny"
+        },
+        {
+          "id": 369,
+          "name": "XII Wydział Cywilny",
+          "code": "0006003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 370,
+          "name": "XIII Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0006536",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 371,
+          "name": "XIV Wydział Karny",
+          "code": "0007006",
+          "type": "Karny"
+        },
+        {
+          "id": 373,
+          "name": "XVI Wydział Karny",
+          "code": "0008006",
+          "type": "Karny"
+        },
+        {
+          "id": 372,
+          "name": "XV Wydział Gospodarczy",
+          "code": "0007527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 1829,
+          "name": "IX Wydział Karny",
+          "code": "0004506",
+          "type": "Karny"
+        },
+        {
+          "id": 2212,
+          "name": "XV Wydział Gospodarczy ds. Upadłościowych i Naprawczych",
+          "code": "0007563",
+          "type": "Upadłościowy"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "name": "Sąd Rejonowy w Inowrocławiu",
+      "type": "DISTRICT",
+      "code": "15100510",
+      "parentCourt": {
+        "id": 60
+      },
+      "divisions": [
+        {
+          "id": 374,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 375,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 376,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 377,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 378,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 379,
+          "name": "VI Wydział Karny",
+          "code": "0003006",
+          "type": "Karny"
+        },
+        {
+          "id": 1830,
+          "name": "VII Zamiejscowy Wydział Cywilny",
+          "code": "3520003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1831,
+          "name": "VIII Zamiejscowy Wydział Karny",
+          "code": "4020006",
+          "type": "Karny"
+        },
+        {
+          "id": 1832,
+          "name": "IX Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "4520012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 1833,
+          "name": "X Zamiejscowy Wydział Ksiąg Wieczystych",
+          "code": "5020024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "name": "Sąd Rejonowy w Szubinie",
+      "type": "DISTRICT",
+      "code": "15100515",
+      "parentCourt": {
+        "id": 60
+      },
+      "divisions": [
+        {
+          "id": 384,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 385,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 386,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 387,
+          "name": "IV Wydział Ksiąg Wieczystych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1834,
+          "name": "IX Zamiejscowy Wydział Cywilny z siedzibą w Żninie",
+          "code": "4520003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1835,
+          "name": "X Zamiejscowy Wydział Karny z siedzibą w Żninie",
+          "code": "5020006",
+          "type": "Karny"
+        },
+        {
+          "id": 1836,
+          "name": "XI Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Żninie",
+          "code": "5520012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "name": "Sąd Rejonowy w Świeciu",
+      "type": "DISTRICT",
+      "code": "15100520",
+      "parentCourt": {
+        "id": 60
+      },
+      "divisions": [
+        {
+          "id": 396,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 397,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 398,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 399,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 400,
+          "name": "V  Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "name": "Sąd Okręgowy w Elblągu",
+      "type": "REGIONAL",
+      "code": "15101000",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 401,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 402,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 403,
+          "name": "III Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 404,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 405,
+          "name": "V Wydział Cywilny Rodzinny",
+          "code": "0002509",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 406,
+          "name": "VI Wydział Karny Odwoławczy",
+          "code": "0003006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "Sąd Rejonowy w Braniewie",
+      "type": "DISTRICT",
+      "code": "15101005",
+      "parentCourt": {
+        "id": 65
+      },
+      "divisions": [
+        {
+          "id": 407,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 408,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 409,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 410,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "name": "Sąd Rejonowy w Elblągu",
+      "type": "DISTRICT",
+      "code": "15101010",
+      "parentCourt": {
+        "id": 65
+      },
+      "divisions": [
+        {
+          "id": 411,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 412,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 413,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 414,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 415,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 416,
+          "name": "VI Wydział Ksiąg Wieczystych",
+          "code": "0003024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 417,
+          "name": "VII Wydział Wykonywania Orzeczeń Sądowych",
+          "code": "0003554",
+          "type": "Wykonawczy"
+        },
+        {
+          "id": 418,
+          "name": "VIII Wydział Karny",
+          "code": "0004006",
+          "type": "Karny"
+        },
+        {
+          "id": 419,
+          "name": "IX Wydział Cywilny",
+          "code": "0004503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1837,
+          "name": "X Wydział Cywilny",
+          "code": "0005003",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "name": "Sąd Rejonowy w Iławie",
+      "type": "DISTRICT",
+      "code": "15101015",
+      "parentCourt": {
+        "id": 65
+      },
+      "divisions": [
+        {
+          "id": 420,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 421,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 422,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 423,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 1838,
+          "name": "VI Zamiejscowy Wydział Cywilny w Nowym Mieście Lubawskim",
+          "code": "3020003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1839,
+          "name": "VII Zamiejscowy Wydział Karny w Nowym Mieście Lubawskim",
+          "code": "3520006",
+          "type": "Karny"
+        },
+        {
+          "id": 1840,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich w Nowym Mieście Lubawskim",
+          "code": "4020012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 1841,
+          "name": "IX Zamiejscowy Wydział Ksiąg Wieczystych w Nowym Mieście Lubawskim",
+          "code": "4520027",
+          "type": "Gospodarczy"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "name": "Sąd Rejonowy w Ostródzie",
+      "type": "DISTRICT",
+      "code": "15101020",
+      "parentCourt": {
+        "id": 65
+      },
+      "divisions": [
+        {
+          "id": 428,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 429,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 430,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 431,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 432,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1842,
+          "name": "VI Zamiejscowy Wydział Ksiąg Wieczystych w Morągu",
+          "code": "3020024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1843,
+          "name": "VII Zamiejscowy Wydział Karny w Morągu",
+          "code": "3520006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "name": "Sąd Okręgowy w Gdańsku",
+      "type": "REGIONAL",
+      "code": "15101500",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 435,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 436,
+          "name": "II Wydział Cywilny Rodzinny",
+          "code": "0001009",
+          "type": "Cywilny Rodzinny"
+        },
+        {
+          "id": 437,
+          "name": "III Wydział Cywilny Odwoławczy",
+          "code": "0001503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 438,
+          "name": "IV Wydział Karny",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 439,
+          "name": "V Wydział Karny Odwoławczy",
+          "code": "0002506",
+          "type": "Karny"
+        },
+        {
+          "id": 440,
+          "name": "VI Wydział Penitencjarny",
+          "code": "0003039",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 441,
+          "name": "VII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 442,
+          "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0004021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 443,
+          "name": "IX Wydział Gospodarczy",
+          "code": "0004527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 444,
+          "name": "X Wydział Wizytacyjny",
+          "code": "0005057",
+          "type": "Wizytacyjny"
+        },
+        {
+          "id": 445,
+          "name": "XI Wydział Wykonawczy",
+          "code": "0005554",
+          "type": "Wykonawczy"
+        },
+        {
+          "id": 446,
+          "name": "XII Wydział Gospodarczy Odwoławczy",
+          "code": "0006027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 447,
+          "name": "XIII Wydział Karny Odwoławczy",
+          "code": "0006506",
+          "type": "Karny"
+        },
+        {
+          "id": 448,
+          "name": "XIV Wydział Karny",
+          "code": "0007006",
+          "type": "Karny"
+        },
+        {
+          "id": 449,
+          "name": "XV Wydział Cywilny",
+          "code": "0007503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 450,
+          "name": "XVI Wydział Cywilny Odwoławczy",
+          "code": "0008003",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "name": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+      "type": "DISTRICT",
+      "code": "15101510",
+      "parentCourt": {
+        "id": 70
+      },
+      "divisions": [
+        {
+          "id": 451,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 452,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 453,
+          "name": "III Wydział Ksiąg Wieczystych",
+          "code": "0001524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 454,
+          "name": "IV Wydział Gospodarczy",
+          "code": "0002027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 455,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 456,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 457,
+          "name": "VII Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0003527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 458,
+          "name": "VIII Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 459,
+          "name": "IX Wydział Gospodarczy Rejestru Zastawów",
+          "code": "0004533",
+          "type": "Gospodarczy Rejestru Zastawów"
+        },
+        {
+          "id": 460,
+          "name": "XI Wydział Karny",
+          "code": "0005506",
+          "type": "Karny"
+        },
+        {
+          "id": 461,
+          "name": "XII Wydział Wykonawczy",
+          "code": "0006054",
+          "type": "Wykonawczy"
+        },
+        {
+          "id": 462,
+          "name": "XIII Cywilny",
+          "code": "0006503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "name": "Sąd Rejonowy w Kwidzynie",
+      "type": "DISTRICT",
+      "code": "15101525",
+      "parentCourt": {
+        "id": 70
+      },
+      "divisions": [
+        {
+          "id": 463,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 464,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 465,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 466,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "name": "Sąd Rejonowy w Malborku",
+      "type": "DISTRICT",
+      "code": "15101530",
+      "parentCourt": {
+        "id": 70
+      },
+      "divisions": [
+        {
+          "id": 467,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 468,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 469,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 470,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 471,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 472,
+          "name": "VII Wydział Wykonywania Orzeczeń",
+          "code": "0003539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "name": "Sąd Rejonowy w Starogardzie Gdańskim",
+      "type": "DISTRICT",
+      "code": "15101540",
+      "parentCourt": {
+        "id": 70
+      },
+      "divisions": [
+        {
+          "id": 473,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 474,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 475,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 476,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "name": "Sąd Okręgowy w Słupsku",
+      "type": "REGIONAL",
+      "code": "15102000",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 477,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 478,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 479,
+          "name": "III Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 480,
+          "name": "IV Wydział Cywilny Odwoławczy",
+          "code": "0002003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 481,
+          "name": "V Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 482,
+          "name": "VI Wydział Karny Odwoławczy",
+          "code": "0003006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "name": "Sąd Rejonowy w Chojnicach",
+      "type": "DISTRICT",
+      "code": "15102005",
+      "parentCourt": {
+        "id": 75
+      },
+      "divisions": [
+        {
+          "id": 483,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 484,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 485,
+          "name": "III Wydział Rodzinny",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 486,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "name": "Sąd Rejonowy w Człuchowie",
+      "type": "DISTRICT",
+      "code": "15102010",
+      "parentCourt": {
+        "id": 75
+      },
+      "divisions": [
+        {
+          "id": 487,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 488,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 489,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 490,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 491,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "name": "Sąd Rejonowy w Lęborku",
+      "type": "DISTRICT",
+      "code": "15102015",
+      "parentCourt": {
+        "id": 75
+      },
+      "divisions": [
+        {
+          "id": 492,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 493,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 494,
+          "name": "III Wydział Rodzinny",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 495,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1856,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Bytowie",
+          "code": "3000003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1857,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Bytowie",
+          "code": "3500006",
+          "type": "Karny"
+        },
+        {
+          "id": 1858,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Bytowie",
+          "code": "4000012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "name": "Sąd Rejonowy w Słupsku",
+      "type": "DISTRICT",
+      "code": "15102020",
+      "parentCourt": {
+        "id": 75
+      },
+      "divisions": [
+        {
+          "id": 496,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 497,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 498,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 499,
+          "name": "V Wydział Pracy i Ubezpieczęń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 500,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 501,
+          "name": "VII Wydział Ksiąg Wieczystych",
+          "code": "0003524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 502,
+          "name": "IX Wydział Cywilny",
+          "code": "0004503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 503,
+          "name": "XIV Wydział Karny",
+          "code": "0007006",
+          "type": "Karny"
+        },
+        {
+          "id": 1859,
+          "name": "XV Zamiejscowy Wydział Cywilny",
+          "code": "7520003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1860,
+          "name": "XVI Zamiejscowy Wydział Karny",
+          "code": "8020006",
+          "type": "Karny"
+        },
+        {
+          "id": 1861,
+          "name": "XVII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "8520012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "name": "Sąd Okręgowy w Toruniu",
+      "type": "REGIONAL",
+      "code": "15102500",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 504,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 505,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 506,
+          "name": "III Wydział Penitencjarny",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 507,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 508,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 509,
+          "name": "VII Wydział Wizytacyjny",
+          "code": "0003557",
+          "type": "Wizytacyjny"
+        },
+        {
+          "id": 510,
+          "name": "VIII Wydział Cywilny Odwoławczy",
+          "code": "0004003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 511,
+          "name": "IX Wydział Karny Odwoławczy",
+          "code": "0004506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "name": "Sąd Rejonowy w Brodnicy",
+      "type": "DISTRICT",
+      "code": "15102505",
+      "parentCourt": {
+        "id": 80
+      },
+      "divisions": [
+        {
+          "id": 512,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 513,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 514,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 515,
+          "name": "IV Wydział Ksiąg Wieczystych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1862,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Golubiu-Dobrzyniu",
+          "code": "3020003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1863,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Golubiu-Dobrzyniu",
+          "code": "3520006",
+          "type": "Karny"
+        },
+        {
+          "id": 1864,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Golubiu-Dobrzyniu",
+          "code": "4020012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "name": "Sąd Rejonowy w Chełmnie",
+      "type": "DISTRICT",
+      "code": "15102510",
+      "parentCourt": {
+        "id": 80
+      },
+      "divisions": [
+        {
+          "id": 516,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 517,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 518,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 1865,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Wąbrzeźnie",
+          "code": "0522503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1866,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Wąbrzeźnie",
+          "code": "1023006",
+          "type": "Karny"
+        },
+        {
+          "id": 1867,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Wąbrzeźnie",
+          "code": "1523512",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "name": "Sąd Rejonowy w Grudziądzu",
+      "type": "DISTRICT",
+      "code": "15102515",
+      "parentCourt": {
+        "id": 80
+      },
+      "divisions": [
+        {
+          "id": 522,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 523,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 524,
+          "name": "III Wydział Rodzinny",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 525,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 526,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 527,
+          "name": "VII Wydział Wykonywania Orzeczeń",
+          "code": "0003539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "name": "Sąd Rejonowy w Toruniu",
+      "type": "DISTRICT",
+      "code": "15102520",
+      "parentCourt": {
+        "id": 80
+      },
+      "divisions": [
+        {
+          "id": 528,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 529,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 530,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 531,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 532,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 533,
+          "name": "VI Wydział Ksiąg Wieczystych",
+          "code": "0003024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 534,
+          "name": "VII Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0003536",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 535,
+          "name": "VIII Wydział Karny",
+          "code": "0004006",
+          "type": "Karny"
+        },
+        {
+          "id": 536,
+          "name": "IX Wydział Wykonywania Orzeczeń",
+          "code": "0004539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 537,
+          "name": "X Wydział Cywilny",
+          "code": "0005003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 538,
+          "name": "XI Wydział Cywilny",
+          "code": "0005503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 539,
+          "name": "XII Wydział Karny",
+          "code": "0006006",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "name": "Sąd Okręgowy we Włocławku",
+      "type": "REGIONAL",
+      "code": "15103000",
+      "parentCourt": {
+        "id": 59
+      },
+      "divisions": [
+        {
+          "id": 540,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 541,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 542,
+          "name": "III Wydział Penitencjarny",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 543,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 544,
+          "name": "V Wydział Cywilny Rodzinny",
+          "code": "0002509",
+          "type": "Cywilny Rodzinny"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "name": "Sąd Rejonowy w Aleksandrowie Kujawskim",
+      "type": "DISTRICT",
+      "code": "15103005",
+      "parentCourt": {
+        "id": 85
+      },
+      "divisions": [
+        {
+          "id": 545,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 546,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 547,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 548,
+          "name": "IV Wydział Ksiąg Wieczystych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1901,
+          "name": "V Zamiejscowy Wydział Cywilny",
+          "code": "2520003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1902,
+          "name": "VI Zamiejscowy Wydział Karny",
+          "code": "3020006",
+          "type": "Karny"
+        },
+        {
+          "id": 1903,
+          "name": "VII Zamiejscowy Wydział Rodzinny i Nieletnich",
+          "code": "3520012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "name": "Sąd Rejonowy w Lipnie",
+      "type": "DISTRICT",
+      "code": "15103010",
+      "parentCourt": {
+        "id": 85
+      },
+      "divisions": [
+        {
+          "id": 549,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 550,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 551,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 552,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 1904,
+          "name": "VI Zamiejscowy Wydział Cywilny z siedzibą w Rypinie",
+          "code": "3020003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 1905,
+          "name": "VII Zamiejscowy Wydział Karny z siedzibą w Rypinie",
+          "code": "3520006",
+          "type": "Karny"
+        },
+        {
+          "id": 1906,
+          "name": "VIII Zamiejscowy Wydział Rodzinny i Nieletnich z siedzibą w Rypinie",
+          "code": "4020012",
+          "type": "Rodzinny i Nieletnich"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "name": "Sąd Rejonowy we Włocławku",
+      "type": "DISTRICT",
+      "code": "15103015",
+      "parentCourt": {
+        "id": 85
+      },
+      "divisions": [
+        {
+          "id": 553,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 554,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 555,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 556,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 557,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 558,
+          "name": "VI Wydział Ksiąg Wieczystych",
+          "code": "0003024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "name": "Sąd Apelacyjny w Katowicach",
+      "type": "APPEAL",
+      "code": "15150000",
+      "parentCourt": null,
+      "divisions": [
+        {
+          "id": 559,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 560,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 561,
+          "name": "III Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0001521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 562,
+          "name": "V Wydział Cywilny",
+          "code": "0002503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "name": "Sąd Okręgowy w Bielsku-Białej",
+      "type": "REGIONAL",
+      "code": "15150500",
+      "parentCourt": {
+        "id": 89
+      },
+      "divisions": [
+        {
+          "id": 563,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 564,
+          "name": "II Wydział Cywilny Odwoławczy",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 565,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 566,
+          "name": "IV Wydział Penitencjarny",
+          "code": "0002039",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 567,
+          "name": "VI Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 568,
+          "name": "VII Wydział Karny Odwoławczy",
+          "code": "0003506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "name": "Sąd Rejonowy w Bielsku-Białej",
+      "type": "DISTRICT",
+      "code": "15150505",
+      "parentCourt": {
+        "id": 90
+      },
+      "divisions": [
+        {
+          "id": 569,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 570,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 571,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 572,
+          "name": "IV Wydział Rodzinny i Nieletnich",
+          "code": "0002012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 573,
+          "name": "V Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 574,
+          "name": "VI Wydział Gospodarczy",
+          "code": "0003027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 575,
+          "name": "VII Wydział Ksiąg Wieczystych",
+          "code": "0003524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 576,
+          "name": "VIII Wydział Krajowego Rejestru Sądowego",
+          "code": "0004036",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 577,
+          "name": "IX Wydział Karny",
+          "code": "0004506",
+          "type": "Karny"
+        },
+        {
+          "id": 578,
+          "name": "X Wydział Cywilny",
+          "code": "0005003",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "name": "Sąd Rejonowy w Cieszynie",
+      "type": "DISTRICT",
+      "code": "15150510",
+      "parentCourt": {
+        "id": 90
+      },
+      "divisions": [
+        {
+          "id": 579,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 580,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 581,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 582,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 583,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "name": "Sąd Rejonowy w Żywcu",
+      "type": "DISTRICT",
+      "code": "15150515",
+      "parentCourt": {
+        "id": 90
+      },
+      "divisions": [
+        {
+          "id": 585,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 586,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 587,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 588,
+          "name": "V Wydział Ksiąg Wieczystych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 584,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "name": "Sąd Okręgowy w Częstochowie",
+      "type": "REGIONAL",
+      "code": "15151000",
+      "parentCourt": {
+        "id": 89
+      },
+      "divisions": [
+        {
+          "id": 589,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 590,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 591,
+          "name": "III Wydział Penitencjarny",
+          "code": "0001539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        },
+        {
+          "id": 592,
+          "name": "IV Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0002021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 593,
+          "name": "V Wydział Gospodarczy",
+          "code": "0002527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 594,
+          "name": "VI Wydział Cywilny Odwoławczy",
+          "code": "0003003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 595,
+          "name": "VII Wydział Karny Odwoławczy",
+          "code": "0003506",
+          "type": "Karny"
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "name": "Sąd Rejonowy w Częstochowie",
+      "type": "DISTRICT",
+      "code": "15151005",
+      "parentCourt": {
+        "id": 94
+      },
+      "divisions": [
+        {
+          "id": 597,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 598,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 599,
+          "name": "IV Wydział Karny",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 600,
+          "name": "V Wydział Rodzinny i Nieletnich",
+          "code": "0002512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 601,
+          "name": "VI Wydział Rodzinny i Nieletnich",
+          "code": "0003012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 602,
+          "name": "VII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 603,
+          "name": "VIII Wydział Gospodarczy",
+          "code": "0004027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 604,
+          "name": "IX Wydział Ksiąg Wieczystych",
+          "code": "0004524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 605,
+          "name": "XI Wydział Karny",
+          "code": "0005506",
+          "type": "Karny"
+        },
+        {
+          "id": 606,
+          "name": "XII Wydział Cywilny",
+          "code": "0006003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 607,
+          "name": "XIV Wydział Karny Wykonawczy",
+          "code": "0007006",
+          "type": "Karny"
+        },
+        {
+          "id": 608,
+          "name": "XV Wydział Cywilny Wykonawczy",
+          "code": "0007503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 609,
+          "name": "XVI Wydział Karny",
+          "code": "0008006",
+          "type": "Karny"
+        },
+        {
+          "id": 610,
+          "name": "XVII Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0008536",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 596,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "name": "Sąd Rejonowy w Lublińcu",
+      "type": "DISTRICT",
+      "code": "15151010",
+      "parentCourt": {
+        "id": 94
+      },
+      "divisions": [
+        {
+          "id": 611,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 612,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 613,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 614,
+          "name": "IV Wydział Ksiąg Wieczytych",
+          "code": "0002024",
+          "type": "Ksiąg Wieczystych"
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "name": "Sąd Rejonowy w Myszkowie",
+      "type": "DISTRICT",
+      "code": "15151015",
+      "parentCourt": {
+        "id": 94
+      },
+      "divisions": [
+        {
+          "id": 615,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 616,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 617,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 618,
+          "name": "IV Wydział Sądu Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 619,
+          "name": "V Wydział Ksiąg Wieczytych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 620,
+          "name": "VI Wydział Wykonywania Orzeczeń",
+          "code": "0003054",
+          "type": "Wykonawczy"
+        }
+      ]
+    },
+    {
+      "id": 98,
+      "name": "Sąd Rejonowy w Zawierciu",
+      "type": "DISTRICT",
+      "code": "15151020",
+      "parentCourt": {
+        "id": 94
+      },
+      "divisions": [
+        {
+          "id": 621,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 622,
+          "name": "II Wydział Karny",
+          "code": "0001006",
+          "type": "Karny"
+        },
+        {
+          "id": 623,
+          "name": "III Wydział Rodzinny i Nieletnich",
+          "code": "0001512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 624,
+          "name": "IV Wydział Pracy",
+          "code": "0002015",
+          "type": "Pracy"
+        },
+        {
+          "id": 625,
+          "name": "V Wydział Ksiąg Wieczytych",
+          "code": "0002524",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 626,
+          "name": "VI Wydział Karny",
+          "code": "0003006",
+          "type": "Karny"
+        },
+        {
+          "id": 627,
+          "name": "VII Wydział Wykonywania Orzeczeń",
+          "code": "0003554",
+          "type": "Wykonawczy"
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "name": "Sąd Okręgowy w Gliwicach",
+      "type": "REGIONAL",
+      "code": "15151500",
+      "parentCourt": {
+        "id": 89
+      },
+      "divisions": [
+        {
+          "id": 628,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 629,
+          "name": "II Zamiejscowy Wydział Cywilny",
+          "code": "0511003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 630,
+          "name": "III Wydział Cywilny Odwoławczy",
+          "code": "0001503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 631,
+          "name": "IV Wydział Karny",
+          "code": "0002006",
+          "type": "Karny"
+        },
+        {
+          "id": 632,
+          "name": "V Zamiejscowy Wydział Karny",
+          "code": "1012506",
+          "type": "Karny"
+        },
+        {
+          "id": 633,
+          "name": "VI Wydział Karny Odwoławczy",
+          "code": "0003006",
+          "type": "Karny"
+        },
+        {
+          "id": 635,
+          "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0004021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 636,
+          "name": "IX Zamiejscowy Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "1514521",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 637,
+          "name": "X Wydział Gospodarczy",
+          "code": "0005027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 638,
+          "name": "XI Wydział Wizytacyjny",
+          "code": "0005557",
+          "type": "Wizytacyjny"
+        },
+        {
+          "id": 639,
+          "name": "XII Wydział Cywilny",
+          "code": "0006003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 2213,
+          "name": "V Zamiejscowy Wydział Karny. Sekcja Odwoławcza",
+          "code": "1012706",
+          "type": "Karny"
+        },
+        {
+          "id": 634,
+          "name": "VII Wydział Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych",
+          "code": "0003539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "name": "Sąd Rejonowy w Gliwicach",
+      "type": "DISTRICT",
+      "code": "15151505",
+      "parentCourt": {
+        "id": 99
+      },
+      "divisions": [
+        {
+          "id": 640,
+          "name": "I Wydział Cywilny",
+          "code": "0000503",
+          "type": "Cywilny"
+        },
+        {
+          "id": 641,
+          "name": "II Wydział Cywilny",
+          "code": "0001003",
+          "type": "Cywilny"
+        },
+        {
+          "id": 642,
+          "name": "III Wydział Karny",
+          "code": "0001506",
+          "type": "Karny"
+        },
+        {
+          "id": 643,
+          "name": "IV Wydział Rodzinny i Nieletnich",
+          "code": "0002012",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 644,
+          "name": "V Wydział Rodzinny i Nieletnich",
+          "code": "0002512",
+          "type": "Rodzinny i Nieletnich"
+        },
+        {
+          "id": 645,
+          "name": "VI Wydział Pracy i Ubezpieczeń Społecznych",
+          "code": "0003021",
+          "type": "Pracy i Ubezpieczeń Społecznych"
+        },
+        {
+          "id": 646,
+          "name": "VII Wydział Gospodarczy",
+          "code": "0003527",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 647,
+          "name": "VIII Wydział Ksiąg Wieczystych",
+          "code": "0004024",
+          "type": "Ksiąg Wieczystych"
+        },
+        {
+          "id": 648,
+          "name": "IX Wydział Karny",
+          "code": "0004506",
+          "type": "Karny"
+        },
+        {
+          "id": 649,
+          "name": "X Wydział Gospodarczy Krajowego Rejestru Sądowego",
+          "code": "0005036",
+          "type": "Krajowego Rejestru Sądowego"
+        },
+        {
+          "id": 650,
+          "name": "XII Wydział Gospodarczy dla spraw Upadłościowych i Naprawczych",
+          "code": "0006027",
+          "type": "Gospodarczy"
+        },
+        {
+          "id": 651,
+          "name": "XIII Wydział Wykonywania Orzeczeń Karnych",
+          "code": "0006539",
+          "type": "Penitencjarny i Nadzoru nad Wykonywaniem Orzeczeń Karnych"
+        }
+      ]
+    }
+  ],
+  "queryTemplate": {
+    "pageSize": {
+      "value": 100,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 10 and less or equal to 100"
+    },
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    }
+  },
+  "info": null
+}

@@ -1,0 +1,486 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=10&pageNumber=0&courtType=COMMON&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=10&pageNumber=1&courtType=COMMON&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    }
+  ],
+  "items": [
+    {
+      "id": 31345,
+      "href": "https://www.saos.org.pl/api/judgments/31345",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "I ACa 772/13"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        },
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": []
+        }
+      ],
+      "textContent": "Sygn. akt I ACa 772/13 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 4 grudnia 3013 roku Sąd Apelacyjny w Łodzi I Wydział Cywilny w składzie: Przewodniczący: SSA xxxxxxxxxx xxxxxx Sędziowie:SSA xxxxx xxxxxxxx (spr.) SSA xxxxxxxx xxxxxxxx Protokolant:st. sekr. sądowy xxxxx xxxxxxxxxx po rozpoznaniu w dniu 4 grudnia 2013r. w Łodzi na rozprawie sprawy z powództw P. S. oraz J. S. przeciwko (...) Spółce Akcyjnej z siedzibą w W. o zadośćuczynienie na skutek apelacji powodów i pozwanego od wyroku łącznego Sądu Okręgowego w Sieradzu z dnia 8 marca 2013 roku sygn. akt I C 186/12 I) z apelacji powoda P. S. zmienia zaskarżony wyrok w punktach 2 i 5 w ten sposób, że ponad zasądzoną w punkcie 1 kwotę 20.000 złotych zasądza od pozwanego (...) Spółki Akcyjnej z siedzibą w W. na rzecz powoda P. S. dalszą",
+      "keywords": [
+        "dobra osobiste",
+        "zadośćuczynienie"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/993",
+        "id": 993,
+        "name": "I Wydział Cywilny",
+        "code": "0000503",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/154",
+          "id": 154,
+          "code": "15250000",
+          "name": "Sąd Apelacyjny w Łodzi"
+        }
+      },
+      "judgmentDate": "3013-12-04"
+    },
+    {
+      "id": 227221,
+      "href": "https://www.saos.org.pl/api/judgments/227221",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "II K 84/16"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt: II K 84/16 3 Ds. 8.2016 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 14 kwietnia 21016 r. Sąd Rejonowy w Toruniu II Wydział Karny w składzie: Przewodniczący: Sędzia SR xxxxxx xxxxxxxx Protokolant: st. sekr. sąd. xxxxxx xxxxxxxx w obecności prokuratora xxxxxxxxxxx xxxxxxxxx xxxxx xxxxxxx-xxxxxx xxxxx xxxxxxx po rozpoznaniu dnia 10.03.2016r., 14.04.2016r. sprawy: R. I. s. F. i M. z domu H., ur. (...) w T. oskarżonego o to, że: w dniu 9 stycznia 2016 r., około godz. 11:40 kierował pojazdem marki V. (...) o nr rej.(...)po drodze publicznej w miejscowości P., ul. (...), gm. Ł. znajdując się w stanie nietrzeźwości, tj. 0,37 mg/1, 0,30 mg/1, 0,31 mg/1 alkoholu w wydychanym powietrzu, przy czym czynu tego dopuścił się po uprzednim prawomocnym skazaniu za prowadzenie pojazdu mechaniczn",
+      "keywords": [
+        "środki karne"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/529",
+        "id": 529,
+        "name": "II Wydział Karny",
+        "code": "0001006",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/84",
+          "id": 84,
+          "code": "15102520",
+          "name": "Sąd Rejonowy w Toruniu"
+        }
+      },
+      "judgmentDate": "2101-04-14"
+    },
+    {
+      "id": 547790,
+      "href": "https://www.saos.org.pl/api/judgments/547790",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "I ACa 1027/23"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "sygn. akt I ACa 1027/23 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ dnia 16 grudnia 2025 r. Sąd Apelacyjny w Krakowie – I Wydział Cywilny w składzie: Przewodniczący: SSA xxxxx xxxxxx Sędziowie: - Protokolant: - po rozpoznaniu w dniu 16 grudnia 2025 r. w Krakowie na posiedzeniu niejawnym sprawy z powództwa (...) spółki z o.o. we L. oraz (...) S.A. w S. przeciwko Narodowemu Instytutowi (...) (...) - Państwowemu Instytutowi Badawczemu w L. o zapłatę na skutek apelacji powodów od wyroku Sądu Okręgowego w Krakowie z dnia 14 lutego 2023 r. sygn. akt I C 476/22 1.  zmienia zaskarżony wyrok w pkt IV w ten sposób, że zasądzoną w tym punkcie kwotę 22.169 zł podwyższa do kwoty 25.769 zł (dwadzieścia pięć tysięcy siedemset sześćdziesiąt dziewięć złotych); 2.  w pozostałej części apelację oddala; 3.  zas",
+      "keywords": [
+        "odsetki"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/816",
+        "id": 816,
+        "name": "I Wydział Cywilny",
+        "code": "0000503",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/123",
+          "id": 123,
+          "code": "15200000",
+          "name": "Sąd Apelacyjny w Krakowie"
+        }
+      },
+      "judgmentDate": "2026-12-16"
+    },
+    {
+      "id": 543475,
+      "href": "https://www.saos.org.pl/api/judgments/543475",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "IV Ka 389/25"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [],
+      "textContent": "UZASADNIENIE Formularz UK 2 Sygnatura akt IV Ka 389/25 Załącznik dołącza się w każdym przypadku. Podać liczbę załączników: 1 1.  CZĘŚĆ WSTĘPNA 1.1.  Oznaczenie wyroku sądu pierwszej instancji Wyrok Sądu Rejonowego w Radomsku wydany w dniu 13 stycznia 2025 roku w sprawie o sygn. akt II K 451/24. 1.2.  Podmiot wnoszący apelację ☐ oskarżyciel publiczny albo prokurator w sprawie o wydanie wyroku łącznego ☐ oskarżyciel posiłkowy ☐ oskarżyciel prywatny ☒ obrońca ☐ oskarżony albo skazany w sprawie o wydanie wyroku łącznego ☐ inny 1.3.  Granice zaskarżenia 1.1.1.  Kierunek i zakres zaskarżenia ☒ na korzyść ☐ na niekorzyść ☒ w całości ☐ w części ☒co do winy ☒co do kary ☐co do środka karnego lub innego rozstrzygnięcia albo ustalenia 1.1.2.  Podniesione zarzuty Zaznaczyć zarzuty wskazane przez strony",
+      "keywords": [
+        "oszustwo"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1083",
+        "id": 1083,
+        "name": "IV Wydział Karny Odwoławczy",
+        "code": "0002006",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/167",
+          "id": 167,
+          "code": "15251500",
+          "name": "Sąd Okręgowy w Piotrkowie Trybunalskim"
+        }
+      },
+      "judgmentDate": "2026-11-28"
+    },
+    {
+      "id": 554922,
+      "href": "https://www.saos.org.pl/api/judgments/554922",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "II Ca 2832/22"
+        }
+      ],
+      "judgmentType": "DECISION",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygnatura akt II Ca 2832/22 POSTANOWIENIE Dnia 27 października 2026 roku Sąd Okręgowy w Krakowie, II Wydział Cywilny - Odwoławczy w składzie następującym: Przewodniczący: Sędzia xxxxx xxxxxxxx Protokolant: xxxxxxx xxxxxxxxxxx po rozpoznaniu w dniu 13 października 2026 roku w Krakowie na rozprawie sprawy z wniosku W. B. przy uczestnictwie (...) spółki z ograniczoną odpowiedzialnością w R. o ustanowienie służebności przesyłu na skutek apelacji uczestnika od postanowienia Sądu Rejonowego dla Krakowa – Krowodrzy w Krakowie z 27 września 2022 roku sygnatura akt I Ns 1448/17/K postanawia: 1.  zmienić punkty I i II zaskarżonego postanowienia w ten sposób, że nadać im brzmienie: „I. ustanowić na nieruchomości, składającej się z (...), położonej w M., powiat (...), jedn. ewid. R., obręb nr (...) M.",
+      "keywords": [],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/877",
+        "id": 877,
+        "name": "II Wydział Cywilny Odwołaczy",
+        "code": "0001003",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/133",
+          "id": 133,
+          "code": "15201000",
+          "name": "Sąd Okręgowy w Krakowie"
+        }
+      },
+      "judgmentDate": "2026-10-27"
+    },
+    {
+      "id": 554756,
+      "href": "https://www.saos.org.pl/api/judgments/554756",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "IX U 113/20"
+        }
+      ],
+      "judgmentType": "REGULATION",
+      "judges": [],
+      "textContent": "Sygnatura akt IX U 113/20 UZASADNIENIE Decyzją z dnia 2 grudnia 2019 r., nr (...), Zakład Ubezpieczeń Społecznych Oddział w U. stwierdził, że J. Z. jako pracownik u płatnika składek (...) Sp. z o.o. w U. nie podlega obowiązkowo ubezpieczeniom: emerytalnemu, rentowym, chorobowemu oraz wypadkowemu od 2 listopada 2018 r. W uzasadnieniu decyzji wskazano, iż umowa o pracę została zawarta pomiędzy stronami dla pozoru - nie w celu faktycznej realizacji wynikającego z treści stosunku pracy, a jedynie dla uzyskania przez ubezpieczoną świadczeń z ubezpieczenia społecznego, w związku z ciążą i macierzyństwem. Wobec tego powyższa umowa, jako zawarta dla pozoru jest nieważna. Odwołanie od powyższej decyzji do Sądu Okręgowego w Szczecinie wniosła ubezpieczona J. Z.. Następnie decyzją z 10 grudnia 2019 r",
+      "keywords": [
+        "zasiłek chorobowy",
+        "zasiłek macierzyński"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1668",
+        "id": 1668,
+        "name": "IX Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004521",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/272",
+          "id": 272,
+          "code": "15551530",
+          "name": "Sąd Rejonowy Szczecin-Centrum w Szczecinie"
+        }
+      },
+      "judgmentDate": "2026-10-23"
+    },
+    {
+      "id": 554971,
+      "href": "https://www.saos.org.pl/api/judgments/554971",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII P 410/23"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [],
+      "textContent": "Sygn. akt VIII P 410/23 UZASADNIENIE wyroku z dnia 11 czerwca 2026 roku W pozwie z dnia 17 lipca 2023 roku, skierowanym przeciwko Urzędowi (...) (dalej: „Urząd” lub „pozwany”), powódka (...) wniosła odwołanie od oświadczenia pozwanego w przedmiocie wypowiedzenia umowy o pracę, domagając się uznania wypowiedzenia za bezskuteczne, a w wypadku upływu okresu wypowiedzenia - przywrócenia do pracy oraz wnosząc o zasądzenie na jej rzecz kosztów procesu według norm przepisanych (pozew k. 3-22). W piśmie procesowym z dnia 23 listopada 2023 roku (data nadania pisma na poczcie) oświadczyła, że w miejsce roszczenia o przywrócenie do pracy domaga się odszkodowania kwocie 22.644 (3 x 7.548) złote (pismo k. 199-201). Odpowiadając na pozew Urząd, działając za pośrednictwem pełnomocnika będącego radcą praw",
+      "keywords": [],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1756",
+        "id": 1756,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/282",
+          "id": 282,
+          "code": "15450530",
+          "name": "Sąd Rejonowy dla Warszawy-Śródmieścia w Warszawie"
+        }
+      },
+      "judgmentDate": "2026-10-23"
+    },
+    {
+      "id": 554688,
+      "href": "https://www.saos.org.pl/api/judgments/554688",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2784/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 2784/26 UZASADNIENIE Decyzją z dnia 30.06.2026 roku Prezes Kasy Rolniczego Ubezpieczenia Społecznego Oddział (...) w E. na podstawie art. 36 ust. 1 pkt 1, art. 3a, art. 5a, art. 8 ust. 1, 2 i 2a, art. 17 ust. 1 i 3, art. 39 ust. 4 ustawy z dnia 20 grudnia 1990 r. o ubezpieczeniu społecznym rolników (Dz.U. z 2025 r. poz. 1770) stwierdził ustanie ubezpieczenia społecznego rolników w zakresie: I. ubezpieczenia wypadkowego, chorobowego i macierzyńskiego dla: 1) A. W. od 2018-05-24 do 2019-02-17 oraz od 2021-04-01 do nadal II. ubezpieczenia emerytalno-rentowego dla: 1)  A. W. od 2018-05-24 do 2019-02-17 oraz od 2021-04-01 do nadal oraz ustanie obowiązku opłacania składek za ww. osobę od wymienionego dnia. W uzasadnieniu KRUS wskazał, że w wyniku przeprowadzonego postępowania wy",
+      "keywords": [
+        "podleganie ubezpieczeniom społecznym"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    },
+    {
+      "id": 554709,
+      "href": "https://www.saos.org.pl/api/judgments/554709",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII Ua 43/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII Ua 43/26 UZASADNIENIE Zaskarżonym wyrokiem z dnia 27 kwietnia 2026 roku Sąd Rejonowy dla Łodzi - Śródmieścia w Łodzi, X Wydział Pracy i Ubezpieczeń Społecznych w sprawie sygn. akt XU 142/26 z wniosku S. L. (1) przeciwko Zakładowi Ubezpieczeń Społecznych Oddział w L. o zasiłek chorobowy na skutek odwołania S. L. (2) od decyzji Zakładu Ubezpieczeń Społecznych Oddział w L. z dnia 19 grudnia 2025 roku znak (...) (...) (...) (...) (...) zmienił zaskarżoną decyzję i przyznał S. L. (1) prawo do zasiłku chorobowego za okres od dnia 2 czerwca 2025 roku do dnia 29 września 2025 roku, oddalił odwołanie w pozostałym zakresie. Powyższe orzeczenie zapadło w oparciu o następujące ustalenia faktyczne S. L. (1) jest osobą prowadzącą działalność gospodarczą i z tego tytułu podlega dobrowolnem",
+      "keywords": [
+        "zasiłek chorobowy"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    },
+    {
+      "id": 554677,
+      "href": "https://www.saos.org.pl/api/judgments/554677",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 2330/26"
+        }
+      ],
+      "judgmentType": "REASONS",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "UZASADNIENIE Decyzją z dnia 28 kwietnia 2026 r. Zakład Ubezpieczeń Społecznych (...) Oddział w S. - wykonując wyrok Sądu Okręgowego z dnia 18 lutego 2026 r. ustalił dla D. E. prawo do renty socjalnej od 1 sierpnia 2024 r., tj. od daty wskazanej w wyroku Sądu do 9 września 2024 r. W uzasadnieniu organ rentowy podał, że renta socjalna nie przysługuje ubezpieczonej od 10 września 2024 r., ponieważ pobiera ona rentę z tytułu niezdolności do pracy. Podniósł, że zgodnie z art. 7 ustawy z dnia 27 czerwca 2023 r. o rencie socjalnej - renta socjalna nie przysługuje osobie uprawnionej do emerytury, uposażenia w stanie spoczynku, renty z tytułu niezdolności do pracy, renty inwalidzkiej lub pobierającej świadczenie o charakterze rentowym z instytucji zagranicznych, renty strukturalnej, a także osobie ",
+      "keywords": [
+        "renta socjalna"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2026-10-22"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 10,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "JUDGMENT_DATE",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "DESC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "COMMON",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": null,
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 474863
+  }
+}

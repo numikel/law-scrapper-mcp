@@ -1,0 +1,176 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=0&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateFrom=2022-01-01&judgmentDateTo=2022-12-31&judgmentTypes=SENTENCE&sortingField=DATABASE_ID&sortingDirection=ASC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=1&pageNumber=1&courtType=COMMON&ccDivisionName=VIII%20Wydzia%C5%82%20Pracy%20i%20Ubezpiecze%C5%84%20Spo%C5%82ecznych&judgmentDateFrom=2022-01-01&judgmentDateTo=2022-12-31&judgmentTypes=SENTENCE&sortingField=DATABASE_ID&sortingDirection=ASC"
+    }
+  ],
+  "items": [
+    {
+      "id": 453661,
+      "href": "https://www.saos.org.pl/api/judgments/453661",
+      "courtType": "COMMON",
+      "courtCases": [
+        {
+          "caseNumber": "VIII U 3010/20"
+        }
+      ],
+      "judgmentType": "SENTENCE",
+      "judges": [
+        {
+          "name": "[redacted]",
+          "function": null,
+          "specialRoles": [
+            "PRESIDING_JUDGE"
+          ]
+        }
+      ],
+      "textContent": "Sygn. akt VIII U 3010/20 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 4 stycznia 2022 roku Sąd Okręgowy w Łodzi VIII Wydział Pracy i Ubezpieczeń Społecznych w następującym składzie: Przewodniczący: x. x.x. xxxxxxxxx xxxxx Protokolant stażysta xxxxxx xxxxxx po rozpoznaniu na rozprawie w dniu 9 grudnia 2021 roku w Ł. sprawy z odwołania : A. K. przeciwko : Zakładowi Ubezpieczeń Społecznych I Oddziałowi w Ł. z udziałem zainteresowanego: S. M. prowadzącego firmę (...).-Q. (...) Alarmowe w O. na skutek odwołania od decyzji Zakładu Ubezpieczeń Społecznych I Oddziału Ł. z dnia 20 października 2020 roku w sprawie nr 53/2020 znak (...)- (...) RWA: (...) - (...)53 (...): (...) o ustalenie podlegania ubezpieczeniom społecznym 1.  zmienia zaskarżoną decyzję i ustala, że A. K. podlega, od 1 lipca 2020",
+      "keywords": [
+        "podleganie ubezpieczeniom społecznym"
+      ],
+      "division": {
+        "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+        "id": 1023,
+        "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+        "code": "0004021",
+        "court": {
+          "href": "https://www.saos.org.pl/api/commonCourts/159",
+          "id": 159,
+          "code": "15251000",
+          "name": "Sąd Okręgowy w Łodzi"
+        }
+      },
+      "judgmentDate": "2022-01-04"
+    }
+  ],
+  "queryTemplate": {
+    "pageNumber": {
+      "value": 0,
+      "description": "Represents current page number",
+      "allowedValues": "Not negative integer"
+    },
+    "pageSize": {
+      "value": 1,
+      "description": "Represents maximum number of items on the page",
+      "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+    },
+    "sortingField": {
+      "value": "DATABASE_ID",
+      "description": "Represents the field by which you want to sort a list of items",
+      "allowedValues": [
+        "DATABASE_ID",
+        "JUDGMENT_DATE",
+        "REFERENCING_JUDGMENTS_COUNT",
+        "MAXIMUM_MONEY_AMOUNT",
+        "CC_COURT_TYPE",
+        "CC_COURT_ID",
+        "CC_COURT_CODE",
+        "CC_COURT_NAME",
+        "CC_COURT_DIVISION_ID",
+        "CC_COURT_DIVISION_CODE",
+        "CC_COURT_DIVISION_NAME",
+        "SC_JUDGMENT_FORM_ID",
+        "SC_PERSONNEL_TYPE",
+        "SC_COURT_DIVISION_ID",
+        "SC_COURT_DIVISION_NAME",
+        "SC_COURT_DIVISIONS_CHAMBER_ID",
+        "SC_COURT_DIVISIONS_CHAMBER_NAME"
+      ]
+    },
+    "sortingDirection": {
+      "value": "ASC",
+      "description": "Represents the direction in which to sort a list of items",
+      "allowedValues": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "all": null,
+    "legalBase": null,
+    "referencedRegulation": null,
+    "lawJournalEntryCode": {
+      "value": null,
+      "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+      "allowedValues": "String in format : 'year/entry_number'"
+    },
+    "judgeName": null,
+    "caseNumber": null,
+    "courtType": {
+      "value": "COMMON",
+      "description": "Represents judgment's court type",
+      "allowedValues": [
+        "COMMON",
+        "SUPREME",
+        "CONSTITUTIONAL_TRIBUNAL",
+        "NATIONAL_APPEAL_CHAMBER",
+        "ADMINISTRATIVE"
+      ]
+    },
+    "ccCourtType": {
+      "value": null,
+      "description": "Represents common court type",
+      "allowedValues": [
+        "APPEAL",
+        "REGIONAL",
+        "DISTRICT"
+      ]
+    },
+    "ccCourtId": null,
+    "ccCourtCode": null,
+    "ccCourtName": null,
+    "ccDivisionId": null,
+    "ccDivisionCode": null,
+    "ccDivisionName": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+    "ccIncludeDependentCourtJudgments": null,
+    "scPersonnelType": {
+      "value": null,
+      "description": "Represents supreme court judgment's personnel type",
+      "allowedValues": [
+        "ONE_PERSON",
+        "THREE_PERSON",
+        "FIVE_PERSON",
+        "SEVEN_PERSON",
+        "ALL_COURT",
+        "ALL_CHAMBER",
+        "JOINED_CHAMBERS"
+      ]
+    },
+    "scJudgmentForm": null,
+    "scChamberId": null,
+    "scChamberName": null,
+    "scDivisionId": null,
+    "scDivisionName": null,
+    "judgmentTypes": {
+      "value": [
+        "SENTENCE"
+      ],
+      "description": "Represents list of judgments types",
+      "allowedValues": [
+        "DECISION",
+        "RESOLUTION",
+        "SENTENCE",
+        "REGULATION",
+        "REASONS"
+      ]
+    },
+    "keywords": [],
+    "judgmentDateFrom": {
+      "value": "2022-01-01",
+      "description": "Represents the earliest allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    },
+    "judgmentDateTo": {
+      "value": "2022-12-31",
+      "description": "Represents the latest of allowed judgment's date on the list of items",
+      "allowedValues": "Date in format : 'yyyy-MM-dd'"
+    }
+  },
+  "info": {
+    "totalResults": 1232
+  }
+}

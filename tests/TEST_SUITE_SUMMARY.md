@@ -48,6 +48,7 @@ tests/
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
 │   ├── edziennik/              # 11 recorded e-Dziennik ELI files (JSON, HTML, PDF); one PROVENANCE.md for the whole session
+│   ├── saos/                   # 25 recorded SAOS API files (search pages, counts, an error body, the court dictionary) with personal names redacted; one PROVENANCE.md; no full judgment texts
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
@@ -72,6 +73,7 @@ tests/
 │   ├── test_readme_tool_table.py       # README tool-properties table matches the live `tools/list` (title, readOnlyHint, openWorldHint)
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
+│   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, judge names and names after role cues redacted, catalogue and stored-file hashes vs PROVENANCE.md
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises

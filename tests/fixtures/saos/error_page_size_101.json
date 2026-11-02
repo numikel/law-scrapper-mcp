@@ -1,0 +1,8 @@
+{
+  "error": {
+    "httpStatus": "400",
+    "reason": "WRONG REQUEST PARAMETER",
+    "propertyName": "pageSize",
+    "message": "parameter 'pageSize' : may not be greater than 100"
+  }
+}

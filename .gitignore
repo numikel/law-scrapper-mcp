@@ -73,3 +73,5 @@ docs/superpowers/
 context/
 .10x-cli.json
 .claude/skills/10x-*/
+.claude/skills/custom-workflow/
+.claude/skills/mcp-*/

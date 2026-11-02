@@ -659,7 +659,7 @@ class EgressClient:
         data = response.json()
 
         if cache_key is not None and cache_ttl is not None:
-            await self._cache.set(cache_key, data, cache_ttl)
+            await self._cache.set(cache_key, data, cache_ttl, namespace=self._origin)
 
         return data
 

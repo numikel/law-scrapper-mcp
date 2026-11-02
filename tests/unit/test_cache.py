@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from unittest.mock import patch
 
@@ -264,3 +265,184 @@ class TestCallerBoundedAge:
             assert await cache.get("shared", max_age=300) is None
             assert await cache.get("shared") == "page"
             assert await cache.get("shared", max_age=600) == "page"
+
+
+class _ReferenceCache:
+    """The cache as it behaved before namespaces existed: one pool, the oldest 10% goes.
+
+    A copy of the old algorithm, kept here so the equivalence test compares against a fixed
+    point instead of against the code under test.
+    """
+
+    def __init__(self, max_entries: int) -> None:
+        self.entries: dict[str, tuple[float, float]] = {}  # key -> (expires_at, created_at)
+        self.max_entries = max_entries
+
+    def set(self, key: str, ttl: int, now: float) -> None:
+        self.entries[key] = (now + ttl, now)
+        if len(self.entries) > self.max_entries:
+            for k in [k for k, (expires_at, _) in self.entries.items() if now > expires_at]:
+                del self.entries[k]
+            if len(self.entries) > self.max_entries:
+                ordered = sorted(self.entries.items(), key=lambda item: item[1][1])
+                for k, _ in ordered[: max(1, len(self.entries) // 10)]:
+                    del self.entries[k]
+
+
+class TestNamespaceEviction:
+    """One shared cap, but the namespace holding the most entries pays first (Q-7, variant B)."""
+
+    @pytest.mark.parametrize("namespace", [None, "https://api.sejm.gov.pl"])
+    async def test_a_single_group_evicts_exactly_as_before(self, namespace: str | None) -> None:
+        rng = random.Random(20261102)
+        cache = TTLCache(max_entries=20)
+        reference = _ReferenceCache(max_entries=20)
+
+        with patch("time.time") as mock_time:
+            now = 1000.0
+            for step in range(400):
+                now += 1.0
+                mock_time.return_value = now
+                key = f"key{rng.randrange(60)}"
+                ttl = rng.choice([5, 50, 5000])
+                await cache.set(key, step, ttl, namespace=namespace)
+                reference.set(key, ttl, now)
+
+                assert set(cache._cache) == set(reference.entries), f"diverged at step {step}"
+
+    async def test_a_chatty_namespace_evicts_only_itself(self) -> None:
+        cache = TTLCache(max_entries=10)
+        for i in range(3):
+            await cache.set(f"quiet{i}", i, ttl=3600, namespace="quiet")
+
+        for i in range(100):
+            await cache.set(f"chatty{i}", i, ttl=3600, namespace="chatty")
+
+        assert cache.size <= 10
+        assert [await cache.get(f"quiet{i}") for i in range(3)] == [0, 1, 2]
+
+    async def test_a_namespace_keeps_its_fair_share_against_a_much_larger_one(self) -> None:
+        cache = TTLCache(max_entries=10)
+        for i in range(5):
+            await cache.set(f"quiet{i}", i, ttl=3600, namespace="quiet")
+
+        for i in range(50):
+            await cache.set(f"chatty{i}", i, ttl=3600, namespace="chatty")
+
+        # Two namespaces on a cap of 10: each is guaranteed 10 // 2 = 5 entries.
+        assert cache._counts["quiet"] == 5
+        assert cache._counts["chatty"] == 5
+
+    async def test_a_tie_is_paid_by_the_namespace_being_inserted_into(self) -> None:
+        cache = TTLCache(max_entries=3)
+        with patch("time.time") as mock_time:
+            for step, (key, namespace) in enumerate([("a1", "A"), ("b1", "B"), ("b2", "B")]):
+                mock_time.return_value = 1000.0 + step
+                await cache.set(key, key, ttl=3600, namespace=namespace)
+
+            mock_time.return_value = 1010.0
+            await cache.set("a2", "a2", ttl=3600, namespace="A")  # A=2, B=2: a tie
+
+        assert "a1" not in cache._cache
+        assert "a2" in cache._cache
+        assert "b1" in cache._cache
+        assert "b2" in cache._cache
+
+    async def test_the_oldest_entries_of_the_victim_go_first(self) -> None:
+        cache = TTLCache(max_entries=4)
+        with patch("time.time") as mock_time:
+            for step, key in enumerate(["x1", "x2", "x3"]):
+                mock_time.return_value = 1000.0 + step
+                await cache.set(key, key, ttl=3600, namespace="X")
+            mock_time.return_value = 1005.0
+            await cache.set("y1", "y1", ttl=3600, namespace="Y")
+            mock_time.return_value = 1006.0
+            await cache.set("x4", "x4", ttl=3600, namespace="X")  # X=4, Y=1, total 5 > 4
+
+        assert "x1" not in cache._cache
+        assert "y1" in cache._cache
+
+    async def test_expired_entries_are_dropped_before_any_namespace_pays(self) -> None:
+        cache = TTLCache(max_entries=3)
+        with patch("time.time") as mock_time:
+            mock_time.return_value = 1000.0
+            await cache.set("old", "old", ttl=10, namespace="A")
+            await cache.set("a2", "a2", ttl=3600, namespace="A")
+            await cache.set("b1", "b1", ttl=3600, namespace="B")
+
+            mock_time.return_value = 1100.0
+            await cache.set("b2", "b2", ttl=3600, namespace="B")
+
+        assert "a2" in cache._cache
+        assert "b1" in cache._cache
+        assert "b2" in cache._cache
+
+    async def test_entries_without_a_namespace_are_a_group_of_their_own(self) -> None:
+        cache = TTLCache(max_entries=4)
+        for i in range(2):
+            await cache.set(f"plain{i}", i, ttl=3600)
+        for i in range(10):
+            await cache.set(f"ns{i}", i, ttl=3600, namespace="N")
+
+        assert cache._counts[None] == 2
+        assert cache._counts["N"] == 2
+
+
+class TestNamespaceCounts:
+    """The per-namespace counts must stay equal to what is really stored."""
+
+    @staticmethod
+    def actual_counts(cache: TTLCache) -> dict[str | None, int]:
+        counts: dict[str | None, int] = {}
+        for entry in cache._cache.values():
+            counts[entry.namespace] = counts.get(entry.namespace, 0) + 1
+        return counts
+
+    async def test_overwrite_delete_and_clear(self) -> None:
+        cache = TTLCache(max_entries=10)
+        await cache.set("k1", 1, ttl=3600, namespace="A")
+        await cache.set("k1", 2, ttl=3600, namespace="A")
+        await cache.set("k2", 1, ttl=3600, namespace="A")
+        await cache.set("k3", 1, ttl=3600, namespace="B")
+        assert cache._counts == {"A": 2, "B": 1}
+
+        await cache.delete("k1")
+        await cache.delete("missing")
+        assert cache._counts == {"A": 1, "B": 1}
+
+        await cache.set("k3", 1, ttl=3600, namespace="A")  # same key, another namespace
+        assert cache._counts == {"A": 2}
+
+        await cache.clear()
+        assert cache._counts == {}
+        assert cache.size == 0
+
+    async def test_expiry_on_get(self) -> None:
+        cache = TTLCache(max_entries=10)
+        with patch("time.time") as mock_time:
+            mock_time.return_value = 1000.0
+            await cache.set("k", 1, ttl=10, namespace="A")
+            mock_time.return_value = 1100.0
+            assert await cache.get("k") is None
+
+        assert cache._counts == {}
+
+    async def test_counts_survive_a_long_mixed_run(self) -> None:
+        rng = random.Random(7)
+        cache = TTLCache(max_entries=15)
+        with patch("time.time") as mock_time:
+            now = 1000.0
+            for step in range(500):
+                now += 1.0
+                mock_time.return_value = now
+                key = f"key{rng.randrange(40)}"
+                action = rng.choice(["set", "set", "set", "get", "delete"])
+                if action == "set":
+                    await cache.set(key, step, rng.choice([3, 30, 3000]), namespace=rng.choice(["A", "B", "C", None]))
+                elif action == "get":
+                    await cache.get(key)
+                else:
+                    await cache.delete(key)
+
+                assert cache._counts == self.actual_counts(cache), f"diverged at step {step}"
+                assert cache.size <= 15

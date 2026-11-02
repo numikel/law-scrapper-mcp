@@ -400,3 +400,37 @@ async def test_the_other_hosts_request_goes_out_on_its_own_connection_state(cloc
         assert saos._client is not other._client
     finally:
         await hub.close()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_eviction_a_chatty_host_cannot_push_a_quiet_host_below_its_share(clock: FakeClock) -> None:
+    cache = TTLCache(max_entries=10)
+    defaults = EgressDefaults(max_attempts=1, rate_burst=100, rate_per_second=5.0, user_agent="law-scrapper-mcp/test")
+    hub = EgressHub(cache, defaults, clock=clock)
+    quiet = hub.client_for(
+        EgressHost(name="Quiet", base_url="https://quiet.example.test/api"), CallerIdentity("q", "1")
+    )
+    chatty = hub.client_for(
+        EgressHost(name="Chatty", base_url="https://chatty.example.test/api"), CallerIdentity("c", "1")
+    )
+    quiet_route = respx.get(url__startswith="https://quiet.example.test/api/").mock(
+        return_value=httpx.Response(200, json={"quiet": True})
+    )
+    respx.get(url__startswith="https://chatty.example.test/api/").mock(
+        return_value=httpx.Response(200, json={"chatty": True})
+    )
+    try:
+        for i in range(5):
+            await quiet.get_json(f"q{i}", cache_ttl=3600)
+        for i in range(60):
+            await chatty.get_json(f"c{i}", cache_ttl=3600)
+
+        # Two hosts on a cache of 10 guarantee each of them 5 entries.
+        for i in range(5):
+            await quiet.get_json(f"q{i}", cache_ttl=3600)
+    finally:
+        await hub.close()
+
+    assert quiet_route.call_count == 5
+    assert cache.size <= 10

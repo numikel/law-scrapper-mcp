@@ -172,7 +172,7 @@ async def test_pinned_redirect_chain_stops_after_three_hops(pinned: EgressClient
 async def test_sejm_redirect_to_another_host_is_still_followed() -> None:
     """Characterisation of the accepted residual risk: the Sejm client neither pins nor caps at 3.
 
-    Documented in the plan (owner decision Q-2); this test makes a future change deliberate.
+    The Sejm client's behaviour was left unchanged on purpose; this test makes a future change deliberate.
     """
     client = SejmApiClient(cache=TTLCache(max_entries=10), max_attempts=1)
     respx.get(f"{SejmApiClient.BASE_URL}/acts/DU/2024/1").mock(

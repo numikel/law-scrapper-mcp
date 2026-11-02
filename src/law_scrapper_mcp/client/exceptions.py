@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+# Name under which errors raised for api.sejm.gov.pl identify their source. Error texts for this
+# source predate source naming and must stay byte-identical, so the tool layer treats it (and a
+# missing source) as "legacy" and leaves them alone.
+SEJM_SOURCE = "api.sejm.gov.pl"
+
 
 class LawScrapperError(Exception):
     """Base exception for Law Scrapper MCP errors."""

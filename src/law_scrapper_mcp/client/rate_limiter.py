@@ -40,7 +40,7 @@ class EgressPaceDeadlineError(Exception):
 async def _wait(seconds: float) -> None:
     """Sole waiting point of the limiter.
 
-    Extracted on the model of `sejm_client._delay` so that tests can drive the clock
+    Extracted on the model of `egress._delay` so that tests can drive the clock
     instead of sitting the delay out.
     """
     await asyncio.sleep(seconds)

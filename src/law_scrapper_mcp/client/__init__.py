@@ -1,6 +1,7 @@
 """HTTP client for Sejm API."""
 
 from law_scrapper_mcp.client.cache import TTLCache
+from law_scrapper_mcp.client.egress import EgressClient
 from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ApiUnavailableError,
@@ -20,6 +21,7 @@ __all__ = [
     "ContentNotAvailableError",
     "ContentTooLargeError",
     "DocumentNotLoadedError",
+    "EgressClient",
     "InvalidEliError",
     "LawScrapperError",
     "ResponseTooLargeError",

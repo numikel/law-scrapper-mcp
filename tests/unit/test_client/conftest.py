@@ -1,7 +1,7 @@
 """Shared clock for the egress suites (`test_rate_limiter`, `test_egress_pacing`).
 
 The limiter and the retry loop each have exactly one waiting point — `rate_limiter._wait`
-and `sejm_client._delay`. Both are swapped here for a wait that advances one injected
+and `egress._delay`. Both are swapped here for a wait that advances one injected
 clock instead of sleeping, so no test in this package measures real elapsed time
 (design constraint 3). One definition rather than one per module: the two copies had
 already drifted apart in which wait point they patched and whether they yielded to the
@@ -14,8 +14,8 @@ import asyncio
 
 import pytest
 
+from law_scrapper_mcp.client import egress as client_module
 from law_scrapper_mcp.client import rate_limiter as limiter_module
-from law_scrapper_mcp.client import sejm_client as client_module
 
 
 class FakeClock:

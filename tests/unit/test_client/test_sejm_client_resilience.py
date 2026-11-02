@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 import respx
 
-from law_scrapper_mcp.client import sejm_client as client_module
+from law_scrapper_mcp.client import egress as client_module
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.circuit_breaker import CircuitBreaker, CircuitState
 from law_scrapper_mcp.client.exceptions import (

@@ -10,7 +10,7 @@ shapes in the test instead. The facts they pin are asserted in
 ## Capture
 
 ```
-Date:     2026-11-01, 08:10:50 - 08:31:42 UTC (one session, requests strictly sequential, no retries)
+Date:     2026-11-01, 08:10:50 - 08:31:42 UTC (one session, requests sequential, no pause between them)
 Client:   httpx, follow_redirects=True, TLS verification on
 Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-scrapper-mcp)
           Accept: application/json (application/pdf for the two PDFs, text/html for the HTML page)
@@ -18,8 +18,16 @@ Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-sc
 
 Three hosts omit their intermediate certificate and fail verification in a stock `httpx`
 client; the two PDFs below come from such hosts (`dziennik.lodzkie.eu` and
-`edziennik.malopolska.uw.gov.pl`). They were fetched with verification still on, after adding
-the intermediate certificate published by the issuing CA.
+`edziennik.malopolska.uw.gov.pl`). They were fetched with verification on, after adding the
+intermediate certificate published by the issuing CA. That intermediate was downloaded over
+plain HTTP and loaded with Python's default `VERIFY_X509_PARTIAL_CHAIN` flag, so it was trusted
+as an anchor instead of being checked against a root; the second session below closed this gap.
+
+The first session fell short of the refresh rules at the end of this file in two ways. It sent
+requests back to back, up to ten starting within one second. And when
+`edziennik.mazowieckie.pl` timed out three times, it tried again: once with an added
+`Accept-Language` header and twice with `curl`, always with the project's `User-Agent`. None of
+those six requests was answered. The second session paced and budgeted every request.
 
 | File | Request | Status | Content-Type | Bytes (original) | SHA-256 (original) | Captured (UTC) |
 |---|---|---|---|---|---|---|
@@ -40,10 +48,16 @@ The eight `.json` files are the recorded payloads re-indented for reviewable dif
 non-breaking space (U+00A0) in one `ShortName` is preserved. Equivalence to the captured bytes
 was checked at write time as `json.loads(stored) == json.loads(original)`. It cannot be
 checked later by hash: re-serialising compactly reproduces the original SHA-256 for five of
-the eight files, and not for the three whose text carries non-ASCII characters, because the
-upstream serialiser escapes them as `\uXXXX`. The test therefore checks the record counts of
-the JSON files, and the bytes and SHA-256 of the HTML and the two PDFs, which are stored
-unchanged (`.gitattributes` marks `*.pdf` as binary so no checkout rewrites their line endings).
+the eight files, and not for the three from the Kujawy-Pomerania host, whose serialiser writes
+some characters as `\uXXXX` escapes where the other hosts write raw UTF-8. The test therefore
+checks the record counts of the JSON files, and the bytes and SHA-256 of the HTML and the two
+PDFs, which are stored unchanged (`.gitattributes` marks this directory `-text` so no checkout
+rewrites line endings).
+
+The two date fields mean different things on different endpoints. In `search_page_*.json`,
+`promulgation` is the act date and `announcementDate` the publication timestamp. The act detail
+of the same act (`act_detail_*.json`: POL_WOJ_PM 2025/5051 and POL_WOJ_KP 2025/6588) has them
+the other way round, as the Sejm API does.
 
 Two files hold names of officials who signed the act. They are public signatures on acts of
 an official journal: `text_page1.html` and `text_layer.pdf`.
@@ -92,9 +106,10 @@ So `text.html` is only the first page of the PDF, while the act detail still rep
 ### Ministries and central offices (second session, 2026-11-02, 08:52 - 08:55 UTC)
 
 Ten journals of ministries and central offices run the same engine (the list is taken from the
-journals' own registry page). One request each for steps 4 and 5 of the admission criterion
-(a `title` filter that changes `totalCount`; an act detail plus its `text.pdf`), 40 requests in
-all, with TLS verification on.
+journals' own registry page). Each journal got three requests for steps 4 and 5 of the
+admission criterion (a `title` filter that changes `totalCount`; an act detail plus its
+`text.pdf`), 30 in all. The session made 40 requests with TLS verification on: those 30, three
+certificate downloads, two to Mazovia and five pages looking for terms of use.
 
 | Journal | Host | JSON | `title=zzzxxyy`: `totalCount` | Act detail / `text.pdf` | TLS in a stock client |
 |---|---|---|---|---|---|
@@ -110,7 +125,7 @@ all, with TLS verification on.
 | UOKiK | dziennikurzedowy.uokik.gov.pl | camel | 52 → 0 | 200 / 200, 19 pages | intermediate omitted |
 
 The four hosts with an omitted intermediate were reached with the issuing CA's intermediate
-(three downloads from the CA's repository, each signed directly by a root in `certifi`),
+(three intermediates from two CAs' repositories, each signed directly by a root in `certifi`),
 with Python's default `VERIFY_X509_PARTIAL_CHAIN` flag cleared so the chain still had to
 reach that root. Every `text.pdf` carried a text layer on page 1 (894 to 2 856 characters).
 The voivodeship journal of Mazovia (`edziennik.mazowieckie.pl`) did not answer eight requests
@@ -122,8 +137,10 @@ Refresh by hand when an upstream change is suspected, never on a schedule and ne
 These hosts belong to public institutions, and the restraint this project applies to its own
 traffic applies to the test traffic too: use the project's `User-Agent`, send requests one at a
 time with a pause between them, make no retries, send at most 15 requests to one host, and
-never disable TLS verification. Update the date, the numbers and the hashes above in the same
-commit as the payloads.
+never disable TLS verification. Stop at the first timeout or reset: that host is done for the
+session, and the request is not sent again with other headers or another client. Trust a
+missing intermediate only after checking that a root in `certifi` signed it. Update the date,
+the numbers and the hashes above in the same commit as the payloads.
 
 The raw capture log of the sessions is kept outside the repository because it contains session
 cookies.

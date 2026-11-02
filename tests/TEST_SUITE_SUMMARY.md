@@ -60,7 +60,7 @@ tests/
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
-│   ├── test_edziennik_fixtures.py      # Facts about the e-Dziennik journals pinned to `fixtures/edziennik/`: casing, inverted dates, sentinels, ignored publisher code, scan vs text PDF, catalogue vs PROVENANCE.md
+│   ├── test_edziennik_fixtures.py      # Facts about the e-Dziennik journals pinned to `fixtures/edziennik/`: casing, dates swapped by search only, sentinels, ignored publisher code, scan vs text PDF, catalogue vs PROVENANCE.md
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
 │   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause
 │   ├── test_health_endpoint.py         # `/health` reports breaker state (unknown, closed, open, half-open) without lying

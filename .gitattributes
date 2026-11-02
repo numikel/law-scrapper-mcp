@@ -1,1 +1,3 @@
 *.pdf binary
+# Recorded payloads are compared byte for byte; no checkout may rewrite their line endings.
+tests/fixtures/edziennik/** -text

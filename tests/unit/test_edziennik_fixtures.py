@@ -1,7 +1,8 @@
 """Facts about the e-Dziennik ELI journals, pinned to the recordings in `fixtures/edziennik/`.
 
-The journals run an engine unlike `api.sejm.gov.pl`: two JSON casings, inverted date
-fields, sentinel dates, a `text.html` that is only the first PDF page, and a host that
+The journals run an engine unlike `api.sejm.gov.pl`: two JSON casings, date fields that
+`/search` swaps while the act detail does not, sentinel dates, a `text.html` that is only
+the first PDF page, and a host that
 ignores an unknown publisher code. Each test states one such fact and derives its
 expectation from the recording, so a refreshed recording that changes the fact turns the
 test red instead of silently invalidating an assumption a later change builds on.
@@ -62,7 +63,7 @@ def test_every_fixture_has_a_provenance_row_and_every_row_has_a_fixture() -> Non
 
 
 def test_binary_fixtures_are_stored_byte_for_byte() -> None:
-    """A text-normalising checkout (autocrlf) would change a PDF; the recorded hash catches it."""
+    """A text-normalising checkout (autocrlf) would change these files; the recorded hash catches it."""
     for name in ("scan_no_text.pdf", "text_layer.pdf", "text_page1.html"):
         _, _url, _status, _ctype, size, digest, *_ = provenance_rows()[name]
         data = (FIXTURES / name).read_bytes()
@@ -74,15 +75,16 @@ def test_binary_fixtures_are_stored_byte_for_byte() -> None:
 def test_json_fixtures_have_the_recorded_structure() -> None:
     """The JSON files are re-indented recordings; their size is checked structurally.
 
-    The upstream serialiser escapes non-ASCII as `\\uXXXX`, so a re-indented file cannot be
-    compared to the original bytes. The record counts come from the request in the
+    One host's serialiser writes some characters as `\\uXXXX` escapes, so not every re-indented
+    file can be compared to the original bytes. The record counts come from the request in the
     provenance table, not from a constant here.
     """
     rows = provenance_rows()
     for name, key in (("search_page_camel.json", "items"), ("search_page_pascal.json", "Items")):
-        limit = int(re.search(r"limit=(\d+)", rows[name][1]).group(1))  # type: ignore[union-attr]
+        limit = re.search(r"limit=(\d+)", rows[name][1])
+        assert limit is not None, name
 
-        assert len(load_json(name)[key]) == limit, name
+        assert len(load_json(name)[key]) == int(limit.group(1)), name
     assert len(load_json("publishers_camel.json")) == 1
     assert len(load_json("publishers_pascal.json")) == 1
 
@@ -105,10 +107,33 @@ def test_camel_search_uses_lowercase_eli_and_inverted_date_fields() -> None:
     assert any(day(item["promulgation"]) < day(item["announcementDate"]) for item in items)
 
 
+def test_only_search_swaps_the_dates_that_the_act_detail_reports() -> None:
+    """The act detail keeps the Sejm order; `/search` lists the same act with the two dates swapped.
+
+    A mapper that inverts both endpoints alike gets the detail wrong, so the pair is pinned here.
+    """
+    for casing, items_key, (year, pos, promulgation, announced) in (
+        ("camel", "items", ("year", "pos", "promulgation", "announcementDate")),
+        ("pascal", "Items", ("Year", "Pos", "Promulgation", "AnnouncementDate")),
+    ):
+        detail = load_json(f"act_detail_{casing}.json")
+        listed = [
+            item
+            for item in load_json(f"search_page_{casing}.json")[items_key]
+            if (item[year], item[pos]) == (detail[year], detail[pos])
+        ]
+
+        assert len(listed) == 1, casing
+        assert detail[promulgation] != detail[announced], casing
+        assert listed[0][promulgation] == detail[announced], casing
+        assert listed[0][announced] == detail[promulgation], casing
+
+
 def test_pascal_search_wraps_pascal_records_in_a_pascal_envelope() -> None:
     page = load_json("search_page_pascal.json")
 
     assert {"Items", "Offset", "Count", "TotalCount"} <= set(page)
+    assert page["Items"]
     assert page["Count"] == len(page["Items"])
     assert all("Eli" in item for item in page["Items"])
 
@@ -134,6 +159,7 @@ def test_references_are_keyed_by_one_relation_description_with_woj_eli() -> None
 
     assert len(relations) == 1
     for entries in relations.values():
+        assert entries
         assert all(entry["act"]["eli"].startswith("POL_WOJ_") for entry in entries)
 
 

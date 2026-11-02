@@ -70,6 +70,7 @@ tests/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
 │   ├── test_auth_settings_validation.py# Startup validation binding a remote bind address to an auth mode; bearer scope rejection
 │   ├── test_cache.py                   # TTLCache: get/set, TTL expiry, LRU eviction, concurrent access
+│   ├── test_ci_module_gates.py         # Module code gets core's gates: the `changes` filter covers `modules/**`, `lint` and `modules` jobs in ci.yml, the `test` job stays core-only, every action SHA-pinned, `check_release.py` mirrors the module commands
 │   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
 │   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
@@ -99,7 +100,7 @@ tests/
 │   ├── test_source_module_isolation.py # The root suite is core-only: `os.environ` holds exactly `-*`, the live `settings` were built with it, and no entry point installed in this environment ends up active
 │   ├── test_source_module_server.py    # `build_app` tool-name checks, module start/stop order around the egress hub, `module_state`, startup INFO and WARNING lines
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
-│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers
+│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers; the same rules run over every `modules/*/src/law_scrapper_mcp_*/tools/` package, module tools may not import `httpx` or the core `client/`, and the core may not import a `law_scrapper_mcp_*` package
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs
 │   ├── test_client/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites
@@ -279,6 +280,11 @@ GitHub Actions (`.github/workflows/ci.yml`), `lint` and `test` jobs:
 - name: Protocol transport tests
 - name: MCP conformance
 ```
+
+The `lint` job installs with `--all-packages` and covers `modules/` with ruff and mypy. A `modules`
+job installs the workspace members, runs `pytest modules/*/tests` and the root unit suite once with a
+member installed; the `test` job stays on plain `uv sync --extra dev`, so the conformance server and
+the transport tests see the core only.
 
 A `release-prep-check` job requires `docs/changelogs/v<version>.md` whenever `pyproject.toml`'s
 version changes, and an `audit` job runs `pip-audit` from the dev extra (`uv run pip-audit` locally).

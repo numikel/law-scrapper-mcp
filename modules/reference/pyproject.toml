@@ -1,0 +1,22 @@
+[project]
+name = "law-scrapper-mcp-reference"
+# Fixed on purpose: this package is a demonstration and is never released (see README.md).
+version = "0.0.0"
+description = "Demonstration source module for law-scrapper-mcp. Never released, never in the container image."
+readme = "README.md"
+requires-python = ">=3.13"
+# Unpinned: the module is developed in the same workspace as the core and is not published.
+dependencies = ["law-scrapper-mcp"]
+
+[project.entry-points."law_scrapper_mcp.source_modules"]
+reference = "law_scrapper_mcp_reference:module"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/law_scrapper_mcp_reference"]
+
+[tool.uv.sources]
+law-scrapper-mcp = { workspace = true }

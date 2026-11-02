@@ -14,6 +14,21 @@ contracts, and the real MCP transports.
 | **2. In-memory integration** | All 13 tools via the official `mcp.Client` with the Sejm API mocked by `respx` | `uv run pytest tests/integration/test_tools_e2e.py tests/integration/test_content_failure_contract.py tests/integration/test_content_pagination.py tests/integration/test_result_pagination.py tests/integration/test_listing_pagination.py tests/integration/test_pagination_contract.py tests/integration/test_output_contract.py -v -m integration` |
 | **3. Transport integration** | Real STDIO subprocess, loopback Streamable HTTP, authenticated HTTP | `uv run pytest tests/integration/test_stdio_transport.py tests/integration/test_http_transport.py tests/integration/test_http_auth.py -v -m integration` |
 
+**Source modules (outside `tests/`).** Modules live in `modules/<source>/` as uv workspace members;
+their tests sit beside them and run against the really installed distribution. A plain
+`uv sync --extra dev` does not install a member; `--all-packages` does. The root suite above stays
+core-only either way (`LAW_MCP_SOURCE_MODULES=-*`, see `tests/conftest.py`).
+
+```bash
+uv sync --extra dev --all-packages
+uv run pytest modules/reference/tests -v
+```
+
+| File | What it pins |
+|------|--------------|
+| `modules/reference/tests/test_install_and_disable.py` | The entry point of the installed distribution, discovery over it, 14 vs 13 tools and the instructions header on a real STDIO server for `unset`, `-reference`, `-*`, `-*,reference`, `reference,-reference`, `reference`; a switched-off module's package is never imported |
+| `modules/reference/tests/test_reference_tool.py` | The descriptor, the state accessor, and `reference_ping` through an in-memory client with `outputSchema` validation |
+
 **Full integration suite:**
 
 ```bash
@@ -40,8 +55,9 @@ Every test file, with what it pins. Regenerate the list with
 ```
 tests/
 ├── TEST_SUITE_SUMMARY.md       # This file
-├── conftest.py                 # Shared fixtures: fixture loaders, mock_client, stores, mcp_client
-├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions
+├── conftest.py                 # Shared fixtures: fixture loaders, mock_client, stores, mcp_client; sets `LAW_MCP_SOURCE_MODULES=-*` above the first `law_scrapper_mcp` import
+├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions; `EXPECTED_TOOLS`; `CORE_ONLY_ENV` (the `-*` value the root suite and its server subprocesses run with)
+├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
@@ -54,10 +70,11 @@ tests/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
 │   ├── test_auth_settings_validation.py# Startup validation binding a remote bind address to an auth mode; bearer scope rejection
 │   ├── test_cache.py                   # TTLCache: get/set, TTL expiry, LRU eviction, concurrent access
+│   ├── test_ci_module_gates.py         # Module code gets core's gates: the `changes` filter covers `modules/**`, `lint` and `modules` jobs in ci.yml, the `test` job stays core-only, every action SHA-pinned, `check_release.py` mirrors the module commands
 │   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
 │   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
-│   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`
+│   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
@@ -77,14 +94,19 @@ tests/
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
+│   ├── test_source_module_activation.py # `LAW_MCP_SOURCE_MODULES`: syntax errors, left-to-right evaluation (the grammar table, order, the bare-name risk pin, the `-*` image-default pin), unknown names refused only while still enabled and reported otherwise
+│   ├── test_source_module_discovery.py # `discover()`: only active entry points are imported, descriptor validation, clashes, real distribution metadata via a temporary dist-info, `registered_tool_names` guard
+│   ├── test_source_module_instructions.py # Pre-change server instructions pinned byte for byte; modules raise the header count and append one block each
+│   ├── test_source_module_isolation.py # The root suite is core-only: `os.environ` holds exactly `-*`, the live `settings` were built with it, and no entry point installed in this environment ends up active
+│   ├── test_source_module_server.py    # `build_app` tool-name checks, module start/stop order around the egress hub, `module_state`, startup INFO and WARNING lines
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
-│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers
+│   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers; the same rules run over every `modules/*/src/law_scrapper_mcp_*/tools/` package, module tools may not import `httpx` or the core `client/`, and the core may not import a `law_scrapper_mcp_*` package
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs
 │   ├── test_client/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites
 │   │   ├── test_circuit_breaker.py     # CLOSED → OPEN → HALF_OPEN transitions and probe races
 │   │   ├── test_download_budget.py     # Byte budget enforced while a document body streams (#19)
-│   │   ├── test_egress_construction_guard.py # `httpx.AsyncClient` is built only in `client/egress.py` (one listed exception: OIDC discovery in `auth/jwt_verifier.py`)
+│   │   ├── test_egress_construction_guard.py # `httpx.AsyncClient` is built only in `client/egress.py` (one listed exception: OIDC discovery in `auth/jwt_verifier.py`); scans `src/law_scrapper_mcp/` and `modules/`, and fails if a root holds no `.py` file
 │   │   ├── test_egress_hub.py          # EgressHub: caller identity tokens, wire User-Agent, one owner per origin and name, rate ceiling a module can only lower, no pin opt-out, source states, close error collection
 │   │   ├── test_egress_isolation.py    # Per-host controls: cache namespace, origin pin and redirect cap (Sejm characterised as unpinned), host label on errors and logs, two-host isolation of 429 pause, breaker, bucket, headers and cookies
 │   │   ├── test_egress_messages.py     # Generic Polish client-side texts of a host with no preset, named after the source
@@ -258,6 +280,11 @@ GitHub Actions (`.github/workflows/ci.yml`), `lint` and `test` jobs:
 - name: Protocol transport tests
 - name: MCP conformance
 ```
+
+The `lint` job installs with `--all-packages` and covers `modules/` with ruff and mypy. A `modules`
+job installs the workspace members, runs `pytest modules/*/tests` and the root unit suite once with a
+member installed; the `test` job stays on plain `uv sync --extra dev`, so the conformance server and
+the transport tests see the core only.
 
 A `release-prep-check` job requires `docs/changelogs/v<version>.md` whenever `pyproject.toml`'s
 version changes, and an `audit` job runs `pip-audit` from the dev extra (`uv run pip-audit` locally).

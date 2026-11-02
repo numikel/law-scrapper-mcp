@@ -1,8 +1,9 @@
 """Law Scrapper MCP Server - Main entry point."""
 
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Sequence
+from contextlib import AsyncExitStack, asynccontextmanager
+from weakref import WeakKeyDictionary
 
 # Imported at module level (unlike the SDK's own lazy in-method import) so
 # `server_module.uvicorn` is a patchable attribute for tests, at the cost of a
@@ -34,6 +35,9 @@ from law_scrapper_mcp.services.metadata_service import MetadataService
 from law_scrapper_mcp.services.relationship_service import RelationshipService
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
+from law_scrapper_mcp.source_modules.contract import LoadedModule, ModuleHost, SourceModule, SourceModuleError
+from law_scrapper_mcp.source_modules.discovery import Discovery, discover, registered_tool_names
+from law_scrapper_mcp.source_modules.instructions import compose_instructions
 from law_scrapper_mcp.tools import register_all_tools
 
 logger = logging.getLogger(__name__)
@@ -166,12 +170,82 @@ UWAGI:
 - Każda odpowiedź zawiera 'hints' z sugerowanymi kolejnymi krokami.
 - Dane w systemie (typy, statusy, słowa kluczowe) są po polsku."""
 
+# Tools the core registers itself. Instructions are composed before the server exists, so the count
+# cannot be read off a live server; `tests/unit/test_source_module_server.py` pins it to the real
+# tool list and to the header of `SERVER_INSTRUCTIONS`.
+CORE_TOOL_COUNT = 13
+
+# The module set each server was built with. `lifespan(_server)` keeps its plain signature (a test
+# reads its source), so it finds its modules here instead of in a closure. Weak keys: a throw-away
+# server built by a test must not outlive the test.
+_DISCOVERIES: WeakKeyDictionary[object, Discovery] = WeakKeyDictionary()
+
+
+def _discovery_for(server: object) -> Discovery:
+    """The module set `build_app` recorded for `server`; empty for a server built any other way."""
+    try:
+        return _DISCOVERIES.get(server, Discovery())
+    except TypeError:  # not weak-referenceable, e.g. the `None` some tests pass to `lifespan`
+        return Discovery()
+
+
+def _names(names: Sequence[str]) -> str:
+    return ",".join(names) if names else "none"
+
+
+def _log_source_modules(discovery: Discovery) -> None:
+    """One INFO line with the resolved module set and the variable as supplied, one WARNING for typos.
+
+    Emitted from `lifespan`, not at import: `setup_logging` runs in `main()` after `app` exists, so
+    an import-time line would be dropped. The values are module names and `-`/`*` only.
+    """
+    active = [loaded.module.name for loaded in discovery.active]
+    installed = sorted([*active, *discovery.inactive])
+    if installed:
+        supplied = f"'{','.join(discovery.requested)}'" if discovery.requested else "(unset)"
+        logger.info(
+            "Source modules: installed=%s active=%s disabled=%s LAW_MCP_SOURCE_MODULES=%s",
+            _names(installed),
+            _names(active),
+            _names(discovery.inactive),
+            supplied,
+        )
+    if discovery.ignored_unknown:
+        logger.warning(
+            "Source modules: LAW_MCP_SOURCE_MODULES names modules that are not installed and are switched "
+            "off or overridden, ignoring them: %s (installed=%s)",
+            ",".join(discovery.ignored_unknown),
+            _names(installed),
+        )
+
+
+async def _start_source_modules(
+    discovery: Discovery, stack: AsyncExitStack, egress_hub: EgressHub, module_state: dict[str, object]
+) -> None:
+    """Run each active module's start hook inside `stack`; the first failure aborts startup."""
+    for loaded in discovery.active:
+        name = loaded.module.name
+        host = ModuleHost(egress=egress_hub, caller=loaded.caller_identity(), settings=settings)
+        if loaded.module.start is None:
+            continue
+        try:
+            module_state[name] = await stack.enter_async_context(loaded.module.start(host))
+        except SourceModuleError:
+            raise
+        except Exception as error:
+            raise SourceModuleError(
+                f"Moduł {name} nie wystartował: {type(error).__name__}: {error}. "
+                f"Wyłącz moduł, dopisując -{name} na końcu LAW_MCP_SOURCE_MODULES."
+            ) from error
+
 
 @asynccontextmanager
 async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     """Initialize and cleanup server resources."""
     logger.info("Starting Law Scrapper MCP Server v%s", settings.server_version)
     log_pattern_limit_clamping(settings, logger)
+    discovery = _discovery_for(_server)
+    _log_source_modules(discovery)
 
     circuit_breaker = CircuitBreaker(
         failure_threshold=settings.circuit_breaker_threshold,
@@ -236,6 +310,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     comparison_service = ComparisonService(act_service)
     relationship_service = RelationshipService(client)
     date_service = DateService()
+    module_state: dict[str, object] = {}
 
     context = AppContext(
         client=client,
@@ -252,10 +327,14 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         relationship_service=relationship_service,
         date_service=date_service,
         egress=egress_hub,
+        module_state=module_state,
     )
 
     try:
-        yield context
+        # Modules start after every core resource exists and stop before any of them closes.
+        async with AsyncExitStack() as module_stack:
+            await _start_source_modules(discovery, module_stack, egress_hub, module_state)
+            yield context
     finally:
         # Cleared first: if `client.close()` raised, a populated handle would
         # let `/health` claim a live breaker after the lifespan had ended.
@@ -281,16 +360,73 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
 # never the source of truth for what the HTTP app serves.
 _auth_settings, _token_verifier = build_auth(settings)
 
-app = MCPServer[AppContext](
-    settings.server_name,
-    version=settings.server_version,
-    instructions=SERVER_INSTRUCTIONS,
-    lifespan=lifespan,
-    auth=_auth_settings,
-    token_verifier=_token_verifier,
-)
 
-register_all_tools(app)
+def _register_module_tools(server: MCPServer[AppContext], module: SourceModule) -> None:
+    """Register one module's tools and verify it added exactly the tools it declared.
+
+    The SDK ignores a duplicate tool name with only a warning, so a module that shadows a core
+    tool, or another module's tool, would otherwise start "successfully" with the wrong tool set.
+    """
+    before = registered_tool_names(server)
+    declared = frozenset(module.tool_names)
+    clash = sorted(before & declared)
+    if clash:
+        raise SourceModuleError(
+            f"Moduł {module.name} deklaruje narzędzie, które już istnieje: {', '.join(clash)}. "
+            f"Wyłącz moduł, dopisując -{module.name} na końcu LAW_MCP_SOURCE_MODULES."
+        )
+    module.register_tools(server)
+    added = registered_tool_names(server) - before
+    if added != declared:
+        raise SourceModuleError(
+            f"Moduł {module.name} zarejestrował inne narzędzia niż zadeklarował "
+            f"(zadeklarowane: {', '.join(sorted(declared)) or 'brak'}; "
+            f"zarejestrowane: {', '.join(sorted(added)) or 'brak'}). "
+            f"Wyłącz moduł, dopisując -{module.name} na końcu LAW_MCP_SOURCE_MODULES."
+        )
+
+
+def build_app(
+    modules: Sequence[LoadedModule] = (),
+    *,
+    inactive: Sequence[str] = (),
+    requested: Sequence[str] = (),
+    ignored_unknown: Sequence[str] = (),
+) -> MCPServer[AppContext]:
+    """Build the server for a given set of active modules.
+
+    Composes the instructions (core text plus module blocks), registers the core tools and then
+    each module's, and records the module set for `lifespan`. `inactive`, `requested` and
+    `ignored_unknown` only feed the startup log. Production calls this once, below, with the result
+    of `discover`; tests build their own servers with fake modules.
+    """
+    server = MCPServer[AppContext](
+        settings.server_name,
+        version=settings.server_version,
+        instructions=compose_instructions(SERVER_INSTRUCTIONS, CORE_TOOL_COUNT, [item.module for item in modules]),
+        lifespan=lifespan,
+        auth=_auth_settings,
+        token_verifier=_token_verifier,
+    )
+    register_all_tools(server)
+    for loaded in modules:
+        _register_module_tools(server, loaded.module)
+    _DISCOVERIES[server] = Discovery(
+        active=tuple(modules),
+        inactive=tuple(inactive),
+        requested=tuple(requested),
+        ignored_unknown=tuple(ignored_unknown),
+    )
+    return server
+
+
+_discovery = discover(settings)
+app = build_app(
+    _discovery.active,
+    inactive=_discovery.inactive,
+    requested=_discovery.requested,
+    ignored_unknown=_discovery.ignored_unknown,
+)
 
 
 @app.custom_route("/health", methods=["GET"])

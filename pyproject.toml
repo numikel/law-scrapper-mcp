@@ -69,6 +69,11 @@ override-dependencies = [
     "opentelemetry-api>=1.45.1",
 ]
 
+# Source modules live in modules/<source>/ as workspace members. A plain `uv sync` installs only the
+# root project; `--all-packages` also installs the members and registers their entry points.
+[tool.uv.workspace]
+members = ["modules/*"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/law_scrapper_mcp"]
 
@@ -96,7 +101,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["law_scrapper_mcp"]
+# Source modules (modules/<source>/src/law_scrapper_mcp_<source>/) are first-party too
+known-first-party = ["law_scrapper_mcp", "law_scrapper_mcp_*"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/unit/**" = ["E402"]

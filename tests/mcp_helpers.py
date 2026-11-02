@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+# The root suite is a core-only suite: whatever source modules a developer installed with
+# `uv sync --all-packages`, `-*` switches every one of them off. `conftest.py` puts it in
+# `os.environ` before the first `law_scrapper_mcp` import, and the one test that spawns a server
+# with an explicit environment merges it in by hand.
+CORE_ONLY_ENV = {"LAW_MCP_SOURCE_MODULES": "-*"}
+
 # Written out by hand: the one place the expected tool set lives. Every tool-count
 # assertion derives from it, so adding or removing a tool means editing this list only.
 EXPECTED_TOOLS = sorted(

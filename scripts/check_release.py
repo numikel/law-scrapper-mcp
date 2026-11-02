@@ -197,8 +197,14 @@ def run_command(cmd: list[str], description: str) -> bool:
         return False
 
 
+def _module_paths(pattern: str) -> list[str]:
+    """Directories under `modules/` matching `pattern`, as repo-relative POSIX paths."""
+    found = (PROJECT_ROOT / "modules").glob(pattern)
+    return sorted(path.relative_to(PROJECT_ROOT).as_posix() for path in found if path.is_dir())
+
+
 def run_checks_and_tests() -> bool:
-    """Run the lint, format, type and test gates of the CI `lint` and `test` jobs.
+    """Run the lint, format, type and test gates of the CI `lint`, `test` and `modules` jobs.
 
     Mirrors `.github/workflows/ci.yml`, so a green run here means those jobs pass too.
     MCP conformance, the Docker smoke tests and pip-audit stay CI-only.
@@ -206,13 +212,21 @@ def run_checks_and_tests() -> bool:
     print("3. Running quality gates and test suite:")
     print("-" * 60)
 
+    # Source modules are linted, type-checked and tested like core code (CI `lint` and `modules`
+    # jobs). The globs mean a new module needs no edit here.
+    module_sources = _module_paths("*/src/law_scrapper_mcp_*")
+    module_tests = _module_paths("*/tests")
+
     commands = [
-        (["uv", "run", "ruff", "check", "src", "tests"], "Ruff linter"),
-        (["uv", "run", "ruff", "format", "--check", "src", "tests"], "Ruff format"),
-        (["uv", "run", "mypy", "src/law_scrapper_mcp/"], "Mypy type checker"),
+        (["uv", "run", "ruff", "check", "src", "tests", "modules"], "Ruff linter"),
+        (["uv", "run", "ruff", "format", "--check", "src", "tests", "modules"], "Ruff format"),
+        (["uv", "run", "mypy", "src/law_scrapper_mcp/", *module_sources], "Mypy type checker"),
         (["uv", "run", "pytest", "tests/unit/"], "Pytest unit tests"),
         (["uv", "run", "pytest", "tests/integration/", "-m", "integration"], "Pytest integration tests"),
     ]
+    if module_tests:
+        # `--all-packages` installs the workspace members, which registers their entry points.
+        commands.append((["uv", "run", "--all-packages", "pytest", *module_tests], "Pytest module tests"))
 
     return all(run_command(cmd, desc) for cmd, desc in commands)
 

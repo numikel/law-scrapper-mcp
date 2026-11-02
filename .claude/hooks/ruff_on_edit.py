@@ -1,6 +1,6 @@
 """PostToolUse hook: format and lint a Python file right after Claude edits it.
 
-Mirrors the CI lint job's scope (`src/` and `tests/`): `ruff format`, then `ruff check --fix`.
+Mirrors the CI lint job's scope (`src/`, `tests/` and `modules/`): `ruff format`, then `ruff check --fix`.
 Exit codes follow the Claude Code hook contract:
 - 0: nothing to do, or the file is clean after the automatic fixes
 - 2: violations ruff cannot fix remain; stderr is fed back to Claude so it fixes them now
@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-LINTED_DIRS = ("src", "tests")
+LINTED_DIRS = ("src", "tests", "modules")
 
 
 def main() -> int:

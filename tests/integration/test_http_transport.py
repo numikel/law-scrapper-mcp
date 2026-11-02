@@ -18,7 +18,7 @@ from starlette.testclient import TestClient
 
 from law_scrapper_mcp import server as server_module
 from law_scrapper_mcp.config import settings
-from mcp_helpers import EXPECTED_TOOLS
+from mcp_helpers import CORE_ONLY_ENV, EXPECTED_TOOLS
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -299,6 +299,7 @@ def live_http_server(tmp_path: Path):
         port = _allocate_loopback_port()
         environment = {
             **os.environ,
+            **CORE_ONLY_ENV,
             "LAW_MCP_TRANSPORT": "streamable-http",
             # Mirror the production bind address. A literal loopback host would
             # make the SDK enable Host/Origin validation on its own, so the

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import re
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Annotated, Literal
@@ -51,6 +53,9 @@ USER_AGENT_CONTACT = "https://github.com/numikel/law-scrapper-mcp"
 LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
 
+# One `LAW_MCP_SOURCE_MODULES` token: `name`, `-name`, `*` or `-*`. The name shape is the one an
+# entry-point name must have (`source_modules/contract.py`).
+_SOURCE_MODULE_TOKEN = re.compile(r"-?(?:[a-z][a-z0-9-]*|\*)")
 
 # Human-readable bands for the egress knobs, quoted by the validator below. Kept next
 # to the fields they describe would be nicer, but a `Field` cannot carry a message.
@@ -214,6 +219,48 @@ class Settings(BaseSettings):
                 # through to the comma reading keeps those working.
                 pass
         return [item.strip() for item in text.split(",") if item.strip()]
+
+    # Source modules. One variable holding an ordered token list: every installed module
+    # starts active and the tokens are applied left to right (`source_modules/discovery.py`).
+    # Only the syntax is checked here; whether a name is installed is known at discovery.
+    source_modules: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator("source_modules", mode="before")
+    @classmethod
+    def _parse_source_module_tokens(cls, value: object) -> object:
+        """Split `LAW_MCP_SOURCE_MODULES` into tokens and reject malformed ones.
+
+        Deliberately not folded into `_accept_comma_separated_list`: that helper drops empty
+        items, and here `a,,b` or a trailing comma is a typo worth a startup error. A blank
+        value or `[]` means "no tokens", which leaves every installed module active.
+        """
+        items: object = value
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            items = text.split(",")
+            if text.startswith("[") and text.endswith("]"):
+                # Not JSON: the comma reading stays and rejects it as a malformed token.
+                with contextlib.suppress(json.JSONDecodeError):
+                    items = json.loads(text)
+        if not isinstance(items, (list, tuple)):
+            return value
+        tokens: list[str] = []
+        for item in items:
+            token = item.strip() if isinstance(item, str) else item
+            if token == "":
+                raise ValueError(
+                    "LAW_MCP_SOURCE_MODULES zawiera pusty token (podwójny, początkowy lub końcowy przecinek). "
+                    "Usuń nadmiarowy przecinek albo zostaw zmienną pustą."
+                )
+            if not isinstance(token, str) or not _SOURCE_MODULE_TOKEN.fullmatch(token):
+                raise ValueError(
+                    f"LAW_MCP_SOURCE_MODULES zawiera nieprawidłowy token {token!r}. Dozwolone: nazwa modułu "
+                    "(małe litery, cyfry i myślniki, zaczyna się od litery), -nazwa, * albo -*."
+                )
+            tokens.append(token)
+        return tokens
 
     # API client
     api_timeout: float = 30.0

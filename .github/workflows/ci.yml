@@ -44,6 +44,7 @@ jobs:
             code:
               - 'src/**'
               - 'tests/**'
+              - 'modules/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - 'Dockerfile'
@@ -63,31 +64,33 @@ jobs:
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
         run: uv python install 3.13
+      # --all-packages also installs the workspace members (modules/*), so their imports resolve.
       - name: Install dependencies
         if: needs.changes.outputs.code == 'true'
-        run: uv sync --extra dev
+        run: uv sync --extra dev --all-packages
 
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Reject legacy framework remnants
         run: |
-          if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests; then
+          if rg -n 'from fastmcp|import fastmcp|fastmcp[<=>]' pyproject.toml src tests modules; then
             echo "Legacy framework remnants found"
             exit 1
           fi
 
       - name: Ruff check
         if: needs.changes.outputs.code == 'true'
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests modules
 
       - name: Ruff format
         if: needs.changes.outputs.code == 'true'
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check src tests modules
 
+      # The glob names every module's import package, so a new module needs no edit here.
       - name: Mypy
         if: needs.changes.outputs.code == 'true'
-        run: uv run mypy src/law_scrapper_mcp/
+        run: uv run mypy src/law_scrapper_mcp/ modules/*/src/law_scrapper_mcp_*/
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
@@ -178,6 +181,37 @@ jobs:
             --spec-version "$SDK_SPEC_VERSION" \
             --expected-failures ./conformance-baseline.yml
 
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
+
+  # Source modules: the same gates as core code, run against the really installed distributions.
+  # The `test` job above stays on plain `uv sync --extra dev` (no member installed), so the
+  # conformance server and the transport tests there see the core only.
+  modules:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
+        run: uv python install 3.13
+      - name: Install dependencies and workspace members
+        if: needs.changes.outputs.code == 'true'
+        run: uv sync --extra dev --all-packages
+      - name: Module tests
+        if: needs.changes.outputs.code == 'true'
+        run: uv run pytest modules/*/tests -v
+      # The root suite sets LAW_MCP_SOURCE_MODULES=-* itself; this proves it stays core-only
+      # (13 tools) even while a module is installed.
+      - name: Root unit tests with a module installed
+        if: needs.changes.outputs.code == 'true'
+        run: uv run pytest tests/unit/ -q
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

@@ -295,6 +295,20 @@ Rate limiting is always on for HTTP: `60` requests per `60 s`, burst `10`.
 Behind a proxy, set `LAW_MCP_TRUSTED_PROXIES` (addresses or CIDRs) — otherwise
 `X-Forwarded-For` is ignored and every client shares one bucket.
 
+## Source modules
+
+The 13 tools below are the core. The server can also load **source modules**: separately installed
+packages that add tools for further legal-information sources. Every installed module is active unless
+`LAW_MCP_SOURCE_MODULES` switches it off. The variable is a comma-separated list read from left to
+right, where the last token about a module wins: `-name` disables a module, `name` enables it, `-*`
+disables all. To run only `woj`, write `LAW_MCP_SOURCE_MODULES=-*,woj`; a bare `woj` leaves the other
+installed modules on. A disabled module is never imported, and a module that fails to load stops the
+server with a message naming it.
+
+With no module installed nothing changes. Module tools are described by each module and are not part
+of the tool table below. Conventions, the full grammar and the gates:
+[docs/source-modules.md](docs/source-modules.md).
+
 ## Tools reference
 
 Law Scrapper MCP provides 13 tools for legal research and analysis:

@@ -29,7 +29,10 @@ import pytest
 
 from mcp_helpers import EXPECTED_TOOLS
 
-TOOLS_ROOT = Path(__file__).parents[2] / "src" / "law_scrapper_mcp" / "tools"
+REPO_ROOT = Path(__file__).parents[2]
+TOOLS_ROOT = REPO_ROOT / "src" / "law_scrapper_mcp" / "tools"
+# Source modules mirror the core layout: modules/<source>/src/law_scrapper_mcp_<source>/tools/.
+MODULE_TOOL_ROOTS = sorted((REPO_ROOT / "modules").glob("*/src/law_scrapper_mcp_*/tools"))
 SKIPPED_MODULES = {"__init__.py", "error_handling.py"}
 MAX_AWAITS_PER_HANDLER = 1
 HINT_FACTORIES = {"Hint"}
@@ -58,8 +61,17 @@ LAYER_EXCEPTIONS = {"tools/error_handling.py": frozenset({"client", HTTP_LIBRARY
 Handler = ast.FunctionDef | ast.AsyncFunctionDef
 
 
-def _tool_modules() -> list[Path]:
+def _core_tool_modules() -> list[Path]:
     return sorted(path for path in TOOLS_ROOT.glob("*.py") if path.name not in SKIPPED_MODULES)
+
+
+def _module_tool_modules() -> list[Path]:
+    return sorted(path for root in MODULE_TOOL_ROOTS for path in root.glob("*.py") if path.name not in SKIPPED_MODULES)
+
+
+def _tool_modules() -> list[Path]:
+    """Every file that may hold tool handlers: the core's and those of every source module."""
+    return [*_core_tool_modules(), *_module_tool_modules()]
 
 
 def _tool_decorator(node: Handler) -> ast.Call | None:
@@ -397,13 +409,15 @@ def test_the_guard_can_actually_fail() -> None:
 
 def test_every_tool_declares_an_annotation_preset_and_a_title() -> None:
     """A future write tool cannot inherit read-only hints without a deliberate choice."""
-    total = 0
+    core_total = 0
     for path in _tool_modules():
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        total += len(_tool_decorators(tree))
+        if path.parent == TOOLS_ROOT:
+            core_total += len(_tool_decorators(tree))
         problems = _decorator_problems(tree)
         assert problems == [], f"{path.name}: {problems}"
-    assert total == EXPECTED_TOOL_COUNT
+    # The count is the core's alone: a module adds its own tools on top of the 13.
+    assert core_total == EXPECTED_TOOL_COUNT
 
 
 @pytest.mark.parametrize(
@@ -486,3 +500,124 @@ def test_the_annotation_guard_covers_sync_handlers_and_named_presets() -> None:
     assert with_write_preset == {"READ_ONLY_LOCAL", "READ_ONLY_REMOTE", "WRITE_REMOTE"}
     assert _decorator_problems(write_tool, with_write_preset) == []
     assert _decorator_problems(write_tool) == [ANNOTATIONS_PROBLEM]
+
+
+# --- source modules -------------------------------------------------------------------------------
+#
+# A module's tools mirror the core's: thin adapters with a title and a preset (the tests above now run
+# over every module tool package as well). On top of that a module reaches upstream only through the
+# host object the core hands its start hook, never through `httpx` or the core `client/` layer, and the
+# core never imports a module.
+
+MODULE_PACKAGE_PREFIX = f"{PACKAGE}_"
+MODULE_FORBIDDEN_TARGETS = frozenset({"client", HTTP_LIBRARY})
+DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
+
+
+def _module_tool_import_problems(tree: ast.Module, filename: str) -> list[str]:
+    """One message per forbidden layer a module's tool file imports."""
+    targets = {_import_target(name) for name in _imported_modules(tree, f"{MODULE_PACKAGE_PREFIX}x.tools")}
+    return [
+        f"{filename} must not import {target}" for target in sorted(t for t in targets if t in MODULE_FORBIDDEN_TARGETS)
+    ]
+
+
+def _hard_wired_module_imports(tree: ast.Module) -> list[str]:
+    """Names of source-module packages the file imports, statically or by a literal `import_module(...)`."""
+    names = {name for name in _imported_modules(tree, PACKAGE) if name.split(".")[0].startswith(MODULE_PACKAGE_PREFIX)}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)):
+            continue
+        func = node.func
+        called = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
+        target = node.args[0].value
+        if called in DYNAMIC_IMPORTERS and isinstance(target, str) and target.startswith(MODULE_PACKAGE_PREFIX):
+            names.add(target)
+    return sorted(names)
+
+
+def test_the_module_tool_packages_were_found() -> None:
+    """Without this, an empty glob would turn every module check above and below into a pass."""
+    assert MODULE_TOOL_ROOTS, "no modules/<source>/src/law_scrapper_mcp_<source>/tools/ found"
+    assert _module_tool_modules(), "the module tool packages hold no tool module"
+
+
+def test_module_tools_do_not_reach_httpx_or_the_core_client_layer() -> None:
+    problems: list[str] = []
+    for root in MODULE_TOOL_ROOTS:
+        for path in sorted(root.glob("*.py")):
+            problems.extend(_module_tool_import_problems(ast.parse(path.read_text(encoding="utf-8")), path.name))
+    assert problems == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("import httpx", ["ping.py must not import httpx"], id="httpx"),
+        pytest.param("from httpx import AsyncClient", ["ping.py must not import httpx"], id="httpx-from"),
+        pytest.param(
+            "from law_scrapper_mcp.client.sejm_client import SejmApiClient",
+            ["ping.py must not import client"],
+            id="core-client-layer",
+        ),
+        pytest.param("from law_scrapper_mcp import client", ["ping.py must not import client"], id="client-package"),
+    ],
+)
+def test_the_module_import_guard_can_actually_fail(source: str, expected: list[str]) -> None:
+    assert _module_tool_import_problems(ast.parse(source), "ping.py") == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from law_scrapper_mcp.services.content_processor import ContentProcessor",
+        "from law_scrapper_mcp.models.tool_outputs import EnrichedResponse",
+        "from law_scrapper_mcp.tools.error_handling import handle_tool_errors",
+        "from law_scrapper_mcp.context import AppContext, get_app_context",
+        "from law_scrapper_mcp_reference.state import reference_state",
+        "from .helpers import something",
+    ],
+)
+def test_the_module_import_guard_allows_what_a_module_tool_may_use(source: str) -> None:
+    assert _module_tool_import_problems(ast.parse(source), "ping.py") == []
+
+
+def test_the_core_never_imports_a_source_module() -> None:
+    """Modules are found by entry point. A hard import would make a disabled module part of the core."""
+    checked = 0
+    problems: dict[str, list[str]] = {}
+    for path in sorted(SRC_ROOT.rglob("*.py")):
+        checked += 1
+        if found := _hard_wired_module_imports(ast.parse(path.read_text(encoding="utf-8"))):
+            problems[path.relative_to(SRC_ROOT).as_posix()] = found
+    assert checked > EXPECTED_TOOL_COUNT, "the scan found too few files to have covered the package"
+    assert problems == {}
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("import law_scrapper_mcp_reference", ["law_scrapper_mcp_reference"], id="import"),
+        pytest.param(
+            "from law_scrapper_mcp_reference.state import reference_state",
+            ["law_scrapper_mcp_reference.state", "law_scrapper_mcp_reference.state.reference_state"],
+            id="from-submodule",
+        ),
+        pytest.param(
+            "from law_scrapper_mcp_reference import module",
+            ["law_scrapper_mcp_reference", "law_scrapper_mcp_reference.module"],
+            id="from-package",
+        ),
+        pytest.param(
+            "import importlib\nimportlib.import_module('law_scrapper_mcp_reference')",
+            ["law_scrapper_mcp_reference"],
+            id="import_module",
+        ),
+        pytest.param("__import__('law_scrapper_mcp_saos')", ["law_scrapper_mcp_saos"], id="dunder-import"),
+        pytest.param("from law_scrapper_mcp import server", [], id="core-import"),
+        pytest.param("import law_scrapper_mcp.source_modules.discovery", [], id="core-submodule"),
+        pytest.param("import importlib\nimportlib.import_module('law_scrapper_mcp.server')", [], id="core-dynamic"),
+    ],
+)
+def test_the_core_import_guard_can_actually_fail(source: str, expected: list[str]) -> None:
+    assert _hard_wired_module_imports(ast.parse(source)) == expected

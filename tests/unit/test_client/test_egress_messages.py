@@ -1,8 +1,8 @@
 """Client-side texts of a host that has no preset.
 
-Expected strings are the literals of the wording table in the plan (client-side part only: the
-"other sources" sentence and the category guidance are added by the tool layer). The example
-source is called SAOS.
+Expected strings are written out literally, so a wording change is a deliberate edit here (client-side
+part only: the "other sources" sentence and the category guidance are added by the tool layer). The
+example source is called SAOS.
 """
 
 from __future__ import annotations

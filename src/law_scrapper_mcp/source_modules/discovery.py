@@ -150,11 +150,6 @@ def _load(candidate: InstalledEntryPoint) -> LoadedModule:
             f"Moduł {name} ({candidate.distribution}): deskryptor nazywa się {loaded.name}, a punkt wejścia {name}. "
             f"{_disable_hint(name)}"
         )
-    if not _MODULE_NAME.fullmatch(name):
-        raise SourceModuleError(
-            f"Moduł {name!r} ({candidate.distribution}): nazwa musi mieć postać małych liter, cyfr i myślników "
-            f"i zaczynać się od litery. {_disable_hint(name)}"
-        )
     if len(set(loaded.tool_names)) != len(loaded.tool_names):
         raise SourceModuleError(f"Moduł {name}: lista tool_names powtarza nazwę narzędzia. {_disable_hint(name)}")
     return LoadedModule(module=loaded, distribution=candidate.distribution, version=candidate.version)
@@ -168,6 +163,17 @@ def discover(settings: Settings, entry_points: Iterable[InstalledEntryPoint] | N
     message naming the module and the remedy.
     """
     candidates = tuple(installed_entry_points() if entry_points is None else entry_points)
+    # Before anything is switched on or imported: a name the variable cannot spell has no
+    # `-name` remedy, so the only way out is to remove or fix the package, and its import-time
+    # code must not run on the way to that message.
+    for candidate in candidates:
+        if not _MODULE_NAME.fullmatch(candidate.name):
+            raise SourceModuleError(
+                f"Pakiet {candidate.distribution} rejestruje moduł o niedozwolonej nazwie {candidate.name!r}: "
+                "nazwa musi składać się z małych liter, cyfr i myślników i zaczynać się od litery. "
+                "Zmiennej LAW_MCP_SOURCE_MODULES nie da się go wyłączyć; odinstaluj pakiet albo popraw nazwę "
+                "punktu wejścia."
+            )
     names = [candidate.name for candidate in candidates]
     duplicated = sorted({name for name in names if names.count(name) > 1})
     if duplicated:

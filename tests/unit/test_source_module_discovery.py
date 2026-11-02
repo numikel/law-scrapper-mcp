@@ -124,10 +124,27 @@ def test_load_failure_names_the_module_and_the_variable(monkeypatch: pytest.Monk
     assert isinstance(excinfo.value.__cause__, ImportError)
 
 
-@pytest.mark.parametrize("name", ["Alpha", "al_pha", "1alpha"])
-def test_active_module_name_must_have_the_documented_shape(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(SourceModuleError):
-        discover(settings_for("", monkeypatch), entry_points_of(SpyEntryPoint(name, fake_module(name))))
+INVALID_ENTRY_POINT_NAMES = ["Alpha", "al_pha", "1alpha", "al pha", "al.pha", "-alpha", "alpha*", "", "*"]
+
+
+@pytest.mark.parametrize("variable", ["", "-*", "-*,beta", "-alpha"])
+@pytest.mark.parametrize("name", INVALID_ENTRY_POINT_NAMES)
+def test_invalid_entry_point_name_is_refused_before_any_import(
+    name: str, variable: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A name the variable cannot spell has no `-name` remedy; no module code may run on the way."""
+    bad = SpyEntryPoint(name, fake_module("alpha"), distribution="law-scrapper-mcp-bad")
+    healthy = SpyEntryPoint("beta", fake_module("beta"))
+
+    with pytest.raises(SourceModuleError) as excinfo:
+        discover(settings_for(variable, monkeypatch), entry_points_of(healthy, bad))
+
+    message = str(excinfo.value)
+    assert "law-scrapper-mcp-bad" in message, "names the distribution to uninstall"
+    assert "odinstaluj" in message
+    assert "dopisując" not in message and "Wyłącz" not in message, "no disable token is suggested"
+    assert bad.loads == []
+    assert healthy.loads == [], "nothing is imported once any name is invalid"
 
 
 def test_tool_names_may_not_repeat_within_a_module(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import AsyncGenerator
-from pathlib import Path
+import os
 
-import pytest
-import pytest_asyncio
-import respx
-from httpx import Response
+from mcp_helpers import CORE_ONLY_ENV
 
-from law_scrapper_mcp.client.cache import TTLCache
-from law_scrapper_mcp.client.sejm_client import SejmApiClient
-from law_scrapper_mcp.config import settings
-from law_scrapper_mcp.services.content_processor import ContentProcessor
-from law_scrapper_mcp.services.document_store import DocumentStore
+# Core-only isolation, and it must run before the first `law_scrapper_mcp` import: `Settings()` and
+# the module-level `app` are built at import, so a later assignment would be too late. A source
+# module installed with `uv sync --all-packages` therefore never reaches the root suite.
+os.environ.update(CORE_ONLY_ENV)
+
+import json  # noqa: E402
+from collections.abc import AsyncGenerator  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+import respx  # noqa: E402
+from httpx import Response  # noqa: E402
+
+from law_scrapper_mcp.client.cache import TTLCache  # noqa: E402
+from law_scrapper_mcp.client.sejm_client import SejmApiClient  # noqa: E402
+from law_scrapper_mcp.config import settings  # noqa: E402
+from law_scrapper_mcp.services.content_processor import ContentProcessor  # noqa: E402
+from law_scrapper_mcp.services.document_store import DocumentStore  # noqa: E402
 
 
 @pytest.fixture

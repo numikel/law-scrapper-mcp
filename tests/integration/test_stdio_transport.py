@@ -13,7 +13,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
-from mcp_helpers import EXPECTED_TOOLS
+from mcp_helpers import CORE_ONLY_ENV, EXPECTED_TOOLS
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -69,6 +69,7 @@ async def test_stdio_discovery_tools_success_and_error(monkeypatch: pytest.Monke
             cwd=str(PROJECT_ROOT),
             env={
                 **get_default_environment(),
+                **CORE_ONLY_ENV,
                 "LAW_MCP_TRANSPORT": "stdio",
                 "LAW_MCP_LOG_LEVEL": "INFO",
             },

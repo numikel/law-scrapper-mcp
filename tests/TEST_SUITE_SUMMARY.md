@@ -42,6 +42,7 @@ tests/
 ├── TEST_SUITE_SUMMARY.md       # This file
 ├── conftest.py                 # Shared fixtures: fixture loaders, mock_client, stores, mcp_client
 ├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions
+├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
@@ -57,7 +58,7 @@ tests/
 │   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
 │   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
-│   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`
+│   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
@@ -77,6 +78,10 @@ tests/
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
+│   ├── test_source_module_activation.py # `LAW_MCP_SOURCE_MODULES`: syntax errors, left-to-right evaluation (the grammar table, order, the bare-name risk pin, the `-*` image-default pin), unknown names refused only while still enabled and reported otherwise
+│   ├── test_source_module_discovery.py # `discover()`: only active entry points are imported, descriptor validation, clashes, real distribution metadata via a temporary dist-info, `registered_tool_names` guard
+│   ├── test_source_module_instructions.py # Pre-change server instructions pinned byte for byte; modules raise the header count and append one block each
+│   ├── test_source_module_server.py    # `build_app` tool-name checks, module start/stop order around the egress hub, `module_state`, startup INFO and WARNING lines
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
 │   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs

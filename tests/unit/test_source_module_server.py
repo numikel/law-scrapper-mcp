@@ -60,22 +60,31 @@ async def test_tools_list_is_core_plus_declared_names() -> None:
 
 def test_a_module_may_not_shadow_a_core_tool() -> None:
     """The case the SDK would silently ignore: the duplicate name is dropped with a warning only."""
-    shadow = fake_module("alpha", ["search_legal_acts"])
+    calls: list[str] = []
+
+    def register(_server: MCPServer[AppContext]) -> None:
+        calls.append("register")
+
+    shadow = fake_module("alpha", ["search_legal_acts"], register=register)
 
     with pytest.raises(SourceModuleError) as excinfo:
         build_app([loaded(shadow)])
 
     assert "alpha" in str(excinfo.value)
     assert "search_legal_acts" in str(excinfo.value)
+    assert "już istnieje" in str(excinfo.value), "refused by name, not merely by the count afterwards"
     assert "LAW_MCP_SOURCE_MODULES" in str(excinfo.value)
+    assert calls == [], "a module that declares a taken name never gets to register anything"
 
 
 def test_two_modules_may_not_claim_the_same_tool() -> None:
     alpha = fake_module("alpha", ["shared_tool"])
     beta = fake_module("beta", ["shared_tool"])
 
-    with pytest.raises(SourceModuleError, match="beta"):
+    with pytest.raises(SourceModuleError, match="beta") as excinfo:
         build_app([loaded(alpha), loaded(beta)])
+
+    assert "już istnieje" in str(excinfo.value)
 
 
 def test_registering_more_than_declared_is_refused() -> None:

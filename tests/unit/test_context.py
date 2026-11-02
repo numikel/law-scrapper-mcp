@@ -22,6 +22,7 @@ EXPECTED_FIELDS = {
     "comparison_service",
     "relationship_service",
     "date_service",
+    "egress",
 }
 
 

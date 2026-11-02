@@ -86,3 +86,52 @@ async def test_cleanup_finishes_when_closing_the_client_raises(monkeypatch) -> N
 
     assert server_module._health_state.snapshot() == {"circuit_state": "unknown"}
     assert cleared == ["cache"]
+
+
+async def test_lifespan_registers_the_sejm_with_the_hub_and_health() -> None:
+    async with lifespan(server_module.app) as context:
+        registered = [state.name for state in context.egress.source_states()]
+        listed = server_module._health_state.sources()
+
+    assert registered == ["api.sejm.gov.pl"]
+    assert listed == [{"name": "api.sejm.gov.pl", "circuit_state": "closed"}]
+    assert server_module._health_state.sources() == []
+
+
+async def test_lifespan_closes_the_hub(monkeypatch) -> None:
+    closed: list[str] = []
+    original_close = server_module.EgressHub.close
+
+    async def spy_close(self) -> None:
+        closed.append("hub")
+        await original_close(self)
+
+    monkeypatch.setattr(server_module.EgressHub, "close", spy_close)
+
+    async with lifespan(server_module.app):
+        pass
+
+    assert closed == ["hub"]
+
+
+async def test_a_failing_hub_close_does_not_skip_the_cache_clear(monkeypatch) -> None:
+    """A source module's client failing to close must not leave a populated cache behind."""
+    cleared: list[str] = []
+    original_clear = cache_module.TTLCache.clear
+
+    async def spy_clear(self) -> None:
+        cleared.append("cache")
+        await original_clear(self)
+
+    async def failing_close(self) -> None:
+        raise RuntimeError("module client stuck")
+
+    monkeypatch.setattr(cache_module.TTLCache, "clear", spy_clear)
+    monkeypatch.setattr(server_module.EgressHub, "close", failing_close)
+
+    with pytest.raises(RuntimeError, match="module client stuck"):
+        async with lifespan(server_module.app):
+            pass
+
+    assert cleared == ["cache"]
+    assert server_module._health_state.sources() == []

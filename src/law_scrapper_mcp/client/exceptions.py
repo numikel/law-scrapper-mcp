@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+# Name under which errors raised for api.sejm.gov.pl identify their source. Error texts for this
+# source predate source naming and must stay byte-identical, so the tool layer treats it (and a
+# missing source) as "legacy" and leaves them alone.
+SEJM_SOURCE = "api.sejm.gov.pl"
+
 
 class LawScrapperError(Exception):
     """Base exception for Law Scrapper MCP errors."""
@@ -10,19 +15,31 @@ class LawScrapperError(Exception):
 
 
 class SejmApiError(LawScrapperError):
-    """Error from Sejm API."""
+    """Error from an upstream source (historically only the Sejm API).
 
-    def __init__(self, message: str, status_code: int | None = None, url: str | None = None):
+    `source` is the label of the host that failed (`EgressHost.name`); `None` means the error was
+    not raised by an egress client. The tool layer uses it to name the source in the message.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        url: str | None = None,
+        *,
+        source: str | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.url = url
+        self.source = source
 
 
 class ActNotFoundError(SejmApiError):
     """Act not found in the API."""
 
-    def __init__(self, eli: str):
-        super().__init__(f"Nie znaleziono aktu: {eli}", status_code=404)
+    def __init__(self, eli: str, *, source: str | None = None):
+        super().__init__(f"Nie znaleziono aktu: {eli}", status_code=404, source=source)
         self.eli = eli
 
 
@@ -33,6 +50,27 @@ class ApiUnavailableError(SejmApiError):
     circuit breaker — exactly the events the breaker counts as a failure.
     Inherits from `SejmApiError`, so existing `except SejmApiError` blocks catch
     them just as before.
+    """
+
+
+class EgressRedirectRefusedError(LawScrapperError):
+    """A source answered with a redirect to another origin, and the client refused to follow it.
+
+    Deliberately not an `ApiUnavailableError`: retrying cannot help, because the address the
+    module is configured with is what has to change. Raised from inside the request pipeline, so
+    it is neither retried nor booked as a breaker failure. Carries the label of the source.
+    """
+
+    def __init__(self, message: str, *, source: str | None = None):
+        super().__init__(message)
+        self.source = source
+
+
+class EgressConfigError(LawScrapperError):
+    """An egress host or caller description is invalid, or claims something already claimed.
+
+    Raised at startup, while modules register their hosts, so an operator sees it before any
+    request is sent.
     """
 
 

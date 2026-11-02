@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from mcp.server.mcpserver import Context
 
 from law_scrapper_mcp.client.cache import TTLCache
+from law_scrapper_mcp.client.egress import EgressHub
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.services.act_service import ActService
 from law_scrapper_mcp.services.changes_service import ChangesService
@@ -36,6 +37,7 @@ class AppContext:
     comparison_service: ComparisonService
     relationship_service: RelationshipService
     date_service: DateService
+    egress: EgressHub
 
 
 def get_app_context(ctx: Context[AppContext]) -> AppContext:

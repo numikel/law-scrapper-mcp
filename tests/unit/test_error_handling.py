@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ from law_scrapper_mcp.client.exceptions import (
     ActNotFoundError,
     ApiUnavailableError,
     ContentTooLargeError,
+    EgressRedirectRefusedError,
     SejmApiError,
 )
 from law_scrapper_mcp.services.result_store import ResultSetNotFoundError, ResultSetTooLargeError
@@ -485,3 +487,179 @@ class TestCallerSourcedCategories:
 
         all_categories = set(_ERROR_CATEGORIES.values()) | {"internal"}
         assert _CALLER_SOURCED_CATEGORIES | {"internal", "upstream"} == all_categories
+
+
+class TestNamedSource:
+    """FR-005: a failure of a source other than the Sejm names it and says the rest are fine.
+
+    The Sejm, and any exception without a `source`, keep the wording this server has always used.
+    """
+
+    OTHER_SOURCES = "Pozostałe źródła nie są objęte tym błędem."
+
+    @staticmethod
+    def message_of(exc: Exception) -> str:
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        return _public_message(exc, _classify_error(exc))
+
+    @pytest.mark.parametrize(
+        ("exc", "expected"),
+        [
+            pytest.param(
+                ApiUnavailableError("Źródło SAOS jest tymczasowo niedostępne (bezpiecznik otwarty)", source="SAOS"),
+                "Źródło SAOS jest tymczasowo niedostępne (bezpiecznik otwarty). "
+                "Pozostałe źródła nie są objęte tym błędem. Ponów wywołanie za chwilę.",
+                id="breaker-open",
+            ),
+            pytest.param(
+                ApiUnavailableError("Źródło SAOS jest chwilowo niedostępne (HTTP 503)", status_code=503, source="SAOS"),
+                "Źródło SAOS jest chwilowo niedostępne (HTTP 503). "
+                "Pozostałe źródła nie są objęte tym błędem. Ponów wywołanie za chwilę.",
+                id="5xx",
+            ),
+            pytest.param(
+                ApiUnavailableError(
+                    "Błąd połączenia ze źródłem SAOS (ConnectError) podczas żądania GET search/judgments", source="SAOS"
+                ),
+                "Błąd połączenia ze źródłem SAOS (ConnectError) podczas żądania GET search/judgments. "
+                "Pozostałe źródła nie są objęte tym błędem. Ponów wywołanie za chwilę.",
+                id="connection-failure",
+            ),
+            pytest.param(
+                ApiUnavailableError(
+                    "Ruch do źródła SAOS jest wstrzymany na prośbę serwera (~30 s) — "
+                    "nie zmieściłoby się w budżecie czasu operacji",
+                    source="SAOS",
+                ),
+                "Ruch do źródła SAOS jest wstrzymany na prośbę serwera (~30 s) — "
+                "nie zmieściłoby się w budżecie czasu operacji. "
+                "Pozostałe źródła nie są objęte tym błędem. Ponów wywołanie za chwilę.",
+                id="server-pause",
+            ),
+            pytest.param(
+                ApiUnavailableError(
+                    "Żądanie do źródła SAOS musiałoby czekać w kolejce na przepustowość (~3 s) — "
+                    "nie zmieściłoby się w budżecie czasu operacji",
+                    source="SAOS",
+                ),
+                "Żądanie do źródła SAOS musiałoby czekać w kolejce na przepustowość (~3 s) — "
+                "nie zmieściłoby się w budżecie czasu operacji. "
+                "Pozostałe źródła nie są objęte tym błędem. Ponów wywołanie za chwilę.",
+                id="pacing-queue",
+            ),
+            pytest.param(
+                EgressRedirectRefusedError(
+                    "Źródło SAOS przekierowało żądanie poza własny adres, więc go nie wykonano", source="SAOS"
+                ),
+                "Źródło SAOS przekierowało żądanie poza własny adres, więc go nie wykonano. "
+                "Pozostałe źródła nie są objęte tym błędem. "
+                "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, "
+                "że konfiguracja adresu tego źródła jest błędna.",
+                id="redirect-refused",
+            ),
+            pytest.param(
+                SejmApiError("HTTP 418: tea", status_code=418, source="SAOS"),
+                "Źródło SAOS nie odpowiedziało poprawnie. Ponów wywołanie za chwilę.",
+                id="4xx",
+            ),
+        ],
+    )
+    def test_the_wording_table(self, exc: Exception, expected: str) -> None:
+        assert self.message_of(exc) == expected
+
+    @pytest.mark.parametrize("source", [None, "api.sejm.gov.pl"])
+    @pytest.mark.parametrize(
+        ("exc_factory", "expected"),
+        [
+            (
+                lambda source: ApiUnavailableError(
+                    "API Sejmu tymczasowo niedostępne (bezpiecznik otwarty)", source=source
+                ),
+                "API Sejmu tymczasowo niedostępne (bezpiecznik otwarty). Ponów wywołanie za chwilę.",
+            ),
+            (
+                lambda source: ApiUnavailableError(
+                    "API Sejmu chwilowo niedostępne (HTTP 503)", status_code=503, source=source
+                ),
+                "API Sejmu chwilowo niedostępne (HTTP 503). Ponów wywołanie za chwilę.",
+            ),
+            (
+                lambda source: SejmApiError("HTTP 418: tea", status_code=418, source=source),
+                "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Ponów wywołanie za chwilę.",
+            ),
+            (
+                lambda source: ActNotFoundError("DU/2024/1", source=source),
+                "Nie znaleziono aktu: DU/2024/1. Ten zasób nie występuje w rejestrze — sprawdź identyfikator przed ponowieniem.",
+            ),
+        ],
+    )
+    def test_the_sejm_and_source_less_errors_keep_the_text_they_always_had(
+        self, source: str | None, exc_factory: Callable[[str | None], Exception], expected: str
+    ) -> None:
+        assert self.message_of(exc_factory(source)) == expected
+
+    def test_no_remote_text_reaches_the_message(self) -> None:
+        exc = SejmApiError(
+            "HTTP 400: body-secret-text ?token=query-secret",
+            status_code=400,
+            url="https://saos.example.test/api?token=query-secret",
+            source="SAOS",
+        )
+        exc.__cause__ = httpx.ReadTimeout("Retry-After: 99 header-secret")
+
+        message = self.message_of(exc)
+
+        assert "secret" not in message
+        assert "Retry-After" not in message
+        assert "saos.example.test" not in message
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            ApiUnavailableError("x", source="SAOS"),
+            SejmApiError("y", source="SAOS"),
+            EgressRedirectRefusedError("z", source="SAOS"),
+        ],
+    )
+    def test_a_named_source_message_still_ends_with_its_category_guidance(self, exc: Exception) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        assert self.message_of(exc).endswith(_CATEGORY_GUIDANCE[_classify_error(exc)])
+
+    def test_the_other_sources_sentence_survives_truncation_of_a_long_body(self) -> None:
+        message = self.message_of(ApiUnavailableError("x" * 5000, source="SAOS"))
+
+        assert self.OTHER_SOURCES in message
+        assert message.endswith("Ponów wywołanie za chwilę.")
+
+    def test_a_refused_redirect_is_not_an_unavailability(self) -> None:
+        exc = EgressRedirectRefusedError("z", source="SAOS")
+
+        assert _classify_error(exc) == "source_address"
+
+    @pytest.mark.asyncio
+    async def test_the_error_log_names_a_non_sejm_source_only(self, caplog: pytest.LogCaptureFixture) -> None:
+        @handle_tool_errors
+        async def saos_tool() -> None:
+            raise ApiUnavailableError("down", source="SAOS")
+
+        @handle_tool_errors
+        async def sejm_tool() -> None:
+            raise ApiUnavailableError("down", source="api.sejm.gov.pl")
+
+        @handle_tool_errors
+        async def upstream_tool() -> None:
+            raise SejmApiError("HTTP 418: tea", status_code=418, source="SAOS")
+
+        with caplog.at_level(logging.ERROR):
+            for tool in (saos_tool, sejm_tool, upstream_tool):
+                with pytest.raises(ToolExecutionError):
+                    await tool()
+
+        lines = [record.getMessage() for record in caplog.records]
+        assert lines == [
+            "Tool saos_tool failed [unavailable] source=SAOS: down",
+            "Tool sejm_tool failed [unavailable]: down",
+            "Tool upstream_tool failed [upstream] source=SAOS (HTTP 418)",
+        ]

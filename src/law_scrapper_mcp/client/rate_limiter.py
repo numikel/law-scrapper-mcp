@@ -40,7 +40,7 @@ class EgressPaceDeadlineError(Exception):
 async def _wait(seconds: float) -> None:
     """Sole waiting point of the limiter.
 
-    Extracted on the model of `sejm_client._delay` so that tests can drive the clock
+    Extracted on the model of `egress._delay` so that tests can drive the clock
     instead of sitting the delay out.
     """
     await asyncio.sleep(seconds)
@@ -64,6 +64,7 @@ class RateLimiter:
         *,
         clock: Callable[[], float] = monotonic,
         max_pause: float = 60.0,
+        name: str = "",
     ) -> None:
         if rate <= 0:
             raise ValueError("Tempo żądań musi być większe od zera.")
@@ -71,6 +72,8 @@ class RateLimiter:
             raise ValueError("Pojemność zbiornika tokenów musi wynosić co najmniej 1.")
         if max_pause <= 0:
             raise ValueError("Maksymalna pauza na żądanie serwera musi być większa od zera.")
+        # Only a label for log lines, so an operator can tell which host was paused.
+        self._label = f" [{name}]" if name else ""
         self._rate = rate
         self._burst = float(burst)
         self._tokens = float(burst)
@@ -114,14 +117,15 @@ class RateLimiter:
             return
         if seconds > self._max_pause:
             logger.warning(
-                "Server-requested pause of %.1fs exceeds the %.1fs cap; pausing egress for %.1fs instead.",
+                "Server-requested pause of %.1fs exceeds the %.1fs cap; pausing egress%s for %.1fs instead.",
                 seconds,
                 self._max_pause,
+                self._label,
                 self._max_pause,
             )
             seconds = self._max_pause
         else:
-            logger.warning("Pausing egress for %.1fs (server requested via Retry-After).", seconds)
+            logger.warning("Pausing egress%s for %.1fs (server requested via Retry-After).", self._label, seconds)
         self._paused_until = max(self._paused_until, self._clock() + seconds)
         # Bank what has been earned up to now before moving the refill mark forward:
         # skipping this would forfeit the tokens accrued since the last `_refill`, which

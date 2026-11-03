@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from saos_testing import TODAY, FakeSaos, HarnessFactory, corpus, recording
+from saos_testing import TODAY, FakeSaos, HarnessFactory, corpus
 
 from law_scrapper_mcp.client.exceptions import SejmApiError
 from law_scrapper_mcp.models.tool_outputs import Hint
@@ -390,27 +390,6 @@ class TestFilterLimitHint:
 
         with pytest.raises(ResultSetTooLargeError):
             await harness.store.filter_and_store(response.data.result_set_id or "", pattern="x")
-
-
-class TestCoverageSentence:
-    async def test_every_number_and_date_comes_from_a_recording(self) -> None:
-        """The sentence is static, so each figure in it is tied to the file it was measured in."""
-        measured = {
-            "search_common_newest_le_today.json": "common",
-            "search_supreme_newest_le_today.json": "supreme",
-            "search_newest_constitutional_tribunal.json": "tribunal",
-            "search_newest_national_appeal_chamber.json": "chamber",
-        }
-        for name in measured:
-            page = recording(name)
-            assert _thousands(page["info"]["totalResults"]) in COVERAGE_SENTENCE, name
-            assert page["items"][0]["judgmentDate"] in COVERAGE_SENTENCE, name
-        assert recording("search_newest_administrative.json")["info"]["totalResults"] == 0
-        assert "sądy administracyjne 0" in COVERAGE_SENTENCE
-        assert "2026-11-02" in COVERAGE_SENTENCE
-
-    async def test_it_says_that_a_missing_result_proves_nothing(self) -> None:
-        assert "nie dowodzi" in COVERAGE_SENTENCE
 
 
 class TestPrivacyOfTheOutput:

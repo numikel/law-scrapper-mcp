@@ -47,8 +47,8 @@ LABOUR_DIVISION_PATTERN = "(15|18|21)$"
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 # What SAOS held on the day it was measured (tests/fixtures/saos/PROVENANCE.md). Static on purpose and
-# dated, so the sentence cannot pass for a live count; `tests/test_coverage.py` ties every number to the
-# recording it came from.
+# dated, so the sentence cannot pass for a live count; `modules/saos/tests/test_saos_coverage.py` ties every
+# number and date to the recording it came from.
 COVERAGE_AS_OF = "2026-11-02"
 COVERAGE_SENTENCE = (
     f"Zasięg SAOS (pomiar z {COVERAGE_AS_OF}): sądy powszechne 474 859 orzeczeń (najnowsze z 2026-10-27), "

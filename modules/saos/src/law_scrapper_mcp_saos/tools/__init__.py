@@ -7,6 +7,8 @@ from law_scrapper_mcp.context import AppContext
 
 def register_all_tools(mcp: MCPServer[AppContext]) -> None:
     """Register every tool of the module."""
+    from law_scrapper_mcp_saos.tools.saos_judgment_details import register as reg_details
     from law_scrapper_mcp_saos.tools.search_saos_judgments import register as reg_search
 
     reg_search(mcp)
+    reg_details(mcp)

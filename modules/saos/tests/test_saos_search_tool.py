@@ -3,40 +3,19 @@
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Any
 
 import jsonschema
 import pytest
 import respx
 from mcp import Client
-from saos_testing import FakeSaos, corpus
+from saos_testing import FakeSaos, connected, corpus, loaded
 
-from law_scrapper_mcp.source_modules.contract import LoadedModule
-from law_scrapper_mcp_saos import module
 from law_scrapper_mcp_saos.service import COVERAGE_SENTENCE
 
 CORE_TOOLS = 13
+MODULE_TOOLS = 2
 TOOL = "search_saos_judgments"
-
-
-def _loaded() -> LoadedModule:
-    return LoadedModule(module=module, distribution="law-scrapper-mcp-saos", version="0.1.0")
-
-
-@asynccontextmanager
-async def connected(router: respx.MockRouter, fake: FakeSaos | None = None) -> AsyncIterator[Client]:
-    """A client on an in-memory server with the SAOS module and a fake SAOS behind it.
-
-    A context manager rather than a fixture: the client's task group must be entered and left by one task.
-    """
-    # Imported here: importing the server runs discovery, so a broken descriptor fails a named test.
-    from law_scrapper_mcp.server import build_app
-
-    (fake or FakeSaos()).install(router)
-    async with Client(build_app([_loaded()])) as client:
-        yield client
 
 
 async def _tool(client: Client) -> Any:
@@ -49,7 +28,7 @@ async def test_the_server_lists_the_core_tools_and_the_module_tool(saos_router: 
         names = [tool.name for tool in (await client.list_tools()).tools]
 
         assert TOOL in names
-        assert len(names) == CORE_TOOLS + 1
+        assert len(names) == CORE_TOOLS + MODULE_TOOLS
 
 
 @pytest.mark.asyncio
@@ -84,11 +63,15 @@ async def test_the_input_schema_has_exactly_the_documented_parameters_with_descr
             "judgment_type",
             "limit",
             "offset",
+            "include_portal_links",
         }
         for name, schema in properties.items():
             assert schema.get("description", "").strip(), name
         assert properties["limit"]["default"] == 20
         assert properties["offset"]["default"] == 0
+        assert properties["include_portal_links"]["default"] is False
+        assert "get_saos_judgment_details" in properties["include_portal_links"]["description"]
+        assert "5" in properties["include_portal_links"]["description"]
         assert "saos.org.pl" in properties["phrase"]["description"]
         assert "saos.org.pl" in properties["signature"]["description"]
         assert "100" in properties["limit"]["description"]
@@ -117,11 +100,11 @@ async def test_the_description_carries_the_decision_tree_five_examples_and_the_d
 def test_the_instructions_name_the_tool_and_count_it() -> None:
     from law_scrapper_mcp.server import build_app
 
-    server = build_app([_loaded()])
+    server = build_app([loaded()])
 
     assert server.instructions is not None
-    assert f"DOSTĘPNE NARZĘDZIA ({CORE_TOOLS + 1}):" in server.instructions
-    assert "MODUŁ ŹRÓDŁA — saos (narzędzi: 1)" in server.instructions
+    assert f"DOSTĘPNE NARZĘDZIA ({CORE_TOOLS + MODULE_TOOLS}):" in server.instructions
+    assert "MODUŁ ŹRÓDŁA — saos (narzędzi: 2)" in server.instructions
     assert TOOL in server.instructions
 
 
@@ -198,7 +181,7 @@ async def test_a_saos_outage_is_a_tool_error_that_names_the_source(saos_router: 
     from law_scrapper_mcp.server import build_app
 
     FakeSaos(failing_pages={0}).install(saos_router)
-    async with Client(build_app([_loaded()])) as connected:
+    async with Client(build_app([loaded()])) as connected:
         result = await connected.call_tool(TOOL, {})
 
     assert result.is_error is True

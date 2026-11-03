@@ -49,7 +49,7 @@ async def make_harness(saos_router: respx.MockRouter) -> AsyncIterator[HarnessFa
         service, store = make_service(
             client, today=(lambda: today) if today else None, filter_max_records=filter_max_records
         )
-        return Harness(fake=fake, service=service, store=store, hub=hub)
+        return Harness(fake=fake, service=service, store=store, hub=hub, client=client)
 
     yield build
     for hub in hubs:

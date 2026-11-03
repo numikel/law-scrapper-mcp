@@ -4,12 +4,19 @@ No SAOS record is invented here. Pages are cut from the redacted recordings in `
 (see `PROVENANCE.md` there), and the fake server only does what the real one was observed to do:
 zero-based `pageNumber`, `pageSize` 1..100, `totalResults` on every page, an empty `items` list past the
 last page (recorded in `search_out_of_range_page.json`).
+
+A judgment detail is derived, not invented: the recorded detail has the same keys as a search item plus
+`source` and `division.type` (`judgment_labour_sentence_metadata.json`, key paths in `PROVENANCE.md`), so a
+test detail is a recorded search item with those two keys added and a long text, which is what the real
+detail is. The court portal address of every test detail is the recorded one with a suffix.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+import re
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -17,16 +24,21 @@ from typing import Any
 
 import httpx
 import respx
+from mcp import Client
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.egress import CallerIdentity, EgressClient, EgressDefaults, EgressHost, EgressHub
 from law_scrapper_mcp.services.result_store import ResultStore
+from law_scrapper_mcp.source_modules.contract import LoadedModule
+from law_scrapper_mcp_saos import module
 from law_scrapper_mcp_saos.client import SaosClient
 from law_scrapper_mcp_saos.service import SaosSearchService
 from law_scrapper_mcp_saos.state import BASE_URL, HOST_LABEL
 
 RECORDINGS = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "saos"
 SEARCH_URL = f"{BASE_URL}/search/judgments"
+DETAIL_URL = re.compile(rf"^{re.escape(BASE_URL)}/judgments/(\d+)$")
+DETAIL_FIXTURE = "judgment_labour_sentence_metadata.json"
 TODAY = date(2026, 11, 3)
 IDENTITY = CallerIdentity("law-scrapper-mcp-saos", "0.1.0")
 
@@ -69,6 +81,33 @@ def corpus() -> list[dict[str, Any]]:
     return recorded_items(*CORPUS_FILES)
 
 
+def recorded_portal_url() -> str:
+    """The court portal address of the recorded detail."""
+    return str(recording(DETAIL_FIXTURE)["data"]["source"]["judgmentUrl"])
+
+
+def portal_url_for(source_id: int) -> str:
+    """A distinct portal address per record, derived from the recorded one."""
+    return f"{recorded_portal_url()}&record={source_id}"
+
+
+def detail_body(
+    item: dict[str, Any], *, portal_url: str | None = None, with_division_type: bool = True
+) -> dict[str, Any]:
+    """A judgment detail derived from a recorded search item (see the module docstring).
+
+    The text is long and the judges are present, as in the real detail, so a test can prove that neither
+    reaches an output.
+    """
+    portal = portal_url if portal_url is not None else portal_url_for(item["id"])
+    data: dict[str, Any] = {**item, "source": {"judgmentUrl": portal}, "textContent": item["textContent"] * 40}
+    if "division" in item:
+        data["division"] = {**item["division"], "type": recording(DETAIL_FIXTURE)["data"]["division"]["type"]}
+        if not with_division_type:
+            del data["division"]["type"]
+    return {"links": [{"rel": "self", "href": item["href"]}], "data": data}
+
+
 def page_body(items: list[dict[str, Any]], total: int) -> dict[str, Any]:
     """A search page in the recorded envelope."""
     return {"links": [], "items": items, "queryTemplate": {}, "info": {"totalResults": total}}
@@ -87,18 +126,45 @@ class FakeSaos:
         total: int | None = None,
         failing_pages: Iterable[int] = (),
         status: int = 502,
+        details: dict[int, dict[str, Any]] | None = None,
+        failing_details: Iterable[int] = (),
+        missing_details: Iterable[int] = (),
     ) -> None:
         self.items = corpus() if items is None else items
         self.total = len(self.items) if total is None else total
         self.failing_pages = set(failing_pages)
         self.status = status
+        self.details = {item["id"]: detail_body(item) for item in self.items} | (details or {})
+        self.failing_details = set(failing_details)
+        self.missing_details = set(missing_details)
         self.calls: list[dict[str, str]] = []
         self.urls: list[str] = []
+        self.detail_urls: list[str] = []
         self.route: respx.Route | None = None
+        self.detail_route: respx.Route | None = None
 
     @property
     def pages(self) -> list[int]:
         return [int(call["pageNumber"]) for call in self.calls]
+
+    @property
+    def detail_ids(self) -> list[int]:
+        """Identifiers asked for, one entry per request (a retried request counts again)."""
+        return [int(url.rsplit("/", 1)[-1]) for url in self.detail_urls]
+
+    @property
+    def requests(self) -> int:
+        """Every request that reached the fake SAOS, search and detail."""
+        return len(self.calls) + len(self.detail_urls)
+
+    def _handle_detail(self, request: httpx.Request) -> httpx.Response:
+        self.detail_urls.append(str(request.url))
+        source_id = int(request.url.path.rsplit("/", 1)[-1])
+        if source_id in self.failing_details:
+            return httpx.Response(self.status, text="upstream failure")
+        if source_id in self.missing_details or source_id not in self.details:
+            return httpx.Response(404)
+        return httpx.Response(200, json=self.details[source_id])
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
@@ -115,6 +181,7 @@ class FakeSaos:
     def install(self, router: respx.MockRouter) -> FakeSaos:
         """Register the route on `router`."""
         self.route = router.get(SEARCH_URL).mock(side_effect=self._handle)
+        self.detail_route = router.get(url__regex=DETAIL_URL).mock(side_effect=self._handle_detail)
         return self
 
 
@@ -151,3 +218,23 @@ class Harness:
     service: SaosSearchService
     store: ResultStore
     hub: EgressHub
+    client: SaosClient
+
+
+def loaded() -> LoadedModule:
+    """The SAOS module as the core would hand it to `build_app`."""
+    return LoadedModule(module=module, distribution="law-scrapper-mcp-saos", version="0.1.0")
+
+
+@asynccontextmanager
+async def connected(router: respx.MockRouter, fake: FakeSaos | None = None) -> AsyncIterator[Client]:
+    """A client on an in-memory server with the SAOS module and a fake SAOS behind it.
+
+    A context manager rather than a fixture: the client's task group must be entered and left by one task.
+    """
+    # Imported here: importing the server runs discovery, so a broken descriptor fails a named test.
+    from law_scrapper_mcp.server import build_app
+
+    (fake or FakeSaos()).install(router)
+    async with Client(build_app([loaded()])) as client:
+        yield client

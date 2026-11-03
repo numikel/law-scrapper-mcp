@@ -1,0 +1,17 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/judgments/554697"
+    }
+  ],
+  "data": {
+    "id": 554697,
+    "source": {
+      "judgmentUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/details?id=152510000004021_VIII_U_002924_2025_Uz_2026-10-13_001"
+    },
+    "division": {
+      "type": "Pracy i Ubezpieczeń Społecznych"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 """Models of the SAOS API (only what this module reads) and of the module's tool output.
 
 The API models ignore every key they do not name. In particular `judges[]` (names of people) and the
-full set of search-item keys are never parsed, so they cannot leak into an output by accident.
+text and reporters of a detail are never parsed, so they cannot leak into an output by accident.
 """
 
 from __future__ import annotations
@@ -45,16 +45,46 @@ class SaosCourtCase(SaosModel):
     case_number: str | None = Field(default=None, alias="caseNumber")
 
 
-class SaosSearchItem(SaosModel):
-    """One search result: a judgment record with an excerpt of at most 800 characters."""
+class SaosRecord(SaosModel):
+    """The keys a search item and a judgment detail have in common."""
 
     id: int
     court_type: str = Field(default="", alias="courtType")
     court_cases: list[SaosCourtCase] = Field(default_factory=list, alias="courtCases")
     judgment_type: str = Field(default="", alias="judgmentType")
-    text_content: str | None = Field(default=None, alias="textContent")
     division: SaosDivision | None = None
     judgment_date: str | None = Field(default=None, alias="judgmentDate")
+
+
+class SaosSearchItem(SaosRecord):
+    """One search result: a judgment record with an excerpt of at most 800 characters."""
+
+    text_content: str | None = Field(default=None, alias="textContent")
+
+
+class SaosSource(SaosModel):
+    """Where the court published the judgment; `judgmentUrl` is the court portal address."""
+
+    judgment_url: str | None = Field(default=None, alias="judgmentUrl")
+
+
+class SaosDetailDivision(SaosDivision):
+    """A division as the detail gives it: with its type (`Pracy i Ubezpieczeń Społecznych`)."""
+
+    type: str | None = None
+
+
+class SaosDetailData(SaosRecord):
+    """The `data` block of a judgment detail. The text, the judges and the reporters are never parsed."""
+
+    division: SaosDetailDivision | None = None  # type: ignore[assignment]
+    source: SaosSource | None = None
+
+
+class SaosDetail(SaosModel):
+    """A judgment detail (`judgments/{id}`)."""
+
+    data: SaosDetailData
 
 
 class SaosPageInfo(SaosModel):
@@ -72,6 +102,26 @@ class SaosSearchPage(SaosModel):
 
     items: list[SaosSearchItem]
     info: SaosPageInfo
+
+
+class PortalLinks(BaseModel):
+    """What `include_portal_links` did: how many detail requests were made and how they ended."""
+
+    requested: int = Field(description="Liczba wyników, dla których pobrano szczegóły (pierwsze wyniki strony).")
+    resolved: int = Field(description="Liczba wyników, które dostały odnośnik do portalu sądu.")
+    without_link: int = Field(description="Liczba wyników, których szczegóły nie zawierają poprawnego odnośnika.")
+    failed: int = Field(
+        description="Liczba wyników bez odnośnika z powodu błędu żądania, także pominiętych po awarii SAOS."
+    )
+    stopped_after_outage: bool = Field(
+        description="True, gdy po awarii SAOS przerwano dalsze żądania szczegółów (wyszukiwanie zostało zwrócone)."
+    )
+    skipped_for_budget: int = Field(
+        description=(
+            "Liczba wyników strony bez próby pobrania odnośnika (limit 5 pobrań na wywołanie, 4 przy offset "
+            "niewyrównanym do limit). Ich odnośniki pobierze get_saos_judgment_details."
+        )
+    )
 
 
 class SearchSaosJudgmentsOutput(BaseModel):
@@ -94,3 +144,19 @@ class SearchSaosJudgmentsOutput(BaseModel):
         ),
     )
     page_info: PageInfo
+    portal_links: PortalLinks | None = Field(
+        default=None, description="Wynik include_portal_links; brak, gdy parametr nie był użyty."
+    )
+
+
+class SaosJudgmentDetailsOutput(BaseModel):
+    """Output of `get_saos_judgment_details`."""
+
+    source: str = Field(description="Źródło orzeczeń: 'saos'.")
+    judgment: JudgmentSummaryOutput = Field(
+        description="Rekord orzeczenia z odnośnikiem do portalu sądu w polu portal_url (bez fragmentu tekstu)."
+    )
+    division_type: str | None = Field(
+        default=None,
+        description="Rodzaj wydziału (np. 'Pracy i Ubezpieczeń Społecznych'); brak, gdy SAOS go nie podaje.",
+    )

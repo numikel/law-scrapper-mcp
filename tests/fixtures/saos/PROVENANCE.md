@@ -18,7 +18,8 @@ not in this repository either.
 ```
 Round 1:  2026-11-02, 11:27:49 - 11:33:18 UTC, 15 requests: 14 x 200 and one deliberate 400
 Round 2:  2026-11-02, 12:20:34 - 12:20:54 UTC, 14 requests, all 200
-Round 3:  2026-11-03, 19:27:50 - 19:28:02 UTC, 3 requests, all 200 (page numbering, end of list, division code)
+Round 3:  2026-11-03, 19:27:50 - 20:06:29 UTC, 4 requests, all 200 (page numbering, end of list, division code,
+          one judgment detail)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
           (round 3: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
@@ -115,6 +116,16 @@ original is not in the repository, so no test can check them. `.gitattributes` m
 | `search_viii_sentence_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=SENTENCE&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 041 | 046736c449a94909403e17d66b8c65a34ebeedd8d01a49f739cdc44dee8c7ae1 | 4 714 | 77e3dac83da4cbe9285138eabf25fecf0fdbdef80090dbae2a06313ed88e3b79 | 2026-11-02 12:20:52 | yes |
 | `search_viii_reasons_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 042 | 00689d67624d8fc91fc3c80b06f14797d4f2d2e4c6b90e27dac6a4c588c5816f | 4 715 | 7039f22eb6ee3dfba7a0fcada21423290250ceeb92232b86b4ec8a4915b3ff16 | 2026-11-02 12:20:54 | yes |
 | `search_out_of_range_page.json` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=269&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 4 132 | ae772aa2126c2b033de96aa776d313adcf2ccd254816b585922a6a609bb1be00 | 3 161 | 539a4355a81348197520a803b164c3ef0f51aea17a67e79efb8c7d03c4ba9e4d | 2026-11-03 19:27:59 | yes |
+| `judgment_labour_sentence_metadata.json` | https://www.saos.org.pl/api/judgments/554697 | 200 | application/json;charset=UTF-8 | 395 | 28d09af44270faeb851f721d36ef7cab7af2b3b809360b322c3fc4768ae6ecea | 3 574 | 49a9d3dd2092dd2f8dd4eca56e8cf2ac2ab6c1d9987ebe9ff48e4dd6fd936f50 | 2026-11-03 20:06:29 | yes |
+## Detail metadata, reduced
+
+`judgment_labour_sentence_metadata.json` is the one stored recording of a judgment detail (`/api/judgments/{id}`). The full body
+holds the whole text of the judgment, the judges' names and the names of court staff, so it was not
+stored. A deterministic reduction keeps only the `links` (`rel` and `href`), `data.id`,
+`data.source.judgmentUrl` (the court portal address) and `data.division.type`; every other key was
+dropped, and the raw body was deleted after the reduction. The record is the one pinned as
+`detail_labour_sentence_split` below (same id, same size and hash as the original body).
+
 ## Recorded, kept private
 
 Four detail recordings hold the whole text of a judgment record (and, for three of them, the names
@@ -168,6 +179,7 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
 | A page past the end (`pageNumber=269`, `pageSize=100`) | HTTP 200, `items` empty, `info.totalResults` still 26 891, links `self` and `prev` only (no `next`) |
 | `ccDivisionCode=0004021` instead of the division name | Honoured as an exact value: every returned record has that code; `totalResults` 26 891, the same as the name filter, in at least 2 courts |
+| The judgment detail (`/api/judgments/{id}`) | A wrapper `{links, data}`; the court portal address is `data.source.judgmentUrl` and the division type `data.division.type`; the body of a short labour `SENTENCE` is 3 574 B |
 
 Records of division VIII by calendar year of their own `judgmentDate`, `pageSize=1`:
 

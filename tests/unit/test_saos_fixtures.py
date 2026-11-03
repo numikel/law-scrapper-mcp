@@ -505,3 +505,43 @@ def test_the_division_code_filter_is_an_exact_value_that_selects_the_division() 
     assert facts["items"] == facts["pageSize"] == "20"
     assert int(facts["totalResults"]) >= total(DIVISION_VIII)
     assert int(facts["distinctCourts"]) >= 2
+
+
+DETAIL = "judgment_labour_sentence_metadata.json"
+DETAIL_RECORDING = "detail_labour_sentence_split"
+
+
+def private_rows() -> dict[str, list[str]]:
+    """Cells of the table of recordings kept outside the repository, keyed by recording name."""
+    return {
+        table_cells(line)[0]: table_cells(line)
+        for line in provenance_text().splitlines()
+        if line.startswith("| `detail_")
+    }
+
+
+def test_the_stored_judgment_detail_is_metadata_only() -> None:
+    """The reduction keeps the wrapper, the id, the portal address and the division type, and nothing else."""
+    body = load_json(DETAIL)
+
+    assert set(body) == {"links", "data"}
+    assert all(set(link) == {"rel", "href"} for link in body["links"])
+    assert set(body["data"]) == {"id", "source", "division"}
+    assert set(body["data"]["source"]) == {"judgmentUrl"}
+    assert set(body["data"]["division"]) == {"type"}
+    assert len((FIXTURES / DETAIL).read_bytes()) < 1000
+
+
+def test_the_stored_judgment_detail_is_the_record_pinned_in_the_private_table() -> None:
+    """Same request, same size and hash of the original body, same division type and portal scheme."""
+    body = load_json(DETAIL)
+    row = provenance_rows()[DETAIL]
+    private = private_rows()[DETAIL_RECORDING]
+    facts = private_facts()[DETAIL_RECORDING]
+
+    assert row[1] == private[1] == f"https://www.saos.org.pl/api/judgments/{body['data']['id']}"
+    assert (row[6], row[7]) == (private[4], private[5])
+    assert body["data"]["division"]["type"] == facts["divisionType"] == "Pracy i Ubezpieczeń Społecznych"
+    assert body["data"]["source"]["judgmentUrl"].split(":", 1)[0] == facts["judgmentUrlScheme"]
+    assert [link["rel"] for link in body["links"]] == ["self"]
+    assert body["links"][0]["href"] == row[1]

@@ -32,13 +32,16 @@ async def start(host: ModuleHost) -> AsyncIterator[SaosState]:
 
 module = SourceModule(
     name=MODULE_NAME,
-    tool_names=("search_saos_judgments",),
+    tool_names=("search_saos_judgments", "get_saos_judgment_details"),
     instructions=(
         "Moduł SAOS (orzeczenia sądów i trybunałów z serwisu saos.org.pl):\n"
         "- search_saos_judgments — wyszukuje orzeczenia po frazie, sygnaturze, dacie, rodzaju sądu i rodzaju "
         "orzeczenia (od najnowszych, dowolny offset). Wynik trafia do zestawu result_set_id, który zawęzisz "
         "narzędziem filter_results (pola wzorca: signature, court, division, division_code, type, excerpt; "
         "zakres dat: date_field=judgment_date).\n"
+        "- get_saos_judgment_details — jedno żądanie do SAOS o szczegóły orzeczenia: odnośnik do portalu sądu "
+        "i rodzaj wydziału (bez treści i bez danych osobowych). Odnośniki dla pierwszych 5 wyników wyszukiwania "
+        "pobierze też parametr include_portal_links=true.\n"
         "Wyrok i jego uzasadnienie to dwa osobne rekordy tej samej sprawy. Wydziały pracy sądów powszechnych "
         'rozpoznasz po kodzie wydziału: filter_results z pattern="(15|18|21)$" i field="division_code". '
         "Fraza i sygnatura są wysyłane do serwisu saos.org.pl; awaria SAOS nie wpływa na inne źródła."

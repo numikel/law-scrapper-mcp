@@ -59,3 +59,16 @@ def test_a_duplicate_code_or_host_fails_at_import_time(monkeypatch: pytest.Monke
 
     with pytest.raises(ValueError, match="unikalne"):
         catalog._check_invariants()
+
+
+def test_the_readme_lists_every_journal_with_its_host_and_state() -> None:
+    from pathlib import Path
+
+    readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
+
+    for journal in JOURNALS:
+        row = next((line for line in readme.splitlines() if line.startswith(f"| `{journal.code}`")), None)
+        assert row is not None, f"{journal.code} has no row in the README table"
+        assert journal.host in row
+        assert journal.voivodeship in row
+        assert ("withheld" in row) is (journal.withheld is not None), journal.code

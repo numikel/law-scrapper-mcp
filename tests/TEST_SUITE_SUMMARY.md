@@ -28,16 +28,21 @@ uv run pytest modules/voivodeship-journals/tests -v
 Several members can be installed at once and test directories are collected in one run
 (`pytest modules/*/tests`), so test file names are unique across members and the reference tests
 derive their tool counts from a run with `reference` switched off instead of hard-coding them.
+`tests/unit/test_ci_module_gates.py` also pins the CI step that runs the MCP conformance suite with
+a module active in the `modules` job (same pinned command as the core-only one in the `test` job).
 
 | File | What it pins |
 |------|--------------|
 | `modules/reference/tests/test_install_and_disable.py` | The entry point of the installed distribution, discovery over it, 14 vs 13 tools and the instructions header on a real STDIO server for `unset`, `-reference`, `-*`, `-*,reference`, `reference,-reference`, `reference`; a switched-off module's package is never imported |
 | `modules/reference/tests/test_reference_tool.py` | The descriptor, the state accessor, and `reference_ping` through an in-memory client with `outputSchema` validation |
-| `modules/voivodeship-journals/tests/journal_support.py`, `conftest.py` | Not tests: the recorded-payload loaders, host constants and the `started` fixture (the real start hook over a fresh hub and registry) |
-| `modules/voivodeship-journals/tests/test_catalog.py` | 16 journals, 12 served, 4 withheld with a stated reason, hosts agree with the recordings, import-time invariants |
+| `modules/voivodeship-journals/tests/journal_support.py`, `conftest.py` | Not tests: the recorded-payload loaders, host constants, a synthetic one-page PDF builder, the in-memory MCP session helper, the `started` fixture (the real start hook over a fresh hub and registry) and the autouse `no_real_network` guard that makes a name lookup for a non-local host fail |
+| `modules/voivodeship-journals/tests/test_catalog.py` | 16 journals, 12 served, 4 withheld with a stated reason, hosts agree with the recordings, import-time invariants, the module README table matches the catalogue |
 | `modules/voivodeship-journals/tests/test_normalise.py` | Both JSON casings, the date swap between search and details, sentinels, the canonical ELI, relations under the journal's own keys |
 | `modules/voivodeship-journals/tests/test_source.py` | Search parameters exactly (no `publisher`, `limit` always sent), each refusal before any request, withheld and unknown codes, 204 as not found, no `/struct`, relations, PDF download and its size budget |
-| `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution |
+| `modules/voivodeship-journals/tests/test_journals_end_to_end.py` | The tools through an in-memory client over the real server with only this module active and every journal host mocked: browse, filter, load, read, search in an act; search params and ISO dates; a Pascal journal; change tracking by publication window; relations; `compare_acts`; a scan (`unavailable` plus the journal PDF link); a garbled layer that still loads; eight refusals in Polish that cost no request; `outputSchema` validated on every answer; a request to the Sejm fails the test |
+| `modules/voivodeship-journals/tests/test_journals_isolation.py` | A 503 storm on one journal opens only its own breaker (read from the list `/health` serves), names that source and says the others are unaffected; another journal and DU still answer; an open breaker sends nothing; no limiter or breaker is shared with any other host |
+| `modules/voivodeship-journals/tests/test_journals_install_and_disable.py` | Real STDIO server: the module block is present for `unset`, `-*,voivodeship-journals`, a bare name and `-reference`, and the tool set equals the same configuration with this module off (it adds none); absent for `-voivodeship-journals`, `-*`, `voivodeship-journals,-*`; the package is never imported when off |
+| `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution, a positive control for the offline guard |
 
 **Full integration suite:**
 

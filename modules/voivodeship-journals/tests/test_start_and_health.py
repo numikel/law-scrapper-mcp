@@ -178,3 +178,14 @@ def test_the_entry_point_of_the_installed_distribution_loads_this_descriptor() -
     assert found[0].dist is not None
     assert (found[0].dist.name, found[0].dist.version) == ("law-scrapper-mcp-voivodeship-journals", "0.0.0")
     assert found[0].load() is module
+
+
+# --- the guard that keeps these tests offline --------------------------------------------------
+
+
+def test_the_offline_guard_refuses_to_resolve_a_journal_host() -> None:
+    """Positive control for the autouse `no_real_network` fixture: a name lookup is all it can cost."""
+    import socket
+
+    with pytest.raises(RuntimeError, match="never reach the network"):
+        socket.getaddrinfo("edziennik.gdansk.uw.gov.pl", 443)

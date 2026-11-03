@@ -11,12 +11,15 @@ from typing import Any
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import (
     ActSummaryOutput,
+    DocumentKind,
     FilterOutput,
+    JudgmentSummaryOutput,
     ResultSetInfo,
     ResultSetListOutput,
     ResultSetScope,
     SetScope,
 )
+from law_scrapper_mcp.services.judgment_filters import apply_judgment_filters, reject_act_only_filters
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import CompiledPattern, compile_pattern
 
@@ -28,12 +31,13 @@ class StoredResultSet:
     """A stored set of search/browse results."""
 
     result_set_id: str
-    results: list[ActSummaryOutput]
+    results: list[ActSummaryOutput] | list[JudgmentSummaryOutput]
     query_summary: str
     total_count: int
     scope: SetScope = SetScope.COMPLETE
     window_offset: int = 0
     corpus_count: int | None = None
+    document_kind: DocumentKind = DocumentKind.ACT
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
 
@@ -79,12 +83,13 @@ class ResultStore:
 
     async def store(
         self,
-        results: list[ActSummaryOutput],
+        results: list[ActSummaryOutput] | list[JudgmentSummaryOutput],
         query_summary: str,
         total_count: int,
         *,
         window_offset: int = 0,
         scope: SetScope | None = None,
+        document_kind: DocumentKind = DocumentKind.ACT,
     ) -> tuple[str, ResultSetScope]:
         """Store a result set and return its ID together with its reach.
 
@@ -103,7 +108,15 @@ class ResultStore:
         corpus count is genuinely unknown: how many corpus records would have matched
         was never computed. Do not "fix" that None by filling in the source set's
         corpus size — it answers a question nobody asked and states it as fact.
+
+        `document_kind` says what the list holds. It is keyword-only with the act default so
+        every existing caller is unchanged; a list whose elements are not of the declared kind
+        is refused, so a set can never mix acts and judgments.
         """
+        expected = ActSummaryOutput if document_kind is DocumentKind.ACT else JudgmentSummaryOutput
+        if not all(isinstance(item, expected) for item in results):
+            raise ValueError(f"Zestaw wyników rodzaju '{document_kind}' może zawierać wyłącznie {expected.__name__}.")
+
         corpus_count: int | None
         if scope is None:
             resolved = SetScope.COMPLETE if window_offset == 0 and len(results) == total_count else SetScope.PAGE
@@ -129,6 +142,7 @@ class ResultStore:
                 scope=resolved,
                 window_offset=window_offset,
                 corpus_count=corpus_count,
+                document_kind=document_kind,
             )
             self._store[result_set_id] = stored
             logger.info(
@@ -166,6 +180,7 @@ class ResultStore:
                     "result_count": len(rs.results),
                     "total_count": rs.total_count,
                     "scope": rs.scope,
+                    "document_kind": rs.document_kind,
                     "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rs.created_at)),
                 }
                 for rs in self._store.values()
@@ -219,7 +234,7 @@ class ResultStore:
         sort_desc: bool = False,
     ) -> tuple[list[ActSummaryOutput], int]:
         """Apply every filter in memory. Returns (filtered_results, original_count)."""
-        filtered = list(rs.results)
+        filtered = list(_acts_of(rs))
         original_count = len(filtered)
 
         # Exact match filters
@@ -301,6 +316,22 @@ class ResultStore:
     ) -> FilterOutput:
         """Filter one set, persist the result, and build its public output."""
         rs = await self._require(result_set_id)
+        if rs.document_kind is DocumentKind.JUDGMENT:
+            return await self._filter_and_store_judgments(
+                rs,
+                pattern=pattern,
+                field=field,
+                type_equals=type_equals,
+                status_equals=status_equals,
+                year_equals=year_equals,
+                date_field=date_field,
+                date_from=date_from,
+                date_to=date_to,
+                sort_by=sort_by,
+                sort_desc=sort_desc,
+                limit=limit,
+                offset=offset,
+            )
         source_scope = rs.scope_view()
         filtered, original_count = self._apply_filters(
             rs,
@@ -379,6 +410,105 @@ class ResultStore:
             page_info=page_info,
         )
 
+    async def _filter_and_store_judgments(
+        self,
+        rs: StoredResultSet,
+        *,
+        pattern: str | None,
+        field: str,
+        type_equals: str | None,
+        status_equals: str | None,
+        year_equals: int | None,
+        date_field: str | None,
+        date_from: str | None,
+        date_to: str | None,
+        sort_by: str | None,
+        sort_desc: bool,
+        limit: int,
+        offset: int,
+    ) -> FilterOutput:
+        """The judgment twin of `filter_and_store`; see there for the reach semantics.
+
+        Kept apart so the act path above stays as it was. The reach is inherited exactly as for
+        acts: a filtered subset of a window is complete with respect to the window only.
+        """
+        reject_act_only_filters(status_equals)
+        judgments = _judgments_of(rs)
+        source_scope = rs.scope_view()
+        compiled = (
+            compile_pattern(
+                pattern,
+                max_length=self.max_pattern_length,
+                limit_was_clamped=self.pattern_length_limit_clamped,
+            )
+            if pattern is not None
+            else None
+        )
+        filtered = apply_judgment_filters(
+            judgments,
+            compiled_pattern=compiled,
+            field=field,
+            type_equals=type_equals,
+            year_equals=year_equals,
+            date_field=date_field,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
+        filters_applied: dict[str, Any] = {}
+        if pattern:
+            filters_applied.update(pattern=pattern, field=field)
+        if type_equals:
+            filters_applied["type_equals"] = type_equals
+        if year_equals is not None:
+            filters_applied["year_equals"] = year_equals
+        if date_field:
+            filters_applied["date_field"] = date_field
+            if date_from:
+                filters_applied["date_from"] = date_from
+            if date_to:
+                filters_applied["date_to"] = date_to
+        if sort_by:
+            filters_applied.update(sort_by=sort_by, sort_desc=sort_desc)
+
+        new_set_id: str | None = None
+        new_scope: ResultSetScope | None = None
+        if filtered:
+            description = _build_filters_description(
+                pattern=pattern,
+                field=field,
+                type_equals=type_equals,
+                year_equals=year_equals,
+                date_field=date_field,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            new_set_id, new_scope = await self.store(
+                filtered,
+                f"filtered({rs.result_set_id}): {description}",
+                len(filtered),
+                scope=source_scope.scope,
+                document_kind=DocumentKind.JUDGMENT,
+            )
+        page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
+        page_offset = parse_non_negative(offset, name="offset", default=0)
+        page_results, page_info = paginate_items(filtered, limit=page_limit, offset=page_offset)
+        return FilterOutput(
+            source_result_set_id=rs.result_set_id,
+            result_set_id=new_set_id,
+            results=[],
+            document_kind=DocumentKind.JUDGMENT,
+            judgments=page_results,
+            original_count=len(judgments),
+            filtered_count=len(filtered),
+            filters_applied=filters_applied,
+            source_scope=source_scope,
+            result_set_scope=new_scope,
+            no_match_is_inconclusive=source_scope.scope is SetScope.PAGE and not filtered,
+            page_info=page_info,
+        )
+
     def _evict_expired(self) -> None:
         """Remove expired result sets (called under lock)."""
         now = time.time()
@@ -428,6 +558,18 @@ class ResultSetTooLargeError(Exception):
 
 
 # --- Helper functions ---
+
+
+def _acts_of(rs: StoredResultSet) -> list[ActSummaryOutput]:
+    """The acts of a set, or a refusal when the set holds judgments (act-only entry points)."""
+    if rs.document_kind is not DocumentKind.ACT:
+        raise ValueError(f"Zestaw '{rs.result_set_id}' zawiera orzeczenia, a ta operacja obsługuje wyłącznie akty.")
+    return [item for item in rs.results if isinstance(item, ActSummaryOutput)]
+
+
+def _judgments_of(rs: StoredResultSet) -> list[JudgmentSummaryOutput]:
+    """The judgments of a set; `store()` already guarantees the elements match `document_kind`."""
+    return [item for item in rs.results if isinstance(item, JudgmentSummaryOutput)]
 
 
 def _build_filters_description(**kwargs: str | int | None) -> str:

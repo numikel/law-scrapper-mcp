@@ -36,11 +36,19 @@ async def make_harness(saos_router: respx.MockRouter) -> AsyncIterator[HarnessFa
     """Factory of harnesses; every hub it built is closed after the test."""
     hubs: list[EgressHub] = []
 
-    def build(fake: FakeSaos | None = None, *, today: date | None = None, search_ttl: int = 600) -> Harness:
+    def build(
+        fake: FakeSaos | None = None,
+        *,
+        today: date | None = None,
+        search_ttl: int = 600,
+        filter_max_records: int | None = None,
+    ) -> Harness:
         fake = (fake or FakeSaos()).install(saos_router)
         client, hub = make_saos_client(search_ttl=search_ttl)
         hubs.append(hub)
-        service, store = make_service(client, today=(lambda: today) if today else None)
+        service, store = make_service(
+            client, today=(lambda: today) if today else None, filter_max_records=filter_max_records
+        )
         return Harness(fake=fake, service=service, store=store, hub=hub)
 
     yield build

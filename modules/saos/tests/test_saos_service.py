@@ -179,7 +179,7 @@ class TestDates:
     async def test_date_from_after_today_is_refused_before_any_request(self, make_harness: HarnessFactory) -> None:
         harness = make_harness()
 
-        with pytest.raises(ValueError, match="date_from"):
+        with pytest.raises(ValueError, match="date_from.*dzisiejsza data"):
             await harness.service.search(date_from="2026-11-04")
 
         assert harness.fake.calls == []
@@ -345,6 +345,51 @@ class TestHints:
 
         assert COVERAGE_SENTENCE in [hint.message for hint in first.hints]
         assert COVERAGE_SENTENCE not in [hint.message for hint in later.hints]
+
+
+class TestFilterLimitHint:
+    async def test_a_set_larger_than_filter_results_accepts_comes_with_the_remedy(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness(filter_max_records=3)
+
+        response = await harness.service.search(limit=5, offset=5)
+
+        hint = next(h for h in response.hints if "filter_results przyjmuje najwyżej 3" in h.message)
+        assert hint.tool == TOOL_SEARCH
+        assert hint.parameters is not None
+        assert (hint.parameters["limit"], hint.parameters["offset"]) == (3, 5)
+
+    async def test_a_set_within_the_limit_has_no_such_hint(self, make_harness: HarnessFactory) -> None:
+        harness = make_harness(filter_max_records=5)
+
+        response = await harness.service.search(limit=5)
+
+        assert all("przyjmuje najwyżej" not in h.message for h in response.hints)
+
+    async def test_the_default_comes_from_the_core_setting_and_covers_the_largest_page(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        from law_scrapper_mcp.config import settings
+
+        harness = make_harness()
+
+        response = await harness.service.search(limit=100)
+
+        assert settings.effective_filter_max_records >= response.data.returned_count
+        assert all("przyjmuje najwyżej" not in h.message for h in response.hints)
+
+    async def test_the_oversized_set_really_is_refused_by_the_core_filter(self, make_harness: HarnessFactory) -> None:
+        from law_scrapper_mcp.services.result_store import ResultSetTooLargeError, ResultStore
+
+        harness = make_harness()
+        harness.store.max_records = 3
+        assert isinstance(harness.store, ResultStore)
+
+        response = await harness.service.search(limit=5)
+
+        with pytest.raises(ResultSetTooLargeError):
+            await harness.store.filter_and_store(response.data.result_set_id or "", pattern="x")
 
 
 class TestCoverageSentence:

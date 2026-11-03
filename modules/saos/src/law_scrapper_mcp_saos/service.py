@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import (
@@ -225,6 +226,7 @@ def search_hints(
     offset: int,
     total: int,
     next_offset: int | None,
+    filter_max_records: int,
 ) -> list[Hint]:
     """Next steps for a page of search results."""
     hints: list[Hint] = []
@@ -264,6 +266,18 @@ def search_hints(
                 },
             )
         )
+    if result_set_id and len(records) > filter_max_records:
+        hints.append(
+            Hint(
+                message=(
+                    f"Zestaw ma {len(records)} rekordów, a filter_results przyjmuje najwyżej {filter_max_records} "
+                    "na jedno wywołanie (większy zestaw kończy się błędem, a nie wynikiem częściowym). Aby go "
+                    f"filtrować, powtórz wyszukiwanie z limit={filter_max_records}."
+                ),
+                tool=TOOL_SEARCH,
+                parameters={**query.tool_parameters(), "limit": filter_max_records, "offset": offset},
+            )
+        )
     if scope is not None and scope.scope is SetScope.PAGE:
         hints.append(
             Hint(
@@ -299,10 +313,12 @@ class SaosSearchService:
         result_store: ResultStore,
         *,
         today: Callable[[], date] | None = None,
+        filter_max_records: int | None = None,
     ) -> None:
         self._client = client
         self._result_store = result_store
         self._today = today
+        self._filter_max_records = filter_max_records
 
     async def _window(self, query: SearchQuery, *, limit: int, offset: int) -> tuple[list[SaosSearchItem], int]:
         """Fetch the records at `offset..offset+limit` of the SAOS list and the list's size.
@@ -381,6 +397,7 @@ class SaosSearchService:
             offset=page_offset,
             total=total,
             next_offset=page_info.next_offset,
+            filter_max_records=self._filter_max_records or settings.effective_filter_max_records,
         )
         return EnrichedResponse[SearchSaosJudgmentsOutput](data=output, hints=hints)
 

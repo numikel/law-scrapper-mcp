@@ -126,11 +126,18 @@ def make_saos_client(*, search_ttl: int = 600) -> tuple[SaosClient, EgressHub]:
 
 
 def make_service(
-    client: SaosClient, store: ResultStore | None = None, *, today: Callable[[], date] | None = None
+    client: SaosClient,
+    store: ResultStore | None = None,
+    *,
+    today: Callable[[], date] | None = None,
+    filter_max_records: int | None = None,
 ) -> tuple[SaosSearchService, ResultStore]:
     """A search service with a fixed 'today'."""
     result_store = store or ResultStore()
-    return SaosSearchService(client, result_store, today=today or (lambda: TODAY)), result_store
+    service = SaosSearchService(
+        client, result_store, today=today or (lambda: TODAY), filter_max_records=filter_max_records
+    )
+    return service, result_store
 
 
 HarnessFactory = Callable[..., "Harness"]

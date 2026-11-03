@@ -18,7 +18,9 @@ not in this repository either.
 ```
 Round 1:  2026-11-02, 11:27:49 - 11:33:18 UTC, 15 requests: 14 x 200 and one deliberate 400
 Round 2:  2026-11-02, 12:20:34 - 12:20:54 UTC, 14 requests, all 200
+Round 3:  2026-11-03, 19:27:50 - 19:28:02 UTC, 3 requests, all 200 (page numbering, end of list, division code)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
+          (round 3: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
 Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-scrapper-mcp)
           Accept: application/json, omitted on one request (see the Accept column)
@@ -112,6 +114,7 @@ original is not in the repository, so no test can check them. `.gitattributes` m
 | `search_viii_reasons_2022.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2022-01-01&judgmentDateTo=2022-12-31 | 200 | application/json;charset=UTF-8 | 6 017 | d194a6c6f03b298db1108812aec7d64241aa3eef14d16f6b4862129689267b05 | 4 690 | d7c5ed32d48206a041363ba4cf020091072ba46a0920b690cb3c5c44425d1b81 | 2026-11-02 12:20:51 | yes |
 | `search_viii_sentence_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=SENTENCE&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 041 | 046736c449a94909403e17d66b8c65a34ebeedd8d01a49f739cdc44dee8c7ae1 | 4 714 | 77e3dac83da4cbe9285138eabf25fecf0fdbdef80090dbae2a06313ed88e3b79 | 2026-11-02 12:20:52 | yes |
 | `search_viii_reasons_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 042 | 00689d67624d8fc91fc3c80b06f14797d4f2d2e4c6b90e27dac6a4c588c5816f | 4 715 | 7039f22eb6ee3dfba7a0fcada21423290250ceeb92232b86b4ec8a4915b3ff16 | 2026-11-02 12:20:54 | yes |
+| `search_out_of_range_page.json` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=269&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 4 132 | ae772aa2126c2b033de96aa776d313adcf2ccd254816b585922a6a609bb1be00 | 3 161 | 539a4355a81348197520a803b164c3ef0f51aea17a67e79efb8c7d03c4ba9e4d | 2026-11-03 19:27:59 | yes |
 ## Recorded, kept private
 
 Four detail recordings hold the whole text of a judgment record (and, for three of them, the names
@@ -132,6 +135,17 @@ numeric journal year and entry. `detail_labour_sentence_split` and `detail_labou
 two records of one case; `detail_sentence_with_reasoning` is a 2013 judgment that carries its
 reasoning inside the same record.
 
+## Probes without a stored body
+
+Round 3 also made two requests whose bodies hold judgment excerpts and judges' names and are therefore not
+stored. Only counts and measurements taken from them are kept, as `key=value` pairs asserted by the test.
+The hash is that of the discarded body and is provenance only.
+
+| Probe | Request | Status | Content-Type | Bytes | SHA-256 (body, not in repo) | Captured (UTC) | Facts |
+|---|---|---|---|---|---|---|---|
+| `probe_page_number_base` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 142 130 | 4176661558e9a55c8f6416cb1ac8de975bc5ac703654fd53ee8f189e119275d0 | 2026-11-03 19:27:50 | pageNumber=1; pageSize=100; items=100; totalResults=26891; overlapWithRecordedPage0=0; selfLinkPageNumber=1; linkRels=self,prev,next |
+| `probe_division_code_filter` | https://www.saos.org.pl/api/search/judgments?pageSize=20&ccDivisionCode=0004021&courtType=COMMON&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 31 307 | 72f3e4782fc8d8ba2b8b04c97cf34f8e3f279466b0f0c829cee77daec6a6cbb6 | 2026-11-03 19:28:01 | ccDivisionCode=0004021; pageSize=20; items=20; totalResults=26891; codesReturned=0004021; distinctCourts=2 |
+
 ## What the recordings establish
 
 Numbers below are taken from the `info.totalResults` of the stored files.
@@ -150,6 +164,10 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | `lawJournalEntryCode=1964/296` (Code of Civil Procedure), common courts | 317 900 |
 | `caseNumber=VIII U 2924/25` | 2 records: the `SENTENCE` and the `REASONS` of one case |
 | `pageSize=101` | HTTP 400, `{"error": {..., "propertyName": "pageSize", "message": "parameter 'pageSize' : may not be greater than 100"}}` |
+| `pageNumber` numbering | Zero-based: page 1 of 100 records shares none of the 20 records of page 0 of the 20-record page, and the `self` link of that response says `pageNumber=1` |
+| Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
+| A page past the end (`pageNumber=269`, `pageSize=100`) | HTTP 200, `items` empty, `info.totalResults` still 26 891, links `self` and `prev` only (no `next`) |
+| `ccDivisionCode=0004021` instead of the division name | Honoured as an exact value: every returned record has that code; `totalResults` 26 891, the same as the name filter, in at least 2 courts |
 
 Records of division VIII by calendar year of their own `judgmentDate`, `pageSize=1`:
 

@@ -456,3 +456,52 @@ def test_no_name_follows_a_role_cue_in_an_excerpt() -> None:
     for name, item in search_items():
         for match in PERSON_CUE.finditer(item["textContent"]):
             assert match.group("next") in ALLOWED_AFTER_CUE, (name, item["id"], match.group(0))
+
+
+OUT_OF_RANGE = "search_out_of_range_page.json"
+
+
+def probe_facts() -> dict[str, tuple[dict[str, str], int]]:
+    """Facts of the requests whose body is not stored, keyed by probe name, with the body size."""
+    out: dict[str, tuple[dict[str, str], int]] = {}
+    for line in provenance_text().splitlines():
+        if not line.startswith("| `probe_"):
+            continue
+        cells = table_cells(line)
+        out[cells[0]] = (dict(pair.split("=", 1) for pair in cells[7].split("; ")), int(re.sub(r"\D", "", cells[4])))
+    return out
+
+
+def test_page_numbers_are_zero_based_and_a_hundred_record_page_is_about_140_kb() -> None:
+    facts, size = probe_facts()["probe_page_number_base"]
+    recorded = load_json(DIVISION_VIII)
+    rels = {link["rel"]: link["href"] for link in recorded["links"]}
+
+    assert "pageNumber=0" in rels["self"] and "pageNumber=1" in rels["next"]
+    assert facts["overlapWithRecordedPage0"] == "0"
+    assert facts["selfLinkPageNumber"] == facts["pageNumber"] == "1"
+    assert facts["items"] == facts["pageSize"] == "100"
+    assert 100_000 < size < 200_000
+
+
+def test_a_page_past_the_end_is_empty_keeps_the_total_and_has_no_next_link() -> None:
+    page = load_json(OUT_OF_RANGE)
+    params = request_params(OUT_OF_RANGE)
+    page_size, page_number = int(params["pageSize"]), int(params["pageNumber"])
+
+    assert page["items"] == []
+    assert provenance_rows()[OUT_OF_RANGE][2] == "200"
+    assert [link["rel"] for link in page["links"]] == ["self", "prev"]
+    # The first page number past the end: it starts at or beyond the total, and the one before it does not.
+    assert page_number * page_size >= total(OUT_OF_RANGE) > (page_number - 1) * page_size
+    assert total(OUT_OF_RANGE) >= total(DIVISION_VIII)
+
+
+def test_the_division_code_filter_is_an_exact_value_that_selects_the_division() -> None:
+    facts, _size = probe_facts()["probe_division_code_filter"]
+    recorded_codes = {item["division"]["code"] for item in load_json(DIVISION_VIII)["items"]}
+
+    assert recorded_codes == {facts["ccDivisionCode"]} == {facts["codesReturned"]}
+    assert facts["items"] == facts["pageSize"] == "20"
+    assert int(facts["totalResults"]) >= total(DIVISION_VIII)
+    assert int(facts["distinctCourts"]) >= 2

@@ -131,6 +131,29 @@ reach that root. Every `text.pdf` carried a text layer on page 1 (894 to 2 856 c
 The voivodeship journal of Mazovia (`edziennik.mazowieckie.pl`) did not answer eight requests
 over two days (read timeout, connection reset).
 
+### Keyword list (third session, 2026-11-03, 19:27 UTC)
+
+One question, three requests to one host (`edziennik.kielce.uw.gov.pl`, camel, TLS ok in a stock
+client): what does `keyword=a,b` mean, the form the Sejm path sends for several keywords? The two
+keywords come from that host's own keyword dictionary (78 values, recorded in the first
+session). Requests were sequential, at least 1.5 s apart, with the project's `User-Agent` and
+`Accept: application/json`, redirects off, TLS verification on; the script enforced the budget of
+three before each send. All three answered 200 and the bodies are stored unchanged apart from the
+re-indenting described above.
+
+| File | Request | Status | Content-Type | Bytes (original) | SHA-256 (original) | Captured (UTC) |
+|---|---|---|---|---|---|---|
+| `keyword_single_a.json` | https://edziennik.kielce.uw.gov.pl/api/eli/search?year=2025&limit=1&keyword=bud%C5%BCety | 200 | application/json; charset=utf-8 | 48 | 0bf60cc21b4fe8a689f76395d9e46f54bfa45e6d8be3e07b79aea925e95052e5 | 2026-11-03 19:27:33 |
+| `keyword_single_b.json` | https://edziennik.kielce.uw.gov.pl/api/eli/search?year=2025&limit=1&keyword=finanse+publiczne | 200 | application/json; charset=utf-8 | 514 | db3fa449bea8c4f1d7aee18ad269a85fb342d981cfbec5ba36b26f23002d2960 | 2026-11-03 19:27:34 |
+| `keyword_pair_ab.json` | https://edziennik.kielce.uw.gov.pl/api/eli/search?year=2025&limit=1&keyword=bud%C5%BCety,finanse+publiczne | 200 | application/json; charset=utf-8 | 514 | db3fa449bea8c4f1d7aee18ad269a85fb342d981cfbec5ba36b26f23002d2960 | 2026-11-03 19:27:35 |
+
+| Fact | Measured |
+|---|---|
+| `keyword=budżety` (a), `year=2025` | `totalCount` 0 |
+| `keyword=finanse publiczne` (b), `year=2025` | `totalCount` 1 694 |
+| `keyword=budżety,finanse publiczne`, `year=2025` | `totalCount` 1 694; the body is byte-identical to the one for `b` alone |
+| Reading | Not an intersection: an AND would be at most 0. Whether the host treats the list as OR or reads only one of the values cannot be told apart from this data, because `a` matched nothing. Either way a comma-joined list does not narrow the result |
+
 ## Refreshing these recordings
 
 Refresh by hand when an upstream change is suspected, never on a schedule and never in CI.

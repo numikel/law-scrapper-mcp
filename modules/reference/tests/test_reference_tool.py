@@ -25,7 +25,8 @@ def _server() -> MCPServer[AppContext]:
 
 
 def _loaded() -> LoadedModule:
-    (item,) = discover(Settings(source_modules=[])).active
+    """The reference module among everything installed; other members may be present."""
+    (item,) = [loaded for loaded in discover(Settings(source_modules=[])).active if loaded.module.name == MODULE_NAME]
     return item
 
 

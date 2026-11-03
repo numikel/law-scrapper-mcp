@@ -12,6 +12,7 @@ resolution-markers = [
 members = [
     "law-scrapper-mcp",
     "law-scrapper-mcp-reference",
+    "law-scrapper-mcp-voivodeship-journals",
 ]
 overrides = [
     { name = "certifi", specifier = ">=2026.10.19" },
@@ -584,6 +585,17 @@ provides-extras = ["dev"]
 name = "law-scrapper-mcp-reference"
 version = "0.0.0"
 source = { editable = "modules/reference" }
+dependencies = [
+    { name = "law-scrapper-mcp" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "law-scrapper-mcp", editable = "." }]
+
+[[package]]
+name = "law-scrapper-mcp-voivodeship-journals"
+version = "0.0.0"
+source = { editable = "modules/voivodeship-journals" }
 dependencies = [
     { name = "law-scrapper-mcp" },
 ]

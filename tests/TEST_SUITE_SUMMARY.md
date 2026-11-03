@@ -22,12 +22,22 @@ core-only either way (`LAW_MCP_SOURCE_MODULES=-*`, see `tests/conftest.py`).
 ```bash
 uv sync --extra dev --all-packages
 uv run pytest modules/reference/tests -v
+uv run pytest modules/voivodeship-journals/tests -v
 ```
+
+Several members can be installed at once and test directories are collected in one run
+(`pytest modules/*/tests`), so test file names are unique across members and the reference tests
+derive their tool counts from a run with `reference` switched off instead of hard-coding them.
 
 | File | What it pins |
 |------|--------------|
 | `modules/reference/tests/test_install_and_disable.py` | The entry point of the installed distribution, discovery over it, 14 vs 13 tools and the instructions header on a real STDIO server for `unset`, `-reference`, `-*`, `-*,reference`, `reference,-reference`, `reference`; a switched-off module's package is never imported |
 | `modules/reference/tests/test_reference_tool.py` | The descriptor, the state accessor, and `reference_ping` through an in-memory client with `outputSchema` validation |
+| `modules/voivodeship-journals/tests/journal_support.py`, `conftest.py` | Not tests: the recorded-payload loaders, host constants and the `started` fixture (the real start hook over a fresh hub and registry) |
+| `modules/voivodeship-journals/tests/test_catalog.py` | 16 journals, 12 served, 4 withheld with a stated reason, hosts agree with the recordings, import-time invariants |
+| `modules/voivodeship-journals/tests/test_normalise.py` | Both JSON casings, the date swap between search and details, sentinels, the canonical ELI, relations under the journal's own keys |
+| `modules/voivodeship-journals/tests/test_source.py` | Search parameters exactly (no `publisher`, `limit` always sent), each refusal before any request, withheld and unknown codes, 204 as not found, no `/struct`, relations, PDF download and its size budget |
+| `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution |
 
 **Full integration suite:**
 
@@ -64,7 +74,7 @@ tests/
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
-│   ├── edziennik/              # 11 recorded e-Dziennik ELI files (JSON, HTML, PDF); one PROVENANCE.md for the whole session
+│   ├── edziennik/              # 14 recorded e-Dziennik ELI files (JSON, HTML, PDF), three of them the keyword-list probe; one PROVENANCE.md for all sessions
 │   ├── saos/                   # 25 recorded SAOS API files (search pages, counts, an error body, the court dictionary) with personal names redacted; one PROVENANCE.md; no full judgment texts
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/

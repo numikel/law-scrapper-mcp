@@ -10,10 +10,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from law_scrapper_mcp.client.egress import EgressHost
 from law_scrapper_mcp.source_modules.contract import ModuleHost, SourceModule
 from law_scrapper_mcp_saos.client import SaosClient
-from law_scrapper_mcp_saos.state import BASE_URL, HOST_LABEL, MODULE_NAME, SaosState
+from law_scrapper_mcp_saos.state import MODULE_NAME, SaosState, saos_host
 from law_scrapper_mcp_saos.tools import register_all_tools
 
 __all__ = ["module"]
@@ -22,7 +21,7 @@ __all__ = ["module"]
 @asynccontextmanager
 async def start(host: ModuleHost) -> AsyncIterator[SaosState]:
     """Register the SAOS host and leave the client for the tools; the hub closes it at shutdown."""
-    egress = host.egress.client_for(EgressHost(name=HOST_LABEL, base_url=BASE_URL), host.caller)
+    egress = host.egress.client_for(saos_host(host.settings), host.caller)
     yield SaosState(
         client=SaosClient(egress, search_ttl=host.settings.cache_search_ttl),
         module=host.caller.module,

@@ -2,26 +2,41 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Iterator
 from datetime import date
 
 import pytest
 import pytest_asyncio
 import respx
-from saos_testing import FakeSaos, Harness, HarnessFactory, make_saos_client, make_service
+from saos_testing import CLOCK, FakeSaos, Harness, HarnessFactory, make_saos_client, make_service
 
 from law_scrapper_mcp.client import egress as egress_module
+from law_scrapper_mcp.client import rate_limiter as limiter_module
 from law_scrapper_mcp.client.egress import EgressHub
 
 
 @pytest.fixture(autouse=True)
-def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The egress retry loop waits between attempts; a failing page must not make a test sleep."""
+def instant_waits(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Make both waiting points of the egress client free, and record the pacing waits.
 
-    async def instant(_seconds: float) -> None:
+    The retry loop waits between attempts and the limiter waits for a token; neither may make a test sleep.
+    A limiter wait advances the shared fake clock, so the limiter still behaves as if the time had passed.
+    The returned list holds every limiter wait, in seconds.
+    """
+    waited: list[float] = []
+
+    async def retry_delay(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr(egress_module, "_delay", instant)
+    async def limiter_wait(seconds: float) -> None:
+        waited.append(seconds)
+        CLOCK.now += seconds
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(egress_module, "_delay", retry_delay)
+    monkeypatch.setattr(limiter_module, "_wait", limiter_wait)
+    return waited
 
 
 @pytest.fixture

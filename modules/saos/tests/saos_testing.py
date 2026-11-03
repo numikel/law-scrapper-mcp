@@ -27,13 +27,14 @@ import respx
 from mcp import Client
 
 from law_scrapper_mcp.client.cache import TTLCache
-from law_scrapper_mcp.client.egress import CallerIdentity, EgressClient, EgressDefaults, EgressHost, EgressHub
+from law_scrapper_mcp.client.egress import CallerIdentity, EgressClient, EgressDefaults, EgressHub
+from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.source_modules.contract import LoadedModule
 from law_scrapper_mcp_saos import module
 from law_scrapper_mcp_saos.client import SaosClient
 from law_scrapper_mcp_saos.service import SaosSearchService
-from law_scrapper_mcp_saos.state import BASE_URL, HOST_LABEL
+from law_scrapper_mcp_saos.state import BASE_URL, saos_host
 
 RECORDINGS = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "saos"
 SEARCH_URL = f"{BASE_URL}/search/judgments"
@@ -185,10 +186,23 @@ class FakeSaos:
         return self
 
 
+class FakeClock:
+    """A clock that only moves when the limiter waits (see `conftest.instant_waits`), so pacing costs no time."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+CLOCK = FakeClock()
+
+
 def make_saos_client(*, search_ttl: int = 600) -> tuple[SaosClient, EgressHub]:
-    """A `SaosClient` on a real egress client against the (mocked) SAOS origin."""
-    hub = EgressHub(TTLCache(max_entries=200), EgressDefaults())
-    egress: EgressClient = hub.client_for(EgressHost(name=HOST_LABEL, base_url=BASE_URL), IDENTITY)
+    """A `SaosClient` on a real egress client, registered with the module's own host and pace."""
+    hub = EgressHub(TTLCache(max_entries=200), EgressDefaults(), clock=CLOCK)
+    egress: EgressClient = hub.client_for(saos_host(settings), IDENTITY)
     return SaosClient(egress, search_ttl=search_ttl), hub
 
 

@@ -10,7 +10,7 @@ from collections.abc import Mapping
 
 from pydantic import ValidationError
 
-from law_scrapper_mcp.client.egress import EgressClient
+from law_scrapper_mcp.client.egress import EgressClient, EgressHost
 from law_scrapper_mcp.client.exceptions import ActNotFoundError, SejmApiError
 from law_scrapper_mcp_saos.models import SaosDetail, SaosSearchPage
 
@@ -24,6 +24,11 @@ class SaosClient:
     def __init__(self, egress: EgressClient, *, search_ttl: int) -> None:
         self._egress = egress
         self._search_ttl = search_ttl
+
+    @property
+    def host(self) -> EgressHost:
+        """The host this client talks to, with the pace it was registered with."""
+        return self._egress.host
 
     async def search(self, params: Mapping[str, str | int]) -> SaosSearchPage:
         """Fetch one page of `search/judgments`; the page is cached under its own parameters.

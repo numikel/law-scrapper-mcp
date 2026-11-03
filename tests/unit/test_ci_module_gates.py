@@ -120,6 +120,47 @@ def test_the_modules_job_installs_the_members_and_runs_their_tests() -> None:
     assert "uv run pytest tests/unit/ -q" in commands, "the root suite must be shown to stay core-only"
 
 
+def step_block(job: str, name: str) -> str:
+    """The lines of one step: from its `- name:` line to the next step of the same job."""
+    lines = job.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == f"- name: {name}"), None)
+    assert start is not None, f"no step named {name}"
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].strip().startswith("- name:")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+CONFORMANCE_CONTRACT = (
+    'CONFORMANCE_PKG="@modelcontextprotocol/conformance@0.2.0-alpha.11"',
+    "--url http://127.0.0.1:7683/mcp",
+    '--spec-version "$SDK_SPEC_VERSION"',
+    "--scenario tools-list",
+    "--expected-failures ./conformance-baseline.yml",
+    "LAW_MCP_RATE_LIMIT_ENABLED=false",
+    "LAW_MCP_TRANSPORT=streamable-http",
+    'grep -q "Unknown spec version"',
+    'exit "$PROBE_STATUS"',
+)
+
+
+def test_the_modules_job_runs_conformance_with_the_module_active() -> None:
+    core = step_block(job_block(CI_TEXT, "test"), "MCP conformance")
+    with_module = step_block(job_block(CI_TEXT, "modules"), "MCP conformance with a module active")
+
+    assert "LAW_MCP_SOURCE_MODULES='-*,voivodeship-journals'" in with_module
+    assert "uv run python -m law_scrapper_mcp" in with_module
+    assert '"name":"POL_WOJ_PM"' in with_module, "the step must prove the module is active, not assume it"
+    for piece in CONFORMANCE_CONTRACT:
+        assert piece in core, f"the core conformance step lost {piece}"
+        assert piece in with_module, f"the module conformance step is narrower than the core one: {piece}"
+
+
+def test_the_core_conformance_step_stays_core_only() -> None:
+    core = step_block(job_block(CI_TEXT, "test"), "MCP conformance")
+
+    assert "LAW_MCP_SOURCE_MODULES" not in core
+    assert "--all-packages" not in job_block(CI_TEXT, "test")
+
+
 def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
     uses = re.findall(r"^\s*(?:- )?uses:\s*(\S+)", CI_TEXT, flags=re.MULTILINE)
 

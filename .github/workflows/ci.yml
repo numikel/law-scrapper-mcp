@@ -212,6 +212,72 @@ jobs:
       - name: Root unit tests with a module installed
         if: needs.changes.outputs.code == 'true'
         run: uv run pytest tests/unit/ -q
+
+      # The `test` job's conformance run sees the core only. This one starts the server with a real
+      # module active (voivodeship-journals adds no tool, so `tools/list` is unchanged, but its
+      # instructions block, start hook and per-host clients are live) and runs the same pinned
+      # command against it. Kept as a copy of that step on purpose: the `test` job is not edited.
+      - name: MCP conformance with a module active
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LAW_MCP_TRANSPORT=streamable-http
+          export LAW_MCP_HOST=127.0.0.1
+          export LAW_MCP_PORT=7683
+          export LAW_MCP_SOURCE_MODULES='-*,voivodeship-journals'
+          # See the `test` job: one loopback peer drives every scenario, so the per-client
+          # bucket would answer the sweep with 429s that read like protocol failures.
+          export LAW_MCP_RATE_LIMIT_ENABLED=false
+          uv run python -m law_scrapper_mcp >server.stdout.log 2>server.stderr.log &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          HEALTH_READY=false
+          for attempt in {1..40}; do
+            if body="$(curl --fail --silent http://127.0.0.1:7683/health)"; then
+              HEALTH_READY=true
+              break
+            fi
+            sleep 0.25
+          done
+          if [ "$HEALTH_READY" != "true" ]; then
+            echo "Server /health did not become ready in time"
+            cat server.stderr.log || true
+            cat server.stdout.log || true
+            exit 1
+          fi
+          # Proof that the module really is active in this run: its journal hosts are on /health.
+          if ! grep -q '"name":"POL_WOJ_PM"' <<<"$body"; then
+            echo "The module is not active: /health lists no POL_WOJ_PM source"
+            echo "$body"
+            exit 1
+          fi
+          CONFORMANCE_PKG="@modelcontextprotocol/conformance@0.2.0-alpha.11"
+          SDK_SPEC_VERSION="$(uv run python -c 'from mcp.types import LATEST_PROTOCOL_VERSION; print(LATEST_PROTOCOL_VERSION)')"
+          PROBE_LOG="$(mktemp)"
+          set +e
+          npx --yes "$CONFORMANCE_PKG" server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SDK_SPEC_VERSION" \
+            --scenario tools-list \
+            >"$PROBE_LOG" 2>&1
+          PROBE_STATUS=$?
+          set -e
+          if grep -q "Unknown spec version" "$PROBE_LOG"; then
+            # Same design as the `test` job: do not mask upstream lag by running an older era.
+            echo "::warning::@modelcontextprotocol/conformance does not yet support SDK protocol ${SDK_SPEC_VERSION}; skipping suite. Transport tests remain the protocol gate."
+            cat "$PROBE_LOG"
+            exit 0
+          fi
+          if [ "$PROBE_STATUS" -ne 0 ]; then
+            cat "$PROBE_LOG"
+            exit "$PROBE_STATUS"
+          fi
+          npx --yes "$CONFORMANCE_PKG" server \
+            --url http://127.0.0.1:7683/mcp \
+            --spec-version "$SDK_SPEC_VERSION" \
+            --expected-failures ./conformance-baseline.yml
+
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

@@ -25,6 +25,7 @@ from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.http.rate_limit import ExemptPathCredentialStripper, RateLimitMiddleware
 from law_scrapper_mcp.logging_config import setup_logging
 from law_scrapper_mcp.services.act_service import ActService
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry
 from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
@@ -220,12 +221,18 @@ def _log_source_modules(discovery: Discovery) -> None:
 
 
 async def _start_source_modules(
-    discovery: Discovery, stack: AsyncExitStack, egress_hub: EgressHub, module_state: dict[str, object]
+    discovery: Discovery,
+    stack: AsyncExitStack,
+    egress_hub: EgressHub,
+    module_state: dict[str, object],
+    act_sources: ActSourceRegistry,
 ) -> None:
     """Run each active module's start hook inside `stack`; the first failure aborts startup."""
     for loaded in discovery.active:
         name = loaded.module.name
-        host = ModuleHost(egress=egress_hub, caller=loaded.caller_identity(), settings=settings)
+        host = ModuleHost(
+            egress=egress_hub, caller=loaded.caller_identity(), settings=settings, act_sources=act_sources
+        )
         if loaded.module.start is None:
             continue
         try:
@@ -302,13 +309,16 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         pattern_length_limit_clamped=settings.max_pattern_length_was_clamped,
         max_records=settings.effective_filter_max_records,
     )
+    # One registry shared by the four services that route by publisher code; source modules
+    # fill it from their start hooks. Empty, every service takes its original Sejm path.
+    act_sources = ActSourceRegistry()
     metadata_service = MetadataService(client)
-    search_service = SearchService(client, result_store)
-    act_service = ActService(client, document_store, content_processor)
+    search_service = SearchService(client, result_store, sources=act_sources)
+    act_service = ActService(client, document_store, content_processor, sources=act_sources)
     content_service = ContentService(document_store)
-    changes_service = ChangesService(client, result_store)
+    changes_service = ChangesService(client, result_store, sources=act_sources)
     comparison_service = ComparisonService(act_service)
-    relationship_service = RelationshipService(client)
+    relationship_service = RelationshipService(client, sources=act_sources)
     date_service = DateService()
     module_state: dict[str, object] = {}
 
@@ -333,7 +343,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     try:
         # Modules start after every core resource exists and stop before any of them closes.
         async with AsyncExitStack() as module_stack:
-            await _start_source_modules(discovery, module_stack, egress_hub, module_state)
+            await _start_source_modules(discovery, module_stack, egress_hub, module_state, act_sources)
             yield context
     finally:
         # Cleared first: if `client.close()` raised, a populated handle would

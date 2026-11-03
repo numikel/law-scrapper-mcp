@@ -15,8 +15,10 @@ from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.tool_inputs import parse_eli
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, ContentStatus
+from law_scrapper_mcp.services.act_sources import ActSource, ActSourceRegistry
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.document_store import DocumentStore
+from law_scrapper_mcp.services.response_enrichment import act_pdf_url
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,13 @@ class ActService:
         client: SejmApiClient,
         document_store: DocumentStore,
         content_processor: ContentProcessor,
+        *,
+        sources: ActSourceRegistry | None = None,
     ):
         self._client = client
         self._doc_store = document_store
         self._content_processor = content_processor
+        self._sources = sources if sources is not None else ActSourceRegistry()
         # ELIs whose text the source has already said it cannot supply. The
         # placeholder document D3 removed used to double as a negative cache;
         # without one, every repeated `load_content=True` on a textless act would
@@ -58,6 +63,10 @@ class ActService:
     async def get_details(self, eli: str, load_content: bool = False) -> ActDetailOutput:
         """Get act details, optionally loading content into document store."""
         publisher, year, pos = parse_eli(eli)
+
+        source = self._sources.for_publisher(publisher)
+        if source is not None:
+            return await self._get_source_details(source, eli, publisher, year, pos, load_content=load_content)
 
         # Get act details
         data = await self._client.get_json(f"acts/{publisher}/{year}/{pos}", cache_ttl=settings.cache_details_ttl)
@@ -189,6 +198,83 @@ class ActService:
         except ResponseTooLargeError as exc:
             # The client knows the URL and the budget, not the act; the refusal the
             # agent reads has to name the act and the source file it can fetch instead.
+            raise ContentTooLargeError(eli, exc.size_bytes, limit, pdf_url, exact=exc.exact) from exc
+
+    def pdf_url(self, publisher: str, year: int, pos: int) -> str:
+        """Public address of the act's source PDF, on the host that serves the publisher."""
+        source = self._sources.for_publisher(publisher)
+        if source is not None:
+            return source.pdf_url(publisher, year, pos)
+        return act_pdf_url(publisher, year, pos)
+
+    async def _get_source_details(
+        self, source: ActSource, eli: str, publisher: str, year: int, pos: int, *, load_content: bool
+    ) -> ActDetailOutput:
+        """`get_details` for a publisher a registered source serves.
+
+        The source supplies the metadata; no `/struct` request is made (the table of contents
+        stays empty) and the content, when asked for, is the PDF only.
+        """
+        details = await source.get_details(publisher, year, pos)
+
+        is_loaded = await self._doc_store.is_loaded(eli)
+        if load_content and not is_loaded and await self._known_unavailable.get(eli) is None:
+            try:
+                await self._load_source_content(source, eli, publisher, year, pos, has_pdf=details.has_pdf)
+            except ContentNotAvailableError as exc:
+                logger.info("No readable content for %s: %s", eli, exc)
+                await self._known_unavailable.set(eli, True, settings.cache_details_ttl)
+            else:
+                is_loaded = await self._doc_store.is_loaded(eli)
+        if is_loaded:
+            content_status = ContentStatus.LOADED
+        elif load_content:
+            content_status = ContentStatus.UNAVAILABLE
+        else:
+            content_status = ContentStatus.NOT_REQUESTED
+        return details.model_copy(update={"is_loaded": is_loaded, "content_status": content_status})
+
+    async def _load_source_content(
+        self, source: ActSource, eli: str, publisher: str, year: int, pos: int, *, has_pdf: bool
+    ) -> None:
+        """Load the PDF of an act from a registered source into the document store.
+
+        Same failure contract as `_load_content`. A scan (no characters on any page), a file the
+        reader cannot open and a text layer with no text raise `ContentNotAvailableError`. A text
+        layer dominated by `(cid:N)` markers is garbled but still text: it loads, with a WARNING,
+        and the module instructions tell the agent to compare with the PDF.
+        """
+        pdf_url = source.pdf_url(publisher, year, pos)
+        limit = settings.doc_store_max_size_bytes
+        if not has_pdf:
+            raise ContentNotAvailableError(eli, "pdf")
+        try:
+            try:
+                pdf_bytes = await source.get_pdf(publisher, year, pos, max_bytes=limit)
+            except ActNotFoundError as exc:
+                raise ContentNotAvailableError(eli, "pdf") from exc
+            _reject_if_too_large(eli, len(pdf_bytes), limit, pdf_url)
+            inspection = await asyncio.to_thread(self._content_processor.inspect_pdf, pdf_bytes)
+            if inspection.failed:
+                logger.warning("PDF of %s could not be read: %s", eli, inspection.error)
+                raise ContentNotAvailableError(eli, "pdf")
+            if not inspection.text.strip():
+                if inspection.pages and inspection.image_only_pages == inspection.pages:
+                    logger.info("PDF of %s is a scan: %d pages, no text layer", eli, inspection.pages)
+                raise ContentNotAvailableError(eli, "pdf")
+            if inspection.broken_layer:
+                logger.warning(
+                    "PDF of %s has a garbled text layer: %d (cid:N) markers in %d pages; loading it anyway",
+                    eli,
+                    inspection.cid_markers,
+                    inspection.pages,
+                )
+            markdown = inspection.text
+            _reject_if_too_large(eli, len(markdown.encode("utf-8")), limit, pdf_url)
+            sections = await asyncio.to_thread(self._content_processor.index_sections, markdown)
+            await self._doc_store.load(eli, markdown, sections)
+            logger.info(f"Loaded content for {eli}: {len(sections)} sections")
+        except ResponseTooLargeError as exc:
             raise ContentTooLargeError(eli, exc.size_bytes, limit, pdf_url, exact=exc.exact) from exc
 
     def _format_toc(self, toc_data: list | dict) -> list[dict[str, Any]]:

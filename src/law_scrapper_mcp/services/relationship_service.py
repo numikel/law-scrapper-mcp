@@ -5,13 +5,15 @@ from typing import Any
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.models.tool_inputs import parse_eli
 from law_scrapper_mcp.models.tool_outputs import RelationshipsOutput
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry
 
 
 class RelationshipService:
     """Retrieve and filter relationships for a legal act."""
 
-    def __init__(self, client: SejmApiClient) -> None:
+    def __init__(self, client: SejmApiClient, *, sources: ActSourceRegistry | None = None) -> None:
         self._client = client
+        self._sources = sources if sources is not None else ActSourceRegistry()
 
     async def get_relationships(
         self,
@@ -19,7 +21,12 @@ class RelationshipService:
         relationship_type: str | None = None,
     ) -> RelationshipsOutput:
         publisher, year, pos = parse_eli(eli)
-        raw = await self._client.get_json(f"acts/{publisher}/{year}/{pos}/references")
+        source = self._sources.for_publisher(publisher)
+        raw: Any
+        if source is not None:
+            raw = await source.get_relationships(publisher, year, pos)
+        else:
+            raw = await self._client.get_json(f"acts/{publisher}/{year}/{pos}/references")
         relationships: dict[str, Any] = {}
         if isinstance(raw, dict):
             for key, value in raw.items():

@@ -6,8 +6,9 @@ from typing import Any
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import DetailLevel
-from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
+from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ResultSetScope, SearchOutput
+from law_scrapper_mcp.services.act_sources import ActSource, ActSourceRegistry, SourceSearchQuery
 from law_scrapper_mcp.services.pagination import item_page_info
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -17,9 +18,48 @@ logger = logging.getLogger(__name__)
 class SearchService:
     """Service for searching and browsing legal acts."""
 
-    def __init__(self, client: SejmApiClient, result_store: ResultStore) -> None:
+    def __init__(
+        self,
+        client: SejmApiClient,
+        result_store: ResultStore,
+        *,
+        sources: ActSourceRegistry | None = None,
+    ) -> None:
         self._client = client
         self._result_store = result_store
+        self._sources = sources if sources is not None else ActSourceRegistry()
+
+    @staticmethod
+    def _trim(item: ActSummaryOutput, detail_level: DetailLevel) -> ActSummaryOutput:
+        """Apply the detail level to a record a source built in full."""
+        if detail_level is DetailLevel.MINIMAL:
+            return item.model_copy(
+                update={"type": None, "promulgation_date": None, "effective_date": None, "in_force": None}
+            )
+        return item
+
+    async def _search_source(
+        self,
+        source: ActSource,
+        publisher: str,
+        query: SourceSearchQuery,
+        *,
+        summary_parts: list[str],
+        limit: int | None,
+        detail_level: DetailLevel,
+    ) -> SearchOutput:
+        """Run `query` against a registered source and return a stored result page."""
+        page = await source.search(publisher, query)
+        results = [self._trim(item, detail_level) for item in page.items]
+        return await self._output(
+            results,
+            total_count=page.total_count,
+            query_summary=" | ".join(summary_parts),
+            limit=limit,
+            offset=query.offset,
+            # The source applied the offset itself, as the Sejm API does.
+            window_offset=query.offset,
+        )
 
     async def _output(
         self,
@@ -93,6 +133,51 @@ class SearchService:
         detail_level: DetailLevel = DetailLevel.STANDARD,
     ) -> SearchOutput:
         """Search for legal acts and return a stored result page."""
+        source = self._sources.for_publisher(publisher)
+        if source is not None:
+            # A source is asked for a bounded page only: the value is rejected, never silently
+            # cut, because the caller would otherwise read a short page as the whole answer.
+            if limit is not None and limit > MAX_ITEM_LIMIT:
+                raise ValueError(
+                    f"Źródło {source.name}: parametr 'limit' nie może przekraczać {MAX_ITEM_LIMIT} "
+                    f"(podano {limit}). Kolejne strony pobieraj parametrem 'offset'."
+                )
+            summary_parts = [f"publisher={publisher}"]
+            if year:
+                summary_parts.append(f"year={year}")
+            if keywords:
+                summary_parts.append(f"keywords={','.join(keywords)}")
+            if date_from:
+                summary_parts.append(f"effective_from={date_from}")
+            if date_to:
+                summary_parts.append(f"effective_to={date_to}")
+            if title:
+                summary_parts.append(f"title={title}")
+            if act_type:
+                summary_parts.append(f"type={act_type}")
+            if in_force is not None:
+                summary_parts.append(f"in_force={in_force}")
+            return await self._search_source(
+                source,
+                publisher,
+                SourceSearchQuery(
+                    year=year or None,
+                    keywords=tuple(keywords or ()),
+                    title=title or None,
+                    act_type=act_type or None,
+                    date_from=date_from or None,
+                    date_to=date_to or None,
+                    pub_date_from=pub_date_from or None,
+                    pub_date_to=pub_date_to or None,
+                    in_force=in_force,
+                    limit=max(limit if limit is not None else DEFAULT_ITEM_LIMIT, 1),
+                    offset=max(offset or 0, 0),
+                ),
+                summary_parts=summary_parts,
+                limit=limit,
+                detail_level=detail_level,
+            )
+
         params: dict[str, Any] = {"publisher": publisher}
 
         summary_parts = [f"publisher={publisher}"]
@@ -198,6 +283,16 @@ class SearchService:
         """
         page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)
         page_offset = max(offset or 0, 0)
+        source = self._sources.for_publisher(publisher)
+        if source is not None:
+            return await self._search_source(
+                source,
+                publisher,
+                SourceSearchQuery(year=year, limit=min(max(page_limit, 1), MAX_ITEM_LIMIT), offset=page_offset),
+                summary_parts=[f"publisher={publisher}", f"year={year}"],
+                limit=limit,
+                detail_level=detail_level,
+            )
         params: dict[str, Any] = {
             "publisher": publisher,
             "year": year,

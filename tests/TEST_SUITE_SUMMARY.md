@@ -58,6 +58,7 @@ tests/
 ├── conftest.py                 # Shared fixtures: fixture loaders, mock_client, stores, mcp_client; sets `LAW_MCP_SOURCE_MODULES=-*` above the first `law_scrapper_mcp` import
 ├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions; `EXPECTED_TOOLS`; `CORE_ONLY_ENV` (the `-*` value the root suite and its server subprocesses run with)
 ├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
+├── fake_act_source.py          # In-memory `ActSource` that records its calls; drives the act-source routing tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
@@ -110,6 +111,7 @@ tests/
 │   │   ├── test_egress_hub.py          # EgressHub: caller identity tokens, wire User-Agent, one owner per origin and name, rate ceiling a module can only lower, no pin opt-out, source states, close error collection
 │   │   ├── test_egress_isolation.py    # Per-host controls: cache namespace, origin pin and redirect cap (Sejm characterised as unpinned), host label on errors and logs, two-host isolation of 429 pause, breaker, bucket, headers and cookies
 │   │   ├── test_egress_messages.py     # Generic Polish client-side texts of a host with no preset, named after the source
+│   │   ├── test_egress_no_content.py   # `get_json(none_on_no_content=True)`: 204 returns None, is never cached, and the default is unchanged
 │   │   ├── test_egress_pacing.py       # Limiter wired into the client: 429 → pause, shared clock, light/heavy lanes, deadline refusal
 │   │   ├── test_facade_exports.py      # `law_scrapper_mcp.client` re-exports every public exception
 │   │   ├── test_failure_policy.py      # Pure retry/breaker classification, Retry-After parsing, `backoff()` bounds
@@ -119,6 +121,7 @@ tests/
 │   │   └── test_user_agent.py          # Identity sent to api.sejm.gov.pl tracks the configured version
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading
+│   │   ├── test_act_sources.py         # ActSourceRegistry: exact code before prefix, reserved DU/MP, conflicts leave nothing half registered, unregister
 │   │   ├── test_browse_paging.py       # `browse()` fetches one page, reports the year's count, does not re-slice, reads `effective_date` from entryIntoForce
 │   │   ├── test_changes_service.py     # ChangesService: date/keyword/publisher params, paged upstream window
 │   │   ├── test_comparison_service.py  # ComparisonService: concurrent fetches, sibling cancellation, comparison mapping
@@ -128,6 +131,8 @@ tests/
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
 │   │   ├── test_metadata_service.py    # MetadataService pages per category and for `all`
 │   │   ├── test_pagination.py          # Shared paginators: effective limit, negative rejection, page metadata
+│   │   ├── test_pdf_inspection.py      # `inspect_pdf`: scan vs failed read vs text layer vs `(cid:N)`-dominated layer (flagged, never discarded)
+│   │   ├── test_source_dispatch.py     # Empty registry issues the 4.4.2 upstream calls; a registered code never reaches the Sejm: search (limit 101 rejected), browse, change tracking, details, relations, PDF-only loading and its outcomes
 │   │   ├── test_pattern_matching.py    # RE2 pattern compilation: supported subset, rejections, no stderr pollution
 │   │   ├── test_relationship_service.py# RelationshipService: category filtering, response-shape normalisation
 │   │   ├── test_result_store.py        # ResultStore: ids, LRU, TTL, filtering, ReDoS regression, record cap, scope

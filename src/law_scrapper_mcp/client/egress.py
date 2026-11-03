@@ -635,16 +635,27 @@ class EgressClient:
         except httpx.HTTPError as exc:
             raise SejmApiError(self._messages.request_error.format(detail=exc), source=self._host.name) from exc
 
-    async def get_json(self, path: str, params: dict[str, Any] | None = None, cache_ttl: int | None = None) -> Any:
+    async def get_json(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        cache_ttl: int | None = None,
+        *,
+        none_on_no_content: bool = False,
+    ) -> Any:
         """Get JSON response from API with optional caching.
 
         Args:
             path: URL path
             params: Query parameters
             cache_ttl: Cache TTL in seconds (None = no cache)
+            none_on_no_content: Return `None` when the host answers 204 No Content, instead of
+                failing to parse an empty body. The answer is not cached. Some hosts use 204
+                for "no such resource", so a caller that knows this opts in; the default keeps
+                the behaviour every existing caller relies on.
 
         Returns:
-            Parsed JSON response
+            Parsed JSON response, or `None` for a 204 when `none_on_no_content` is set
         """
         # Build cache key
         cache_key = None
@@ -656,6 +667,8 @@ class EgressClient:
                 return cached
 
         response = await self._request("GET", path, params=params)
+        if none_on_no_content and response.status_code == 204:
+            return None
         data = response.json()
 
         if cache_key is not None and cache_ttl is not None:

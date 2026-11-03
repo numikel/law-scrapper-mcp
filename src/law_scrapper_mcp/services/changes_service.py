@@ -8,6 +8,7 @@ from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ChangesOutput, ResultSetScope
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry, SourceSearchQuery
 from law_scrapper_mcp.services.pagination import effective_limit, item_page_info, parse_non_negative
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -17,9 +18,16 @@ logger = logging.getLogger(__name__)
 class ChangesService:
     """Track legal changes using search endpoint (workaround for WAF-blocked /eli/changes/acts)."""
 
-    def __init__(self, client: SejmApiClient, result_store: ResultStore) -> None:
+    def __init__(
+        self,
+        client: SejmApiClient,
+        result_store: ResultStore,
+        *,
+        sources: ActSourceRegistry | None = None,
+    ) -> None:
         self._client = client
         self._result_store = result_store
+        self._sources = sources if sources is not None else ActSourceRegistry()
 
     async def _output(
         self,
@@ -86,6 +94,30 @@ class ChangesService:
         # construction and left records past the default page unreachable.
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
+
+        source = self._sources.for_publisher(publisher)
+        if source is not None:
+            # "Changes" means the acts announced in the window, which is also what the Sejm
+            # path asks of the search endpoint: the pair goes out as publication dates.
+            page = await source.search(
+                publisher,
+                SourceSearchQuery(
+                    keywords=tuple(keywords or ()),
+                    pub_date_from=date_from or None,
+                    pub_date_to=date_to,
+                    limit=max(page_limit, 1),
+                    offset=page_offset,
+                ),
+            )
+            return await self._output(
+                results=page.items,
+                total_count=page.total_count,
+                date_range=f"{date_from} to {date_to}",
+                publisher=publisher,
+                keywords=keywords or [],
+                limit=page_limit,
+                offset=page_offset,
+            )
 
         params: dict[str, Any] = {
             "publisher": publisher,

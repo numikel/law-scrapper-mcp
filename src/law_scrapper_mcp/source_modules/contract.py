@@ -12,6 +12,7 @@ from law_scrapper_mcp.client.egress import CallerIdentity, EgressHub
 from law_scrapper_mcp.client.exceptions import EgressConfigError
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.context import AppContext
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry
 
 ENTRY_POINT_GROUP = "law_scrapper_mcp.source_modules"
 
@@ -37,11 +38,15 @@ class ModuleHost:
         caller: Identity derived by the core from the module's distribution, never filled in by
             the module, so a module cannot forget or spoof its attribution.
         settings: The process settings.
+        act_sources: The registry the core services consult to route a publisher code to a
+            source. A module that serves acts registers its `ActSource` here inside the start
+            hook and unregisters it when the hook exits.
     """
 
     egress: EgressHub
     caller: CallerIdentity
     settings: Settings
+    act_sources: ActSourceRegistry
 
 
 @dataclass(frozen=True, slots=True)

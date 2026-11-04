@@ -1,0 +1,22 @@
+[project]
+name = "law-scrapper-mcp-voivodeship-journals"
+# Fixed until the first release of a module (the version follows the core from then on).
+version = "0.0.0"
+description = "Source module for law-scrapper-mcp: acts of the voivodeship official journals (e-Dziennik ELI), through the existing tools."
+readme = "README.md"
+requires-python = ">=3.13"
+# Unpinned: the module is developed in the same workspace as the core.
+dependencies = ["law-scrapper-mcp"]
+
+[project.entry-points."law_scrapper_mcp.source_modules"]
+voivodeship-journals = "law_scrapper_mcp_voivodeship_journals:module"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/law_scrapper_mcp_voivodeship_journals"]
+
+[tool.uv.sources]
+law-scrapper-mcp = { workspace = true }

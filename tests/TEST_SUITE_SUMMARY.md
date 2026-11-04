@@ -22,12 +22,27 @@ core-only either way (`LAW_MCP_SOURCE_MODULES=-*`, see `tests/conftest.py`).
 ```bash
 uv sync --extra dev --all-packages
 uv run pytest modules/reference/tests -v
+uv run pytest modules/voivodeship-journals/tests -v
 ```
+
+Several members can be installed at once and test directories are collected in one run
+(`pytest modules/*/tests`), so test file names are unique across members and the reference tests
+derive their tool counts from a run with `reference` switched off instead of hard-coding them.
+`tests/unit/test_ci_module_gates.py` also pins the CI step that runs the MCP conformance suite with
+a module active in the `modules` job (same pinned command as the core-only one in the `test` job).
 
 | File | What it pins |
 |------|--------------|
 | `modules/reference/tests/test_install_and_disable.py` | The entry point of the installed distribution, discovery over it, 14 vs 13 tools and the instructions header on a real STDIO server for `unset`, `-reference`, `-*`, `-*,reference`, `reference,-reference`, `reference`; a switched-off module's package is never imported |
 | `modules/reference/tests/test_reference_tool.py` | The descriptor, the state accessor, and `reference_ping` through an in-memory client with `outputSchema` validation |
+| `modules/voivodeship-journals/tests/journal_support.py`, `conftest.py` | Not tests: the recorded-payload loaders, host constants, a synthetic one-page PDF builder, the in-memory MCP session helper, the `started` fixture (the real start hook over a fresh hub and registry) and the autouse `no_real_network` guard that makes a name lookup for a non-local host fail |
+| `modules/voivodeship-journals/tests/test_catalog.py` | 16 journals, 12 served, 4 withheld with a stated reason, hosts agree with the recordings, import-time invariants, the module README table matches the catalogue |
+| `modules/voivodeship-journals/tests/test_normalise.py` | Both JSON casings, the date swap between search and details, sentinels, the canonical ELI, relations under the journal's own keys |
+| `modules/voivodeship-journals/tests/test_source.py` | Search parameters exactly (no `publisher`, `limit` always sent), each refusal before any request, withheld and unknown codes, 204 as not found, no `/struct`, relations, PDF download and its size budget |
+| `modules/voivodeship-journals/tests/test_journals_end_to_end.py` | The tools through an in-memory client over the real server with only this module active and every journal host mocked: browse, filter, load, read, search in an act; search params and ISO dates; a Pascal journal; change tracking by publication window; relations; `compare_acts`; a scan (`unavailable` plus the journal PDF link); a garbled layer that still loads; eight refusals in Polish that cost no request; `outputSchema` validated on every answer; a request to the Sejm fails the test |
+| `modules/voivodeship-journals/tests/test_journals_isolation.py` | A 503 storm on one journal opens only its own breaker (read from the list `/health` serves), names that source and says the others are unaffected; another journal and DU still answer; an open breaker sends nothing; no limiter or breaker is shared with any other host |
+| `modules/voivodeship-journals/tests/test_journals_install_and_disable.py` | Real STDIO server: the module block is present for `unset`, `-*,voivodeship-journals`, a bare name and `-reference`, and the tool set equals the same configuration with this module off (it adds none); absent for `-voivodeship-journals`, `-*`, `voivodeship-journals,-*`; the package is never imported when off |
+| `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution, a positive control for the offline guard |
 
 **Full integration suite:**
 
@@ -58,12 +73,13 @@ tests/
 ├── conftest.py                 # Shared fixtures: fixture loaders, mock_client, stores, mcp_client; sets `LAW_MCP_SOURCE_MODULES=-*` above the first `law_scrapper_mcp` import
 ├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions; `EXPECTED_TOOLS`; `CORE_ONLY_ENV` (the `-*` value the root suite and its server subprocesses run with)
 ├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
+├── fake_act_source.py          # In-memory `ActSource` that records its calls; drives the act-source routing tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
-│   ├── edziennik/              # 11 recorded e-Dziennik ELI files (JSON, HTML, PDF); one PROVENANCE.md for the whole session
+│   ├── edziennik/              # 14 recorded e-Dziennik ELI files (JSON, HTML, PDF), three of them the keyword-list probe; one PROVENANCE.md for all sessions
 │   ├── saos/                   # 25 recorded SAOS API files (search pages, counts, an error body, the court dictionary) with personal names redacted; one PROVENANCE.md; no full judgment texts
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
@@ -110,6 +126,7 @@ tests/
 │   │   ├── test_egress_hub.py          # EgressHub: caller identity tokens, wire User-Agent, one owner per origin and name, rate ceiling a module can only lower, no pin opt-out, source states, close error collection
 │   │   ├── test_egress_isolation.py    # Per-host controls: cache namespace, origin pin and redirect cap (Sejm characterised as unpinned), host label on errors and logs, two-host isolation of 429 pause, breaker, bucket, headers and cookies
 │   │   ├── test_egress_messages.py     # Generic Polish client-side texts of a host with no preset, named after the source
+│   │   ├── test_egress_no_content.py   # `get_json(none_on_no_content=True)`: 204 returns None, is never cached, and the default is unchanged
 │   │   ├── test_egress_pacing.py       # Limiter wired into the client: 429 → pause, shared clock, light/heavy lanes, deadline refusal
 │   │   ├── test_facade_exports.py      # `law_scrapper_mcp.client` re-exports every public exception
 │   │   ├── test_failure_policy.py      # Pure retry/breaker classification, Retry-After parsing, `backoff()` bounds
@@ -119,6 +136,7 @@ tests/
 │   │   └── test_user_agent.py          # Identity sent to api.sejm.gov.pl tracks the configured version
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading
+│   │   ├── test_act_sources.py         # ActSourceRegistry: exact code before prefix, reserved DU/MP, conflicts leave nothing half registered, unregister
 │   │   ├── test_browse_paging.py       # `browse()` fetches one page, reports the year's count, does not re-slice, reads `effective_date` from entryIntoForce
 │   │   ├── test_changes_service.py     # ChangesService: date/keyword/publisher params, paged upstream window
 │   │   ├── test_comparison_service.py  # ComparisonService: concurrent fetches, sibling cancellation, comparison mapping
@@ -128,6 +146,8 @@ tests/
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
 │   │   ├── test_metadata_service.py    # MetadataService pages per category and for `all`
 │   │   ├── test_pagination.py          # Shared paginators: effective limit, negative rejection, page metadata
+│   │   ├── test_pdf_inspection.py      # `inspect_pdf`: scan vs failed read vs text layer vs `(cid:N)`-dominated layer (flagged, never discarded)
+│   │   ├── test_source_dispatch.py     # Empty registry issues the 4.4.2 upstream calls; a registered code never reaches the Sejm: search (limit 101 rejected), browse, change tracking, details, relations, PDF-only loading and its outcomes
 │   │   ├── test_pattern_matching.py    # RE2 pattern compilation: supported subset, rejections, no stderr pollution
 │   │   ├── test_relationship_service.py# RelationshipService: category filtering, response-shape normalisation
 │   │   ├── test_result_store.py        # ResultStore: ids, LRU, TTL, filtering, ReDoS regression, record cap, scope

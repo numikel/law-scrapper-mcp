@@ -24,6 +24,7 @@ import pdfplumber
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "edziennik"
 PROVENANCE = FIXTURES / "PROVENANCE.md"
 SENTINEL = "0001-01-01T00:00:00"
+KEYWORD_FILES = ("keyword_single_a.json", "keyword_single_b.json", "keyword_pair_ab.json")
 NBSP = " "
 
 
@@ -87,6 +88,13 @@ def test_json_fixtures_have_the_recorded_structure() -> None:
         assert len(load_json(name)[key]) == int(limit.group(1)), name
     assert len(load_json("publishers_camel.json")) == 1
     assert len(load_json("publishers_pascal.json")) == 1
+    for name in KEYWORD_FILES:
+        limit = re.search(r"limit=(\d+)", rows[name][1])
+        assert limit is not None, name
+        page = load_json(name)
+
+        assert page["count"] == len(page["items"]) <= int(limit.group(1)), name
+        assert page["totalCount"] >= page["count"], name
 
 
 def test_publisher_lists_differ_in_key_casing_between_journals() -> None:
@@ -180,6 +188,32 @@ def test_a_scanned_pdf_has_images_and_no_text_while_the_other_has_a_text_layer()
         assert all(len(page.images) >= 1 for page in scan.pages)
     with pdfplumber.open(FIXTURES / "text_layer.pdf") as layered:
         assert "".join((page.extract_text() or "") for page in layered.pages).strip()
+
+
+def test_a_comma_separated_keyword_list_is_not_an_intersection() -> None:
+    """The Sejm path joins several keywords with a comma and documents that as AND.
+
+    On a journal host the joined list returned more than the narrower single keyword allows, so
+    it is not an AND and a source must not claim it is. The counts come from the recordings.
+    `a` matched nothing in the recording, which is why OR and "reads only one of the values"
+    cannot be told apart; the test pins only what the data does decide.
+    """
+    count_a = load_json("keyword_single_a.json")["totalCount"]
+    count_b = load_json("keyword_single_b.json")["totalCount"]
+    count_pair = load_json("keyword_pair_ab.json")["totalCount"]
+
+    assert count_pair > min(count_a, count_b), "an AND could not exceed the smaller of its two sets"
+    assert count_pair >= max(count_a, count_b), "the joined list did not narrow the larger set"
+    assert load_json("keyword_pair_ab.json") == load_json("keyword_single_b.json")
+
+
+def test_the_keyword_probe_recordings_come_from_one_host_within_the_budget() -> None:
+    rows = provenance_rows()
+    hosts = {re.match(r"https://([^/]+)/", rows[name][1]).group(1) for name in KEYWORD_FILES}  # type: ignore[union-attr]
+
+    assert len(KEYWORD_FILES) <= 3
+    assert len(hosts) == 1
+    assert all(rows[name][2] == "200" for name in KEYWORD_FILES)
 
 
 def test_the_measurements_taken_without_storing_a_body_are_on_record() -> None:

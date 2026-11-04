@@ -306,7 +306,9 @@ installed modules on. A disabled module is never imported, and a module that fai
 server with a message naming it.
 
 With no module installed nothing changes. Module tools are described by each module and are not part
-of the tool table below. Conventions, the full grammar and the gates:
+of the tool table below. A module can also serve further publisher codes through the tools below
+instead of adding tools; `modules/voivodeship-journals` does this for the voivodeship official
+journals (`POL_WOJ_*`, for example `POL_WOJ_PM/2025/5051`), see its README. Conventions, the full grammar and the gates:
 [docs/source-modules.md](docs/source-modules.md).
 
 ## Tools reference

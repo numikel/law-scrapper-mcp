@@ -29,6 +29,17 @@ PROJECT_ROOT = Path(__file__).parents[3]
 VARIABLE = "LAW_MCP_SOURCE_MODULES"
 MODULE_IMPORT = "law_scrapper_mcp_reference"
 CORE_TOOL_COUNT = 13
+# Other members may be installed next to this one, and some of them add tools. Every count below is
+# therefore derived from the same configuration with `reference` switched off, never hard-coded.
+
+
+async def _in_process_tool_names(tokens: list[str]) -> list[str]:
+    """Tool names of a server built in-process for the given `LAW_MCP_SOURCE_MODULES` tokens."""
+    from law_scrapper_mcp.server import build_app
+
+    discovery = discover(Settings(source_modules=tokens))
+    server = build_app(discovery.active, inactive=discovery.inactive)
+    return sorted(tool.name for tool in await server.list_tools())
 
 
 def _reference_entry_points() -> list[importlib.metadata.EntryPoint]:
@@ -74,25 +85,38 @@ async def test_real_discovery_lists_core_plus_the_reference_tool() -> None:
     server = build_app(discovery.active, inactive=discovery.inactive)
 
     names = sorted(tool.name for tool in await server.list_tools())
-    assert len(names) == CORE_TOOL_COUNT + 1
-    assert "reference_ping" in names
+    without_reference = await _in_process_tool_names(["-reference"])
+    assert len(names) == len(without_reference) + 1
+    assert set(names) - set(without_reference) == {"reference_ping"}
     assert server.instructions is not None
-    assert "DOSTĘPNE NARZĘDZIA (14):" in server.instructions
+    assert f"DOSTĘPNE NARZĘDZIA ({len(names)}):" in server.instructions
     assert "MODUŁ ŹRÓDŁA — reference (narzędzi: 1)" in server.instructions
 
 
 @pytest.mark.asyncio
-async def test_real_discovery_with_the_module_switched_off_is_the_core() -> None:
+async def test_real_discovery_with_every_module_switched_off_is_the_core() -> None:
     from law_scrapper_mcp.server import build_app
 
-    discovery = discover(Settings(source_modules=["-reference"]))
+    discovery = discover(Settings(source_modules=["-*"]))
 
     server = build_app(discovery.active, inactive=discovery.inactive)
 
     names = [tool.name for tool in await server.list_tools()]
     assert len(names) == CORE_TOOL_COUNT
     assert "reference_ping" not in names
-    assert discovery.inactive == ("reference",)
+    assert "reference" in discovery.inactive
+    assert discovery.active == ()
+
+
+@pytest.mark.asyncio
+async def test_real_discovery_with_only_this_module_switched_off_drops_exactly_its_tool() -> None:
+    discovery = discover(Settings(source_modules=["-reference"]))
+
+    names = await _in_process_tool_names(["-reference"])
+
+    assert "reference_ping" not in names
+    assert "reference" in discovery.inactive
+    assert "reference" not in [loaded.module.name for loaded in discovery.active]
 
 
 # --- a real STDIO server -----------------------------------------------------------------------
@@ -116,23 +140,29 @@ async def _stdio_tools_and_instructions(value: str | None) -> tuple[list[str], s
 @pytest.mark.integration
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    ("value", "expected_count"),
+    ("value", "reference_active"),
     [
-        pytest.param(None, 14, id="unset: every installed module is active"),
-        pytest.param("-reference", 13, id="-reference"),
-        pytest.param("-*", 13, id="-* resets everything"),
-        pytest.param("-*,reference", 14, id="-*,reference re-enables after the reset"),
-        pytest.param("reference,-reference", 13, id="the last token wins"),
-        pytest.param("reference", 14, id="a bare name leaves the module on"),
+        pytest.param(None, True, id="unset: every installed module is active"),
+        pytest.param("-reference", False, id="-reference"),
+        pytest.param("-*", False, id="-* resets everything"),
+        pytest.param("-*,reference", True, id="-*,reference re-enables after the reset"),
+        pytest.param("reference,-reference", False, id="the last token wins"),
+        pytest.param("reference", True, id="a bare name leaves the module on"),
     ],
 )
-async def test_stdio_server_tool_count_follows_the_variable(value: str | None, expected_count: int) -> None:
+async def test_stdio_server_tool_count_follows_the_variable(value: str | None, reference_active: bool) -> None:
     names, instructions = await _stdio_tools_and_instructions(value)
 
-    assert len(names) == expected_count
-    assert ("reference_ping" in names) is (expected_count == CORE_TOOL_COUNT + 1)
-    assert f"DOSTĘPNE NARZĘDZIA ({expected_count}):" in instructions
-    assert ("MODUŁ ŹRÓDŁA — reference" in instructions) is (expected_count == CORE_TOOL_COUNT + 1)
+    # The same configuration with `reference` forced off is the yardstick, so a second installed
+    # module (with or without tools) cannot change what this test expects.
+    tokens = [token.strip() for token in (value or "").split(",") if token.strip()]
+    others = await _in_process_tool_names([*tokens, "-reference"])
+    assert len(names) == len(others) + (1 if reference_active else 0)
+    assert ("reference_ping" in names) is reference_active
+    assert f"DOSTĘPNE NARZĘDZIA ({len(names)}):" in instructions
+    assert ("MODUŁ ŹRÓDŁA — reference" in instructions) is reference_active
+    if value == "-*":
+        assert len(names) == CORE_TOOL_COUNT
 
 
 @pytest.mark.integration
@@ -140,7 +170,7 @@ async def test_stdio_server_tool_count_follows_the_variable(value: str | None, e
 async def test_the_disabled_server_instructions_equal_the_core_text() -> None:
     from law_scrapper_mcp.server import SERVER_INSTRUCTIONS
 
-    _, instructions = await _stdio_tools_and_instructions("-reference")
+    _, instructions = await _stdio_tools_and_instructions("-*")
 
     assert instructions == SERVER_INSTRUCTIONS
 

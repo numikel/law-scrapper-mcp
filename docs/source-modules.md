@@ -15,8 +15,10 @@ A module is **not**:
 
 - a plugin API for agents: there is no runtime enable or disable tool, only the environment variable
   read at startup;
-- a way to change how the 13 core tools behave: source routing, a `source` parameter and generic
-  document identifiers are out of the mechanism on purpose and are shaped by the first real modules;
+- a way to change how the 13 core tools behave. A `source` parameter and generic document identifiers
+  are out of the mechanism on purpose. The one thing a module may do to the core tools is serve further
+  publisher codes through them (section 5, "Act sources"); it cannot change their names, parameters,
+  defaults or output schemas;
 - released with the core: the reference module is a demonstration that is never published and never in
   the container image (section 9).
 
@@ -87,6 +89,7 @@ The start hook receives one `ModuleHost`:
 | `egress` | The `EgressHub`, the same object as `AppContext.egress` |
 | `caller` | A `CallerIdentity(module, version)` the core derives from the module's distribution; a module cannot forget or spoof it |
 | `settings` | The process settings |
+| `act_sources` | The `ActSourceRegistry` the core services consult by publisher code (see "Act sources" below) |
 
 A module that talks to an upstream host calls `host.egress.client_for(EgressHost(...), host.caller)`
 **inside its start hook**. That call registers the host with the hub: the host appears on `/health`
@@ -98,6 +101,55 @@ redirects, and a rate or burst not above the defaults. Per-host TLS is set throu
 
 What the start hook yields goes to `AppContext.module_state[name]`. Give the module a typed accessor
 (`reference_state()` in `state.py`) so tools never index the mapping themselves.
+
+### Act sources: serving a publisher code through the core tools
+
+A module for a source whose acts fit the core tools (an official journal with an ELI identifier,
+dates and a PDF) does not need tools of its own. It registers an `ActSource`
+(`law_scrapper_mcp.services.act_sources`) in its start hook, and the core services (`search_legal_acts`,
+`browse_acts`, `track_legal_changes`, `get_act_details` with its content tools, `analyze_act_relationships`,
+`compare_acts`) hand a request for that publisher code to the source instead of the Sejm client.
+`modules/voivodeship-journals/` is the working example, and it declares no tool (`tool_names=()`).
+
+```python
+@asynccontextmanager
+async def start(host: ModuleHost) -> AsyncIterator[State]:
+    client = host.egress.client_for(EgressHost(name="POL_X_AB", base_url="https://..."), host.caller)
+    source = MySource({"POL_X_AB": client}, host.settings)      # implements ActSource
+    host.act_sources.register(source, publishers=["POL_X_AB"], prefixes=("POL_X_",))
+    try:
+        yield State(...)
+    finally:
+        host.act_sources.unregister(source)                      # before the core closes its resources
+```
+
+What the core guarantees:
+
+- **Empty registry, same behaviour.** The services ask the registry once per call. With nothing
+  registered, or for `DU` and `MP`, they issue exactly the upstream calls they always did;
+  `test_empty_registry_issues_the_same_upstream_calls` pins that. `DU` and `MP`, and any prefix that
+  would cover them, cannot be claimed; a code or prefix claimed twice stops startup.
+- **Exact code first, then the longest prefix.** A source that claims a prefix receives every code under
+  it, including ones it does not serve, and must refuse those loudly (a Polish `ValueError` listing the
+  served codes) rather than let the request fall through.
+- **The source returns the core output models** (`ActSummaryOutput`, `ActDetailOutput`), so paging,
+  result sets, `filter_results`, size gates, section indexing and the negative cache for unavailable
+  content are the core's, not the module's.
+- **Content is read from the PDF.** The core downloads through `source.get_pdf(..., max_bytes=...)` under
+  the usual size budget. A scan or an unreadable file is `content_status: unavailable` with a link from
+  `source.pdf_url(...)`; a text layer dominated by `(cid:N)` markers loads with a WARNING in the log.
+- **Errors need no mapping.** Raise a Polish `ValueError` for an input the source cannot honour,
+  `ActNotFoundError` for a missing act, and the egress client's own exceptions (they carry the host
+  label) for a failing host; the tool layer turns them into the usual categories.
+- **`search_legal_acts` rejects a `limit` above 100 for a source** (the Sejm path keeps its documented
+  lack of a ceiling). `browse_acts` and `track_legal_changes` keep their documented clamp.
+- **One egress client per upstream host**, created in the start hook with `client_for`, so a failing host
+  opens only its own breaker and spends only its own pacing budget (`/health` lists each one).
+  `EgressClient.get_json(..., none_on_no_content=True)` returns `None` for HTTP 204, for hosts that
+  answer that way for a missing resource.
+
+A module must never send `publisher` codes it does not serve to its host, and must build the canonical
+ELI (`{publisher}/{year}/{pos}`) from the request, not from fields the host returns.
 
 ## 6. Activation: `LAW_MCP_SOURCE_MODULES`
 
@@ -184,6 +236,18 @@ uv run python scripts/check_release.py --version X.Y.Z
   `law_scrapper_mcp` import and in both server subprocess environments, so an installed module never
   reaches it. Tests that need a module run from `modules/<source>/tests` against the installed
   distribution.
+- Several members can be installed at once and CI collects every `modules/*/tests` in one run, so a
+  module's test files carry a name no other module uses (`test_<short-name>_*.py`; two files called
+  `test_install_and_disable.py` fail the collection), and shared test helpers live in an
+  identically unique module (not imported from `conftest`). A test must not assume it is the only
+  module installed: derive tool counts from the same configuration with your own module switched off
+  (see the tests in `modules/reference/tests`) instead of hard-coding 13 or 14.
+- A module's tests never reach the network. Mock the upstream host with `respx` and add an autouse
+  guard that makes a name lookup for a non-local host fail (see `no_real_network` in
+  `modules/voivodeship-journals/tests/conftest.py`): a test that forgets its mock then fails instead of
+  sending traffic to a public institution.
+- The CI `modules` job also runs the MCP conformance suite with a module active
+  (`LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals`), next to the core-only run in the `test` job.
 - `mypy` runs with `disallow_untyped_defs`: every function in a module, tests included, is annotated.
 - Import the server inside module tests (`from law_scrapper_mcp.server import build_app`), not at the top
   of the file: importing it runs discovery, so a broken descriptor should fail a named test, not the

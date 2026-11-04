@@ -9,7 +9,7 @@ from pydantic import Field
 
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput, ContentStatus, EnrichedResponse
-from law_scrapper_mcp.services.response_enrichment import act_details_hints, act_pdf_url
+from law_scrapper_mcp.services.response_enrichment import act_details_hints
 from law_scrapper_mcp.tools.annotations import READ_ONLY_REMOTE
 from law_scrapper_mcp.tools.error_handling import handle_tool_errors
 
@@ -85,7 +85,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 act_details.has_html,
                 just_loaded=load_content_bool and act_details.content_status is ContentStatus.LOADED,
                 content_status=act_details.content_status,
-                pdf_url=act_pdf_url(act_details.publisher, act_details.year, act_details.pos)
+                pdf_url=act_service.pdf_url(act_details.publisher, act_details.year, act_details.pos)
                 if act_details.has_pdf
                 else None,
             ),

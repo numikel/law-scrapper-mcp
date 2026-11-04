@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import gc
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from unittest.mock import Mock
 
 import pytest
 from mcp.server import MCPServer
 
 import law_scrapper_mcp.server as server_module
+from fake_act_source import FakeActSource
 from fake_source_modules import fake_module, loaded, register_named_tools, started
 from law_scrapper_mcp.client.egress import CallerIdentity, EgressHub
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.server import CORE_TOOL_COUNT, SERVER_INSTRUCTIONS, build_app, lifespan
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry
 from law_scrapper_mcp.source_modules.contract import ModuleHost, SourceModuleError
 from law_scrapper_mcp.source_modules.discovery import registered_tool_names
 from mcp_helpers import EXPECTED_TOOLS
@@ -165,6 +169,51 @@ async def test_start_hook_receives_the_hub_the_derived_identity_and_the_settings
         assert isinstance(host.egress, EgressHub)
         assert host.caller == CallerIdentity(module="law-scrapper-mcp-alpha", version="1.2.3")
         assert host.settings is settings
+        assert isinstance(host.act_sources, ActSourceRegistry)
+
+
+@pytest.mark.asyncio
+async def test_a_source_registered_by_a_start_hook_is_served_by_the_context_services() -> None:
+    """The registry in `ModuleHost` is the very object the four routed services consult."""
+    source = FakeActSource(total=3)
+
+    @asynccontextmanager
+    async def hook(host: ModuleHost) -> AsyncIterator[None]:
+        host.act_sources.register(source, publishers=["ZZ_TEST"])
+        try:
+            yield None
+        finally:
+            host.act_sources.unregister(source)
+
+    server = build_app([loaded(fake_module("alpha", start=hook))])  # type: ignore[arg-type]
+
+    async with lifespan(server) as app_context:
+        output = await app_context.search_service.search("ZZ_TEST")
+        details = await app_context.act_service.get_details("ZZ_TEST/2025/2")
+        relations = await app_context.relationship_service.get_relationships("ZZ_TEST/2025/2")
+        changes = await app_context.changes_service.track_changes("ZZ_TEST", "2025-01-01", "2025-12-31")
+
+    assert output.total_count == 3
+    assert details.title == "Uchwała w sprawie budżetu"
+    assert relations.total_count == 1
+    assert len(changes.changes) == 3
+    assert [call[0] for call in source.calls] == ["search", "get_details", "get_relationships", "search"]
+
+
+@pytest.mark.asyncio
+async def test_without_a_registering_module_the_registry_is_empty() -> None:
+    seen: list[ModuleHost] = []
+
+    def hook(host: ModuleHost) -> object:
+        seen.append(host)
+        return started("state")(host)
+
+    server = build_app([loaded(fake_module("alpha", start=hook))])  # type: ignore[arg-type]
+
+    async with lifespan(server):
+        (host,) = seen
+        assert host.act_sources.publishers() == ()
+        assert host.act_sources.for_publisher("POL_WOJ_PM") is None
 
 
 @pytest.mark.asyncio

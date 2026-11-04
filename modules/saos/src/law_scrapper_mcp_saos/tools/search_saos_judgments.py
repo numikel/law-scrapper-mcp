@@ -106,12 +106,13 @@ def register(mcp: MCPServer[AppContext]) -> None:
             bool | str,
             Field(
                 description=(
-                    "Gdy true, zwraca tylko orzeczenia wydziałów pracy sądów powszechnych (kod wydziału kończy się na "
-                    "15, 18 lub 21), skanując kolejne strony SAOS po 100 rekordów: do 5 żądań do SAOS na wywołanie, "
-                    "zatrzymanie po limit trafieniach. Bez total_count i page_info; kursor jest w polu scan "
-                    "(scan.next_offset podaj jako offset następnego wywołania). court_type: brak lub 'COMMON'; "
-                    "pozostałe rodzaje sądów są odrzucane (Sąd Najwyższy: obsługa w przygotowaniu). Nie łączy się z "
-                    "include_portal_links. Domyślnie false."
+                    "Gdy true, zwraca tylko orzeczenia z wydziałów pracy sądów powszechnych (kod wydziału kończy się "
+                    "na 15, 18 lub 21) albo z Izby Pracy Sądu Najwyższego (court_type='SUPREME'; nazwa izby zaczyna "
+                    "się od 'Izba Pracy'), skanując kolejne strony SAOS po 100 rekordów: do 5 żądań do SAOS na "
+                    "wywołanie, zatrzymanie po limit trafieniach. Bez total_count i page_info; kursor jest w polu scan "
+                    "(scan.next_offset podaj jako offset następnego wywołania). court_type: brak, 'COMMON' lub "
+                    "'SUPREME'; pozostałe rodzaje sądów są odrzucane. Nie łączy się z include_portal_links. "
+                    "Domyślnie false."
                 ),
             ),
         ] = False,
@@ -135,7 +136,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
         i field="division_code" (wzorzec "(15|21)$" pomija wydziały wyłącznie ubezpieczeń społecznych;
         po nazwie wydziału działa field="division", pattern="Pracy"). Gdy strona zawiera mało orzeczeń pracy,
         użyj labour_only=true: serwer skanuje do 5 stron SAOS po 100 rekordów (do 5 żądań) i zwraca najwyżej
-        limit orzeczeń z wydziałów pracy (kod wydziału kończy się na 15, 18 lub 21). To skan, a nie wyszukiwanie
+        limit orzeczeń z wydziałów pracy (kod wydziału kończy się na 15, 18 lub 21; w Sądzie Najwyższym (court_type="SUPREME")
+        nazwa izby zaczyna się od "Izba Pracy", a po wyszukaniu zawęża field="division", pattern="Izba Pracy").
+        To skan, a nie wyszukiwanie
         po wydziale: nie zna liczby wszystkich trafień (total_count i page_info są puste), a pole scan podaje
         przeskanowany zakres, regułę i scan.next_offset. W tym trybie offset to pozycja na liście SAOS, więc
         kolejne wywołanie przekaż z offset=scan.next_offset. Zestaw ze skanu obejmuje tylko przeskanowane okno,
@@ -143,9 +146,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
 
         Kiedy użyć: Szukasz orzeczeń sądów lub trybunałów po frazie, sygnaturze, dacie, rodzaju sądu lub rodzaju
         orzeczenia.
-        Kiedy użyć labour_only: Chcesz orzeczenia wydziałów pracy i ubezpieczeń społecznych sądów powszechnych,
-        a fraza lub daty nie zawężają wyników do nich.
-        Kiedy NIE używać labour_only: Szukasz orzeczeń Sądu Najwyższego, Trybunału lub KIO (odrzucane), chcesz
+        Kiedy użyć labour_only: Chcesz orzeczenia wydziałów pracy i ubezpieczeń społecznych sądów powszechnych
+        albo Izby Pracy Sądu Najwyższego, a fraza lub daty nie zawężają wyników do nich.
+        Kiedy NIE używać labour_only: Szukasz orzeczeń Trybunału lub KIO (odrzucane), chcesz
         odnośników do portalu sądu w tym samym wywołaniu (nie łączy się z include_portal_links) albo potrzebujesz
         liczby wszystkich orzeczeń pracy (skan jej nie zna).
         Kiedy NIE używać: Szukasz aktów prawnych → użyj search_legal_acts.
@@ -164,6 +167,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - search_saos_judgments(signature="VIII U 2924/25", include_portal_links=True) - Z odnośnikami do portalu sądu
         - search_saos_judgments(phrase="wypadek przy pracy", labour_only=True) - Tylko wydziały pracy, skan do 5 stron
         - search_saos_judgments(phrase="mobbing", labour_only=True, limit=10, offset=300) - Skan od pozycji 300 listy SAOS
+        - search_saos_judgments(court_type="SUPREME", labour_only=True, limit=10) - Izba Pracy Sądu Najwyższego
         """
         return await run_search(
             get_app_context(ctx),

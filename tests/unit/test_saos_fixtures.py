@@ -521,6 +521,45 @@ def test_the_supreme_court_labour_chamber_name_as_written_matches_no_record() ->
     assert recorded_chambers == {"Izba Karna"}
 
 
+CHAMBERS = "supreme_chambers_metadata_2016.json"
+LABOUR_CHAMBER = "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+
+
+def test_the_supreme_court_chamber_page_is_metadata_only_and_the_newest_up_to_the_last_date() -> None:
+    page = load_json(CHAMBERS)
+    items = page["items"]
+    row = provenance_rows()[CHAMBERS]
+    params = request_params(CHAMBERS)
+
+    assert set(page) == {"links", "items", "info"}
+    assert len(items) == int(params["pageSize"]) == 100
+    assert all(set(item) == {"id", "courtType", "division", "judgmentDate"} for item in items)
+    assert all(item["courtType"] == "SUPREME" for item in items)
+    assert all(set(item["division"]) == {"href", "id", "name", "chambers"} for item in items)
+    assert all(set(chamber) == {"href", "id", "name"} for item in items for chamber in item["division"]["chambers"])
+    dates = [item["judgmentDate"] for item in items]
+    assert dates == sorted(dates, reverse=True)
+    assert dates[0] <= params["judgmentDateTo"] == "2016-06-22"
+    assert page["info"]["totalResults"] == total(SUPREME)
+    assert row[2] == "200" and row[9] == "yes"
+    assert len((FIXTURES / CHAMBERS).read_bytes()) < 100_000
+
+
+def test_the_supreme_court_labour_chamber_is_recorded_under_its_older_long_name() -> None:
+    """The chamber names on the page, and which of them concern labour; the rule of `labour_only` follows this."""
+    items = load_json(CHAMBERS)["items"]
+    names = collections.Counter(chamber["name"] for item in items for chamber in item["division"]["chambers"])
+    labour_names = {name for name in names if "prac" in name.casefold() or "ubezpiecz" in name.casefold()}
+    probe_5, _size = probe_facts()["probe_supreme_labour_chamber_name"]
+
+    assert set(names) == {"Izba Cywilna", "Izba Karna", "Izba Wojskowa", LABOUR_CHAMBER}
+    assert labour_names == {LABOUR_CHAMBER}
+    assert names[LABOUR_CHAMBER] == 15
+    assert LABOUR_CHAMBER.startswith("Izba Pracy")
+    assert probe_5["scChamberName"] not in names
+    assert all(len(item["division"]["chambers"]) == 1 for item in items)
+
+
 DETAIL = "judgment_labour_sentence_metadata.json"
 DETAIL_RECORDING = "detail_labour_sentence_split"
 

@@ -30,6 +30,7 @@ from law_scrapper_mcp_saos.client import SaosClient
 from law_scrapper_mcp_saos.mapping import (
     COURT_TYPES,
     JUDGMENT_TYPE_LABELS,
+    LABOUR_CHAMBER_PATTERN,
     LABOUR_DIVISION_PATTERN,
     NO_SIGNATURE,
     SOURCE,
@@ -292,6 +293,17 @@ def search_hints(
             )
         )
     hints.extend(_details_hints(records, portal_links))
+    if result_set_id and query.court_type == "SUPREME":
+        hints.append(
+            Hint(
+                message=(
+                    "Zawęź zestaw do Izby Pracy Sądu Najwyższego wzorcem na nazwie izby i wydziału. Skan kolejnych "
+                    "stron w poszukiwaniu izby pracy robi labour_only=true z court_type='SUPREME'."
+                ),
+                tool="filter_results",
+                parameters={"result_set_id": result_set_id, "pattern": LABOUR_CHAMBER_PATTERN, "field": "division"},
+            )
+        )
     if result_set_id and query.court_type in (None, "COMMON"):
         hints.append(
             Hint(
@@ -440,7 +452,7 @@ def labour_hints(
                 parameters={**query.tool_parameters(), "labour_only": True, "limit": limit, "offset": scan.next_offset},
             )
         )
-    if result_set_id:
+    if result_set_id and query.court_type == "COMMON":
         hints.append(
             Hint(
                 message=(

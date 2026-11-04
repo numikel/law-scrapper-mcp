@@ -72,7 +72,7 @@ async def test_the_input_schema_has_exactly_the_documented_parameters_with_descr
         assert properties["offset"]["default"] == 0
         assert properties["include_portal_links"]["default"] is False
         assert properties["labour_only"]["default"] is False
-        for fact in ("5", "100", "scan", "include_portal_links", "Sąd Najwyższy"):
+        for fact in ("5", "100", "scan", "include_portal_links", "Sądu Najwyższego", "SUPREME"):
             assert fact in properties["labour_only"]["description"], fact
         assert "scan.next_offset" in properties["offset"]["description"]
         assert "get_saos_judgment_details" in properties["include_portal_links"]["description"]

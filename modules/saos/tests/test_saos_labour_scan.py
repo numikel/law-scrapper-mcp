@@ -11,7 +11,15 @@ from typing import Any
 import jsonschema
 import pytest
 import respx
-from saos_testing import TODAY, FakeSaos, Harness, HarnessFactory, connected, derived_list
+from saos_testing import (
+    TODAY,
+    FakeSaos,
+    Harness,
+    HarnessFactory,
+    connected,
+    derived_list,
+    supreme_chamber_items,
+)
 
 from law_scrapper_mcp.client.exceptions import ApiUnavailableError
 from law_scrapper_mcp.models.tool_outputs import DocumentKind, Hint, SetScope
@@ -254,15 +262,6 @@ class TestRefusals:
         assert court_type in str(excinfo.value)
         assert harness.fake.requests == 0
 
-    async def test_the_supreme_court_is_refused_for_now_with_the_way_round(self, make_harness: HarnessFactory) -> None:
-        harness = make_harness(FakeSaos(SPREAD_ITEMS))
-
-        with pytest.raises(ValueError, match="w przygotowaniu") as excinfo:
-            await harness.service.search(labour_only=True, court_type="SUPREME")
-
-        assert "filter_results" in str(excinfo.value) and "division" in str(excinfo.value)
-        assert harness.fake.requests == 0
-
     async def test_the_supreme_court_is_still_searchable_without_the_flag(self, make_harness: HarnessFactory) -> None:
         harness = make_harness()
 
@@ -299,6 +298,104 @@ class TestRefusals:
         response = await harness.service.search(labour_only=flag, limit=1)
 
         assert response.data.scan is not None
+
+
+def _supreme_list(copies: int = 1) -> list[dict[str, Any]]:
+    """The recorded Supreme Court page, repeated `copies` times with fresh ids (newest first stays as recorded)."""
+    return [
+        {**item, "id": 9_500_000 + copy * 1000 + index}
+        for copy in range(copies)
+        for index, item in enumerate(supreme_chamber_items())
+    ]
+
+
+LABOUR_CHAMBER_POSITIONS = [
+    index
+    for index, item in enumerate(supreme_chamber_items())
+    if item["division"]["chambers"][0]["name"].startswith("Izba Pracy")
+]
+
+
+class TestSupremeCourt:
+    async def test_the_scan_keeps_the_records_of_the_labour_chamber_and_only_those(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        items = _supreme_list()
+        harness = make_harness(FakeSaos(items))
+
+        response = await harness.service.search(labour_only=True, court_type="SUPREME", limit=100)
+
+        scan = response.data.scan
+        assert scan is not None
+        assert len(LABOUR_CHAMBER_POSITIONS) == 15
+        assert _ids(response.data.results) == [str(items[i]["id"]) for i in LABOUR_CHAMBER_POSITIONS]
+        assert all("Izba Pracy" in (r.division or "") for r in response.data.results)
+        assert [call["courtType"] for call in harness.fake.calls] == ["SUPREME"]
+        assert harness.fake.pages == [0]
+        assert (scan.scanned_to, scan.next_offset, scan.scan_complete) == (100, None, True)
+
+    async def test_the_response_states_the_chamber_rule_and_not_the_division_code_rule(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness(FakeSaos(_supreme_list()))
+
+        response = await harness.service.search(labour_only=True, court_type="supreme", limit=5)
+
+        assert response.data.scan is not None
+        assert "Izba Pracy" in response.data.scan.rule
+        assert "division_code" not in response.data.scan.rule
+        assert all(h.parameters is None or h.parameters.get("pattern") != "(15|21)$" for h in response.hints)
+
+    async def test_the_cursor_and_the_limit_work_as_for_common_courts(self, make_harness: HarnessFactory) -> None:
+        items = _supreme_list()
+        harness = make_harness(FakeSaos(items))
+
+        first = await harness.service.search(labour_only=True, court_type="SUPREME", limit=5)
+        assert first.data.scan is not None
+        second = await harness.service.search(
+            labour_only=True, court_type="SUPREME", limit=5, offset=first.data.scan.next_offset
+        )
+
+        every = [str(items[i]["id"]) for i in LABOUR_CHAMBER_POSITIONS]
+        assert _ids(first.data.results) == every[:5]
+        assert first.data.scan.next_offset == LABOUR_CHAMBER_POSITIONS[4] + 1
+        assert _ids(second.data.results) == every[5:10]
+
+    async def test_the_five_page_cap_holds_on_a_long_list(self, make_harness: HarnessFactory) -> None:
+        harness = make_harness(FakeSaos(_supreme_list(copies=6)))
+
+        response = await harness.service.search(labour_only=True, court_type="SUPREME", limit=100)
+
+        scan = response.data.scan
+        assert scan is not None
+        assert harness.fake.pages == [0, 1, 2, 3, 4]
+        assert len(response.data.results) == 5 * 15
+        assert (scan.pages_fetched, scan.next_offset, scan.scan_complete) == (5, 500, False)
+
+    async def test_the_documented_narrowing_selects_the_same_records_as_the_scan(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness(FakeSaos(_supreme_list()))
+        plain = await harness.service.search(court_type="SUPREME", limit=100)
+        scanned = await harness.service.search(labour_only=True, court_type="SUPREME", limit=100)
+
+        narrowed = await harness.store.filter_and_store(
+            plain.data.result_set_id or "", pattern="Izba Pracy", field="division"
+        )
+
+        assert [j.source_id for j in narrowed.judgments] == _ids(scanned.data.results)
+        hint = next(h for h in plain.hints if h.tool == "filter_results" and h.parameters)
+        assert (hint.parameters or {})["pattern"] == "Izba Pracy"
+        assert (hint.parameters or {})["field"] == "division"
+
+    async def test_a_scan_without_a_court_type_never_reads_the_supreme_court(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness(FakeSaos(_supreme_list()))
+
+        await harness.service.search(labour_only=True)
+
+        assert [call["courtType"] for call in harness.fake.calls] == ["COMMON"]
 
 
 class TestRequestBudget:
@@ -430,7 +527,7 @@ class TestThroughTheProtocol:
     @pytest.mark.parametrize(
         ("arguments", "text"),
         [
-            ({"labour_only": True, "court_type": "SUPREME"}, "w przygotowaniu"),
+            ({"labour_only": True, "court_type": "NATIONAL_APPEAL_CHAMBER"}, "Najwyższego"),
             ({"labour_only": True, "court_type": "ADMINISTRATIVE"}, "tylko dla sądów powszechnych"),
             ({"labour_only": True, "include_portal_links": True}, "nie łączą się"),
         ],

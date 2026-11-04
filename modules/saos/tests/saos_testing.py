@@ -118,6 +118,15 @@ def dictionary_division_codes() -> list[str]:
     return [str(division["code"]) for court in recording(COURT_DICTIONARY)["items"] for division in court["divisions"]]
 
 
+SUPREME_CHAMBERS = "supreme_chambers_metadata_2016.json"
+
+
+def supreme_chamber_items() -> list[dict[str, Any]]:
+    """The 100 recorded Supreme Court records of `SUPREME_CHAMBERS`: id, court type, chambers, division, date."""
+    items: list[dict[str, Any]] = recording(SUPREME_CHAMBERS)["items"]
+    return items
+
+
 def derived_list(layout: str) -> list[dict[str, Any]]:
     """A list of search items cut from the recorded ones, one per character of `layout`, with fresh ids.
 

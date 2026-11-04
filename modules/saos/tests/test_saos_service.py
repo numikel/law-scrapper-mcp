@@ -302,8 +302,8 @@ class TestHints:
         assert "(15|21)$" in hint.message
         assert "pattern='Pracy'" in hint.message
 
-    @pytest.mark.parametrize("court_type", ["SUPREME", "CONSTITUTIONAL_TRIBUNAL", "NATIONAL_APPEAL_CHAMBER"])
-    async def test_no_division_code_hint_for_courts_that_have_none(
+    @pytest.mark.parametrize("court_type", ["CONSTITUTIONAL_TRIBUNAL", "NATIONAL_APPEAL_CHAMBER"])
+    async def test_no_narrowing_hint_for_courts_without_a_labour_classification(
         self, make_harness: HarnessFactory, court_type: str
     ) -> None:
         harness = make_harness()
@@ -311,6 +311,21 @@ class TestHints:
         response = await harness.service.search(court_type=court_type)
 
         assert all(hint.tool != "filter_results" for hint in response.hints)
+
+    async def test_the_supreme_court_hint_narrows_by_chamber_name_not_by_division_code(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness()
+
+        response = await harness.service.search(court_type="SUPREME")
+
+        hint = _hint_for(response.hints, "filter_results")
+        assert hint.parameters == {
+            "result_set_id": response.data.result_set_id,
+            "pattern": "Izba Pracy",
+            "field": "division",
+        }
+        assert all((h.parameters or {}).get("field") != "division_code" for h in response.hints)
 
     async def test_a_window_set_says_that_filtering_covers_the_window_only(self, make_harness: HarnessFactory) -> None:
         harness = make_harness()

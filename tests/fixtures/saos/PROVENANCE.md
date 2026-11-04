@@ -21,8 +21,9 @@ Round 2:  2026-11-02, 12:20:34 - 12:20:54 UTC, 14 requests, all 200
 Round 3:  2026-11-03, 19:27:50 - 20:06:29 UTC, 4 requests, all 200 (page numbering, end of list, division code,
           one judgment detail)
 Round 4:  2026-11-04, 20:00:53 UTC, 1 request, 200 (the Supreme Court labour chamber, no records returned)
+Round 5:  2026-11-04, 22:01:50 UTC, 1 request, 200 (the Supreme Court chamber names, one page of 100 records)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
-          (rounds 3 and 4: the same client version with follow_redirects=False)
+          (rounds 3 to 5: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
 Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-scrapper-mcp)
           Accept: application/json, omitted on one request (see the Accept column)
@@ -117,6 +118,7 @@ original is not in the repository, so no test can check them. `.gitattributes` m
 | `search_viii_sentence_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=SENTENCE&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 041 | 046736c449a94909403e17d66b8c65a34ebeedd8d01a49f739cdc44dee8c7ae1 | 4 714 | 77e3dac83da4cbe9285138eabf25fecf0fdbdef80090dbae2a06313ed88e3b79 | 2026-11-02 12:20:52 | yes |
 | `search_viii_reasons_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 042 | 00689d67624d8fc91fc3c80b06f14797d4f2d2e4c6b90e27dac6a4c588c5816f | 4 715 | 7039f22eb6ee3dfba7a0fcada21423290250ceeb92232b86b4ec8a4915b3ff16 | 2026-11-02 12:20:54 | yes |
 | `search_out_of_range_page.json` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=269&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 4 132 | ae772aa2126c2b033de96aa776d313adcf2ccd254816b585922a6a609bb1be00 | 3 161 | 539a4355a81348197520a803b164c3ef0f51aea17a67e79efb8c7d03c4ba9e4d | 2026-11-03 19:27:59 | yes |
+| `supreme_chambers_metadata_2016.json` | https://www.saos.org.pl/api/search/judgments?courtType=SUPREME&judgmentDateTo=2016-06-22&pageSize=100&pageNumber=0&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 42 475 | a55310b01f25317237d9dee46932694481bda78eb3230db06e374dbca0e351f2 | 156 655 | 694222618aec8475ef07fa3979a99901a60dbefdfb991b6eb966ba9b0f77d271 | 2026-11-04 22:01:50 | yes |
 | `judgment_labour_sentence_metadata.json` | https://www.saos.org.pl/api/judgments/554697 | 200 | application/json;charset=UTF-8 | 395 | 28d09af44270faeb851f721d36ef7cab7af2b3b809360b322c3fc4768ae6ecea | 3 574 | 49a9d3dd2092dd2f8dd4eca56e8cf2ac2ab6c1d9987ebe9ff48e4dd6fd936f50 | 2026-11-03 20:06:29 | yes |
 ## Detail metadata, reduced
 
@@ -126,6 +128,15 @@ stored. A deterministic reduction keeps only the `links` (`rel` and `href`), `da
 `data.source.judgmentUrl` (the court portal address) and `data.division.type`; every other key was
 dropped, and the raw body was deleted after the reduction. The record is the one pinned as
 `detail_labour_sentence_split` below (same id, same size and hash as the original body).
+
+## Supreme Court chambers, reduced
+
+`supreme_chambers_metadata_2016.json` is one page of 100 Supreme Court records (the newest up to 2016-06-22, the
+last date SAOS holds for this court), reduced to what names a chamber: for each record only `id`, `courtType`,
+`division` (`href`, `id`, `name`, `chambers[]` with `href`, `id`, `name`) and `judgmentDate`, plus the `links` of
+the page and `info.totalResults`. The excerpts, case numbers, judges, personnel type and keywords of the
+captured body were dropped, and the raw body was deleted after the reduction. It exists to record the names of
+the chambers; the facts are asserted in `tests/unit/test_saos_fixtures.py`.
 
 ## Recorded, kept private
 
@@ -182,7 +193,8 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
 | A page past the end (`pageNumber=269`, `pageSize=100`) | HTTP 200, `items` empty, `info.totalResults` still 26 891, links `self` and `prev` only (no `next`) |
 | `ccDivisionCode=0004021` instead of the division name | Honoured as an exact value: every returned record has that code; `totalResults` 26 891, the same as the name filter, in at least 2 courts |
-| `scChamberName=Izba Pracy i Ubezpieczeń Społecznych` with `courtType=SUPREME` | 0 results. The parameter is known to the service (it is echoed in `queryTemplate`), and the filter is an exact whole-name match, so the name as written is not the name SAOS stores. The name SAOS does store is not known: the one request allowed for it was spent on this value |
+| `scChamberName=Izba Pracy i Ubezpieczeń Społecznych` with `courtType=SUPREME` | 0 results. The parameter is known to the service (it is echoed in `queryTemplate`), and the filter is an exact whole-name match, so the name as written is not the name SAOS stores |
+| Chambers on the newest page of 100 Supreme Court records (2016-05-12 to 2016-06-22) | Four names: `Izba Cywilna`, `Izba Karna`, `Izba Wojskowa` and `Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych`, the labour chamber, with 15 of the 100 records (its divisions I, II and III). The spelling `Izba Pracy i Ubezpieczeń Społecznych` tried in the earlier request matched no record |
 | The judgment detail (`/api/judgments/{id}`) | A wrapper `{links, data}`; the court portal address is `data.source.judgmentUrl` and the division type `data.division.type`; the body of a short labour `SENTENCE` is 3 574 B |
 
 Records of division VIII by calendar year of their own `judgmentDate`, `pageSize=1`:

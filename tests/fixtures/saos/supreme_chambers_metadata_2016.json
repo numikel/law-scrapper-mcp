@@ -1,0 +1,1717 @@
+{
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=0&courtType=SUPREME&judgmentDateTo=2016-06-22&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    },
+    {
+      "rel": "next",
+      "href": "https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=1&courtType=SUPREME&judgmentDateTo=2016-06-22&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+    }
+  ],
+  "items": [
+    {
+      "id": 245360,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-22"
+    },
+    {
+      "id": 245361,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-22"
+    },
+    {
+      "id": 245363,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-21"
+    },
+    {
+      "id": 245364,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-21"
+    },
+    {
+      "id": 245362,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-21"
+    },
+    {
+      "id": 245365,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-20"
+    },
+    {
+      "id": 245346,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-16"
+    },
+    {
+      "id": 245351,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245354,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245349,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245352,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245348,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245347,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245350,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245353,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-15"
+    },
+    {
+      "id": 245358,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/14",
+        "id": 14,
+        "name": "Wydział Odwoławczo-Kasacyjny",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/4",
+            "id": 4,
+            "name": "Izba Wojskowa"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-14"
+    },
+    {
+      "id": 245356,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-14"
+    },
+    {
+      "id": 245355,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-14"
+    },
+    {
+      "id": 245359,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-14"
+    },
+    {
+      "id": 245357,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/14",
+        "id": 14,
+        "name": "Wydział Odwoławczo-Kasacyjny",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/4",
+            "id": 4,
+            "name": "Izba Wojskowa"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-14"
+    },
+    {
+      "id": 245341,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-09"
+    },
+    {
+      "id": 245342,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-08"
+    },
+    {
+      "id": 245343,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-07"
+    },
+    {
+      "id": 245345,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-07"
+    },
+    {
+      "id": 245344,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-07"
+    },
+    {
+      "id": 245332,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-03"
+    },
+    {
+      "id": 245334,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/14",
+        "id": 14,
+        "name": "Wydział Odwoławczo-Kasacyjny",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/4",
+            "id": 4,
+            "name": "Izba Wojskowa"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-02"
+    },
+    {
+      "id": 245333,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/14",
+        "id": 14,
+        "name": "Wydział Odwoławczo-Kasacyjny",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/4",
+            "id": 4,
+            "name": "Izba Wojskowa"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-02"
+    },
+    {
+      "id": 245336,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-01"
+    },
+    {
+      "id": 245337,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-01"
+    },
+    {
+      "id": 245335,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-01"
+    },
+    {
+      "id": 245338,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-01"
+    },
+    {
+      "id": 245339,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-06-01"
+    },
+    {
+      "id": 245340,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-31"
+    },
+    {
+      "id": 245317,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245314,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245311,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245316,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245315,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245313,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/10",
+        "id": 10,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245312,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/2",
+        "id": 2,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245310,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-25"
+    },
+    {
+      "id": 245325,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245321,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245331,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245324,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245322,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245318,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/5",
+        "id": 5,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245326,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245330,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245319,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/14",
+        "id": 14,
+        "name": "Wydział Odwoławczo-Kasacyjny",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/4",
+            "id": 4,
+            "name": "Izba Wojskowa"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245327,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245328,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245320,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245323,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/12",
+        "id": 12,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245329,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/5",
+        "id": 5,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-24"
+    },
+    {
+      "id": 245290,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245289,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245285,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245284,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245288,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/2",
+        "id": 2,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245286,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245287,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/6",
+        "id": 6,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-20"
+    },
+    {
+      "id": 245293,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-19"
+    },
+    {
+      "id": 245294,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-19"
+    },
+    {
+      "id": 245291,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-19"
+    },
+    {
+      "id": 245292,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/7",
+        "id": 7,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-19"
+    },
+    {
+      "id": 245299,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/8",
+        "id": 8,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-18"
+    },
+    {
+      "id": 245298,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/2",
+        "id": 2,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-18"
+    },
+    {
+      "id": 245295,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/2",
+        "id": 2,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-18"
+    },
+    {
+      "id": 245297,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/2",
+        "id": 2,
+        "name": "Wydział V",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-18"
+    },
+    {
+      "id": 245296,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-18"
+    },
+    {
+      "id": 245303,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245301,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245300,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245306,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245304,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245302,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/15",
+        "id": 15,
+        "name": "Wydział II",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245305,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-17"
+    },
+    {
+      "id": 245307,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-16"
+    },
+    {
+      "id": 245308,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-16"
+    },
+    {
+      "id": 245309,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/1",
+        "id": 1,
+        "name": "Wydział VI",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-16"
+    },
+    {
+      "id": 245253,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/8",
+        "id": 8,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-13"
+    },
+    {
+      "id": 245254,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/8",
+        "id": 8,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-13"
+    },
+    {
+      "id": 245252,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/8",
+        "id": 8,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-13"
+    },
+    {
+      "id": 245251,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/8",
+        "id": 8,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-13"
+    },
+    {
+      "id": 245266,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245259,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/13",
+        "id": 13,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/1",
+            "id": 1,
+            "name": "Izba Karna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245260,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245258,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/3",
+        "id": 3,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245262,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/3",
+        "id": 3,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245265,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245261,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/3",
+        "id": 3,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245256,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/3",
+        "id": 3,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245267,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245257,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/3",
+        "id": 3,
+        "name": "Wydział I",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245263,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/11",
+        "id": 11,
+        "name": "Wydział III",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/3",
+            "id": 3,
+            "name": "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245269,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245264,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    },
+    {
+      "id": 245268,
+      "courtType": "SUPREME",
+      "division": {
+        "href": "https://www.saos.org.pl/api/scDivisions/9",
+        "id": 9,
+        "name": "Wydział IV",
+        "chambers": [
+          {
+            "href": "https://www.saos.org.pl/api/scChambers/2",
+            "id": 2,
+            "name": "Izba Cywilna"
+          }
+        ]
+      },
+      "judgmentDate": "2016-05-12"
+    }
+  ],
+  "info": {
+    "totalResults": 38081
+  }
+}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -91,6 +91,24 @@ def _common_court_is_labour(item: SaosSearchItem) -> bool:
     return is_labour_division(item.division.code if item.division else None)
 
 
+# The Supreme Court has no division codes; its records name chambers. The chamber SAOS stores for labour cases is
+# `Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych` (recorded in `supreme_chambers_metadata_2016.json`),
+# so the rule is a prefix: a chamber whose name starts with `Izba Pracy`. The prefix also covers the spelling
+# `Izba Pracy i Ubezpieczeń Społecznych`, which no recorded SAOS record carries. The mapped `division` of a
+# Supreme Court record lists the chamber names first, so `filter_results` narrows with the same words.
+LABOUR_CHAMBER_PATTERN = "Izba Pracy"
+
+
+def is_labour_chamber(chamber_names: Iterable[str]) -> bool:
+    """Whether any chamber name of a Supreme Court record starts with the labour chamber's name."""
+    prefix = LABOUR_CHAMBER_PATTERN.casefold()
+    return any(name.casefold().startswith(prefix) for name in chamber_names)
+
+
+def _supreme_court_is_labour(item: SaosSearchItem) -> bool:
+    return item.division is not None and is_labour_chamber(c.name for c in item.division.chambers if c.name)
+
+
 LABOUR_RULES: dict[str, LabourRule] = {
     "COMMON": LabourRule(
         description=(
@@ -101,31 +119,32 @@ LABOUR_RULES: dict[str, LabourRule] = {
         ),
         matches=_common_court_is_labour,
     ),
+    "SUPREME": LabourRule(
+        description=(
+            f"Sąd Najwyższy: orzeczenie zaliczone, gdy nazwa którejkolwiek izby zaczyna się od '{LABOUR_CHAMBER_PATTERN}' "
+            "(w SAOS: 'Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych'; ta izba rozpoznaje też sprawy "
+            f"publiczne). W filter_results to field='division', pattern='{LABOUR_CHAMBER_PATTERN}'. SAOS ma orzeczenia "
+            "Sądu Najwyższego tylko do 2016-06-22."
+        ),
+        matches=_supreme_court_is_labour,
+    ),
 }
-
-# Court types for which a labour rule is announced and not yet written; the refusal names the way round.
-LABOUR_RULE_PENDING: frozenset[str] = frozenset({"SUPREME"})
 
 
 def labour_rule_for(court_type: str) -> LabourRule:
     """The labour rule of a court type.
 
     Raises:
-        ValueError: The court type has no rule (Polish message): the Supreme Court while its rule is being
-            prepared, the others because SAOS gives them no division type to classify by.
+        ValueError: The court type has no rule (Polish message): SAOS gives the other courts neither a
+            division type nor a chamber to classify by.
     """
     rule = LABOUR_RULES.get(court_type)
     if rule is not None:
         return rule
-    if court_type in LABOUR_RULE_PENDING:
-        raise ValueError(
-            "Parametr 'labour_only' nie obsługuje jeszcze Sądu Najwyższego (court_type='SUPREME'): obsługa jest w "
-            "przygotowaniu. Wyszukaj orzeczenia bez labour_only i zawęź zestaw narzędziem filter_results "
-            "(field='division', pattern='Izba Pracy')."
-        )
     raise ValueError(
-        f"Parametr 'labour_only' działa tylko dla sądów powszechnych (court_type='COMMON' lub brak): dla "
-        f"'{court_type}' SAOS nie podaje rodzaju wydziału, więc orzeczeń pracy nie da się wybrać."
+        f"Parametr 'labour_only' działa tylko dla sądów powszechnych (court_type='COMMON' lub brak) i Sądu "
+        f"Najwyższego (court_type='SUPREME'): dla '{court_type}' SAOS nie podaje rodzaju wydziału ani izby, więc "
+        "orzeczeń pracy nie da się wybrać."
     )
 
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from collections.abc import AsyncIterator, Iterator
 from datetime import date
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -14,6 +16,27 @@ from saos_testing import CLOCK, FakeSaos, Harness, HarnessFactory, make_saos_cli
 from law_scrapper_mcp.client import egress as egress_module
 from law_scrapper_mcp.client import rate_limiter as limiter_module
 from law_scrapper_mcp.client.egress import EgressHub
+
+LOCAL_NAMES = frozenset({"localhost", "127.0.0.1", "::1", "", None})
+
+
+@pytest.fixture(autouse=True)
+def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make a name lookup for any non-local host fail, so a test that forgot its mock cannot reach SAOS.
+
+    `respx` answers below the socket layer and never resolves a name, so a mocked request is unaffected;
+    an unmocked one dies here, before a single byte leaves the machine. SAOS is an academic service and
+    no test may send it traffic. The guard covers lookups by name, which is how every request of this
+    module is addressed; a request to a bare IP literal would skip the lookup, and the module builds none.
+    """
+    real = socket.getaddrinfo
+
+    def guarded(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if host in LOCAL_NAMES:
+            return real(host, *args, **kwargs)
+        raise RuntimeError(f"Test tried to resolve {host!r}: the module tests never reach the network.")
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded)
 
 
 @pytest.fixture(autouse=True)

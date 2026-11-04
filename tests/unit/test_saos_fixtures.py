@@ -507,6 +507,20 @@ def test_the_division_code_filter_is_an_exact_value_that_selects_the_division() 
     assert int(facts["distinctCourts"]) >= 2
 
 
+def test_the_supreme_court_labour_chamber_name_as_written_matches_no_record() -> None:
+    """The exact-name chamber filter returned nothing: the stored chamber name differs from this spelling."""
+    facts, _size = probe_facts()["probe_supreme_labour_chamber_name"]
+    recorded_chambers = {
+        chamber["name"] for item in load_json(SUPREME)["items"] for chamber in item["division"]["chambers"]
+    }
+
+    assert facts["courtType"] == "SUPREME"
+    assert facts["items"] == facts["totalResults"] == "0"
+    assert facts["queryTemplateScChamberName"] == "echoed"
+    assert facts["scChamberName"] not in recorded_chambers
+    assert recorded_chambers == {"Izba Karna"}
+
+
 DETAIL = "judgment_labour_sentence_metadata.json"
 DETAIL_RECORDING = "detail_labour_sentence_split"
 

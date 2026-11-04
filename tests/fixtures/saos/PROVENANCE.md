@@ -20,8 +20,9 @@ Round 1:  2026-11-02, 11:27:49 - 11:33:18 UTC, 15 requests: 14 x 200 and one del
 Round 2:  2026-11-02, 12:20:34 - 12:20:54 UTC, 14 requests, all 200
 Round 3:  2026-11-03, 19:27:50 - 20:06:29 UTC, 4 requests, all 200 (page numbering, end of list, division code,
           one judgment detail)
+Round 4:  2026-11-04, 20:00:53 UTC, 1 request, 200 (the Supreme Court labour chamber, no records returned)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
-          (round 3: the same client version with follow_redirects=False)
+          (rounds 3 and 4: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
 Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-scrapper-mcp)
           Accept: application/json, omitted on one request (see the Accept column)
@@ -148,14 +149,16 @@ reasoning inside the same record.
 
 ## Probes without a stored body
 
-Round 3 also made two requests whose bodies hold judgment excerpts and judges' names and are therefore not
+Round 3 made two requests whose bodies hold judgment excerpts and judges' names and are therefore not
 stored. Only counts and measurements taken from them are kept, as `key=value` pairs asserted by the test.
-The hash is that of the discarded body and is provenance only.
+The hash is that of the discarded body and is provenance only. Round 4 made one request whose body holds
+no record at all; it is not stored either, because it would add no fact beyond the row below.
 
 | Probe | Request | Status | Content-Type | Bytes | SHA-256 (body, not in repo) | Captured (UTC) | Facts |
 |---|---|---|---|---|---|---|---|
 | `probe_page_number_base` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 142 130 | 4176661558e9a55c8f6416cb1ac8de975bc5ac703654fd53ee8f189e119275d0 | 2026-11-03 19:27:50 | pageNumber=1; pageSize=100; items=100; totalResults=26891; overlapWithRecordedPage0=0; selfLinkPageNumber=1; linkRels=self,prev,next |
 | `probe_division_code_filter` | https://www.saos.org.pl/api/search/judgments?pageSize=20&ccDivisionCode=0004021&courtType=COMMON&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 31 307 | 72f3e4782fc8d8ba2b8b04c97cf34f8e3f279466b0f0c829cee77daec6a6cbb6 | 2026-11-03 19:28:01 | ccDivisionCode=0004021; pageSize=20; items=20; totalResults=26891; codesReturned=0004021; distinctCourts=2 |
+| `probe_supreme_labour_chamber_name` | https://www.saos.org.pl/api/search/judgments?courtType=SUPREME&scChamberName=Izba+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&pageSize=1&pageNumber=0&judgmentDateTo=2026-11-04 | 200 | application/json;charset=UTF-8 | 2 846 | 71fa54a83d01c2f0bb30344be0897020f7a4786a9ade4ddc5046189875152472 | 2026-11-04 20:00:53 | scChamberName=Izba Pracy i Ubezpieczeń Społecznych; courtType=SUPREME; pageSize=1; items=0; totalResults=0; queryTemplateScChamberName=echoed |
 
 ## What the recordings establish
 
@@ -179,6 +182,7 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
 | A page past the end (`pageNumber=269`, `pageSize=100`) | HTTP 200, `items` empty, `info.totalResults` still 26 891, links `self` and `prev` only (no `next`) |
 | `ccDivisionCode=0004021` instead of the division name | Honoured as an exact value: every returned record has that code; `totalResults` 26 891, the same as the name filter, in at least 2 courts |
+| `scChamberName=Izba Pracy i Ubezpieczeń Społecznych` with `courtType=SUPREME` | 0 results. The parameter is known to the service (it is echoed in `queryTemplate`), and the filter is an exact whole-name match, so the name as written is not the name SAOS stores. The name SAOS does store is not known: the one request allowed for it was spent on this value |
 | The judgment detail (`/api/judgments/{id}`) | A wrapper `{links, data}`; the court portal address is `data.source.judgmentUrl` and the division type `data.division.type`; the body of a short labour `SENTENCE` is 3 574 B |
 
 Records of division VIII by calendar year of their own `judgmentDate`, `pageSize=1`:

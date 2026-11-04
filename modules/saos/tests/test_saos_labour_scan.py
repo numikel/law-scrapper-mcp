@@ -249,6 +249,20 @@ class TestRule:
         assert narrowing.parameters["result_set_id"] == response.data.result_set_id
 
 
+class TestHintsOfAScan:
+    async def test_the_details_hint_does_not_offer_the_flag_a_scan_cannot_use(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness(FakeSaos(SPREAD_ITEMS))
+
+        response = await harness.service.search(labour_only=True, limit=5)
+
+        hint = _hint(response.hints, "get_saos_judgment_details")
+        assert "labour_only nie łączy się z include_portal_links" in hint.message
+        assert "zrobi to też parametr" not in hint.message
+        assert hint.parameters == {"source_id": response.data.results[0].source_id}
+
+
 class TestRefusals:
     @pytest.mark.parametrize("court_type", ["CONSTITUTIONAL_TRIBUNAL", "NATIONAL_APPEAL_CHAMBER", "ADMINISTRATIVE"])
     async def test_other_court_types_are_refused_before_any_request(

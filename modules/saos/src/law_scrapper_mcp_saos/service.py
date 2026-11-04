@@ -335,17 +335,24 @@ def search_hints(
     return hints
 
 
-def _details_hints(records: list[JudgmentSummaryOutput], portal_links: PortalLinks | None) -> list[Hint]:
-    """Offer the details tool for the first result that has no court portal link."""
+def _details_hints(
+    records: list[JudgmentSummaryOutput], portal_links: PortalLinks | None, *, flag_allowed: bool = True
+) -> list[Hint]:
+    """Offer the details tool for the first result that has no court portal link.
+
+    `flag_allowed` is false for a labour scan, which cannot be combined with `include_portal_links`.
+    """
     without_link = next((r for r in records if r.portal_url is None), None)
     if without_link is None or not (portal_links is None or portal_links.skipped_for_budget or portal_links.failed):
         return []
+    how = (
+        f"dla pierwszych {PORTAL_LINK_CAP} wyników strony zrobi to też parametr include_portal_links=true."
+        if flag_allowed
+        else "labour_only nie łączy się z include_portal_links."
+    )
     return [
         Hint(
-            message=(
-                "Odnośnik do orzeczenia w portalu sądu pobierzesz szczegółami orzeczenia (jedno żądanie do SAOS); "
-                f"dla pierwszych {PORTAL_LINK_CAP} wyników strony zrobi to też parametr include_portal_links=true."
-            ),
+            message=f"Odnośnik do orzeczenia w portalu sądu pobierzesz szczegółami orzeczenia (jedno żądanie do SAOS); {how}",
             tool=TOOL_DETAILS,
             parameters={"source_id": without_link.source_id},
         )
@@ -463,7 +470,7 @@ def labour_hints(
                 parameters={"result_set_id": result_set_id, "pattern": "(15|21)$", "field": "division_code"},
             )
         )
-    hints.extend(_details_hints(records, None))
+    hints.extend(_details_hints(records, None, flag_allowed=False))
     hints.extend(
         _set_hints(
             query,

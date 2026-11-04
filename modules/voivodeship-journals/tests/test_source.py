@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import httpx
 import pytest
 import respx
@@ -225,7 +227,8 @@ async def test_the_mazovian_host_is_never_contacted(started: Started) -> None:
         await source_for(started, "POL_WOJ_MZ").get_details("POL_WOJ_MZ", 2025, 1)
 
     assert mazovia.call_count == 0
-    assert MZ.startswith("https://edziennik.mazowieckie.pl")
+    # The route above watches the host this constant names; compare host names, not URL prefixes.
+    assert urlsplit(MZ).hostname == "edziennik.mazowieckie.pl"
 
 
 # --- details, relations, PDF -------------------------------------------------------------------

@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 import respx
-from fake_act_source import FAKE_PUBLISHER, FakeActSource
 from httpx import Response
 
+from fake_act_source import FAKE_PUBLISHER, FakeActSource
 from law_scrapper_mcp.client.exceptions import ContentTooLargeError
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
 from law_scrapper_mcp.models.enums import DetailLevel

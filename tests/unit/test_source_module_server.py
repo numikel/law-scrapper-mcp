@@ -9,10 +9,10 @@ from contextlib import asynccontextmanager
 from unittest.mock import Mock
 
 import pytest
-from fake_act_source import FakeActSource
 from mcp.server import MCPServer
 
 import law_scrapper_mcp.server as server_module
+from fake_act_source import FakeActSource
 from fake_source_modules import fake_module, loaded, register_named_tools, started
 from law_scrapper_mcp.client.egress import CallerIdentity, EgressHub
 from law_scrapper_mcp.config import settings

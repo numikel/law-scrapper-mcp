@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from fake_act_source import FakeActSource
 
+from fake_act_source import FakeActSource
 from law_scrapper_mcp.services.act_sources import ActSourceConflictError, ActSourceRegistry
 
 

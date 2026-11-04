@@ -64,12 +64,17 @@ async def test_the_input_schema_has_exactly_the_documented_parameters_with_descr
             "limit",
             "offset",
             "include_portal_links",
+            "labour_only",
         }
         for name, schema in properties.items():
             assert schema.get("description", "").strip(), name
         assert properties["limit"]["default"] == 20
         assert properties["offset"]["default"] == 0
         assert properties["include_portal_links"]["default"] is False
+        assert properties["labour_only"]["default"] is False
+        for fact in ("5", "100", "scan", "include_portal_links", "Sąd Najwyższy"):
+            assert fact in properties["labour_only"]["description"], fact
+        assert "scan.next_offset" in properties["offset"]["description"]
         assert "get_saos_judgment_details" in properties["include_portal_links"]["description"]
         assert "5" in properties["include_portal_links"]["description"]
         assert "saos.org.pl" in properties["phrase"]["description"]
@@ -91,6 +96,8 @@ async def test_the_description_carries_the_decision_tree_five_examples_and_the_d
         assert "saos.org.pl" in description
         assert "(15|18|21)$" in description
         assert "(15|21)$" in description
+        assert "labour_only" in description
+        assert "Kiedy NIE używać labour_only:" in description
         # The docstring repeats the coverage figures of the hint; both must stay one set of numbers.
         for figure in re.findall(r"\d{1,3}(?: \d{3})+", COVERAGE_SENTENCE):
             assert figure in description, figure

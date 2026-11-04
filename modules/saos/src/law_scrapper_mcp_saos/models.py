@@ -124,12 +124,43 @@ class PortalLinks(BaseModel):
     )
 
 
+class LabourScan(BaseModel):
+    """What a `labour_only` call scanned, and where to continue.
+
+    Positions are positions in the SAOS result list (newest first), not indexes among the labour hits.
+    """
+
+    rule: str = Field(description="Reguła, wg której orzeczenie uznano za należące do wydziału pracy.")
+    scanned_from: int = Field(description="Pozycja na liście SAOS, od której zaczęto skan (równa offset).")
+    scanned_to: int = Field(description="Pozycja na liście SAOS tuż za ostatnim przeskanowanym rekordem.")
+    pages_fetched: int = Field(description="Liczba pobranych stron SAOS po 100 rekordów (najwyżej 5).")
+    saos_records_scanned: int = Field(description="Liczba przeskanowanych rekordów SAOS (scanned_to - scanned_from).")
+    next_offset: int | None = Field(
+        description=(
+            "Pozycja na liście SAOS, od której kontynuować skan (wartość offset następnego wywołania). "
+            "Brak (null), gdy lista SAOS się skończyła."
+        )
+    )
+    scan_complete: bool = Field(description="True, gdy skan dotarł do końca listy SAOS dla tego zapytania.")
+    interrupted: bool = Field(
+        description=(
+            "True, gdy kolejna strona SAOS nie odpowiedziała: zwrócono trafienia z przeskanowanego zakresu, "
+            "a next_offset wskazuje pierwszą nieprzeskanowaną pozycję."
+        )
+    )
+
+
 class SearchSaosJudgmentsOutput(BaseModel):
     """Output of `search_saos_judgments`."""
 
     source: str = Field(description="Źródło orzeczeń: 'saos'.")
     results: list[JudgmentSummaryOutput]
-    total_count: int = Field(description="Liczba wszystkich orzeczeń pasujących do zapytania w SAOS.")
+    total_count: int | None = Field(
+        description=(
+            "Liczba wszystkich orzeczeń pasujących do zapytania w SAOS. Brak (null) przy labour_only: skan "
+            "nie zna liczby orzeczeń wydziałów pracy."
+        ),
+    )
     returned_count: int
     query_summary: str
     result_set_id: str | None = Field(
@@ -143,9 +174,15 @@ class SearchSaosJudgmentsOutput(BaseModel):
             "a nie wszystkie orzeczenia pasujące do zapytania."
         ),
     )
-    page_info: PageInfo
+    page_info: PageInfo | None = Field(
+        description="Numeracja stron. Brak (null) przy labour_only: kursor skanu jest w polu scan.",
+    )
     portal_links: PortalLinks | None = Field(
         default=None, description="Wynik include_portal_links; brak, gdy parametr nie był użyty."
+    )
+    scan: LabourScan | None = Field(
+        default=None,
+        description="Skan labour_only: zakres przeskanowany, reguła i kursor. Brak, gdy parametr nie był użyty.",
     )
 
 

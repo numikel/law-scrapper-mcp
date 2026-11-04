@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from law_scrapper_mcp.models.tool_outputs import JudgmentSummaryOutput
@@ -58,6 +60,73 @@ def saos_judgment_type(value: str) -> str | None:
         if folded in (saos_name.casefold(), label.casefold()):
             return saos_name
     return None
+
+
+# Common-court divisions are numbered by type: the code ends in 15 (`Pracy`), 21 (`Pracy i Ubezpieczeń
+# Społecznych`) or 18 (`Ubezpieczeń Społecznych`, deliberately counted as labour). The pattern is
+# the one the agent is told to give `filter_results` (field `division_code`), and `is_labour_division` is the
+# same rule as code; a test pins that the two agree on every recorded division code.
+LABOUR_DIVISION_PATTERN = "(15|18|21)$"
+LABOUR_DIVISION_SUFFIXES: tuple[str, ...] = ("15", "18", "21")
+
+
+def is_labour_division(division_code: str | None) -> bool:
+    """Whether a common-court division code denotes a labour (or social insurance) division."""
+    return division_code is not None and division_code.endswith(LABOUR_DIVISION_SUFFIXES)
+
+
+@dataclass(frozen=True, slots=True)
+class LabourRule:
+    """How one court type decides that a record is a labour judgment.
+
+    A court type has a rule here or it is refused by `labour_rule_for`; the scan itself knows nothing about
+    divisions or chambers. Adding a court type means adding one entry to `LABOUR_RULES`.
+    """
+
+    description: str
+    matches: Callable[[SaosSearchItem], bool]
+
+
+def _common_court_is_labour(item: SaosSearchItem) -> bool:
+    return is_labour_division(item.division.code if item.division else None)
+
+
+LABOUR_RULES: dict[str, LabourRule] = {
+    "COMMON": LabourRule(
+        description=(
+            "Sądy powszechne: orzeczenie zaliczone, gdy kod wydziału kończy się na 15 (pracy), 21 (pracy i "
+            f"ubezpieczeń społecznych) lub 18 (ubezpieczeń społecznych), czyli wzorzec {LABOUR_DIVISION_PATTERN} "
+            "na polu division_code w filter_results. Wzorzec (15|21)$ pomija wydziały wyłącznie ubezpieczeń "
+            "społecznych. Rekord bez kodu wydziału nie jest zaliczany."
+        ),
+        matches=_common_court_is_labour,
+    ),
+}
+
+# Court types for which a labour rule is announced and not yet written; the refusal names the way round.
+LABOUR_RULE_PENDING: frozenset[str] = frozenset({"SUPREME"})
+
+
+def labour_rule_for(court_type: str) -> LabourRule:
+    """The labour rule of a court type.
+
+    Raises:
+        ValueError: The court type has no rule (Polish message): the Supreme Court while its rule is being
+            prepared, the others because SAOS gives them no division type to classify by.
+    """
+    rule = LABOUR_RULES.get(court_type)
+    if rule is not None:
+        return rule
+    if court_type in LABOUR_RULE_PENDING:
+        raise ValueError(
+            "Parametr 'labour_only' nie obsługuje jeszcze Sądu Najwyższego (court_type='SUPREME'): obsługa jest w "
+            "przygotowaniu. Wyszukaj orzeczenia bez labour_only i zawęź zestaw narzędziem filter_results "
+            "(field='division', pattern='Izba Pracy')."
+        )
+    raise ValueError(
+        f"Parametr 'labour_only' działa tylko dla sądów powszechnych (court_type='COMMON' lub brak): dla "
+        f"'{court_type}' SAOS nie podaje rodzaju wydziału, więc orzeczeń pracy nie da się wybrać."
+    )
 
 
 def portal_url_of(source_id: int | str) -> str:

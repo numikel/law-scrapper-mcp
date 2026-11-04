@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -30,14 +30,18 @@ from law_scrapper_mcp_saos.client import SaosClient
 from law_scrapper_mcp_saos.mapping import (
     COURT_TYPES,
     JUDGMENT_TYPE_LABELS,
+    LABOUR_DIVISION_PATTERN,
     NO_SIGNATURE,
     SOURCE,
+    LabourRule,
     judgment_type_label,
+    labour_rule_for,
     saos_judgment_type,
     to_detail,
     to_judgment,
 )
 from law_scrapper_mcp_saos.models import (
+    LabourScan,
     PortalLinks,
     SaosJudgmentDetailsOutput,
     SaosSearchItem,
@@ -57,7 +61,9 @@ PORTAL_LINK_CAP = 5
 _SOURCE_ID = re.compile(r"[0-9]{1,12}")
 PHRASE_MAX_LENGTH = 500
 SIGNATURE_MAX_LENGTH = 100
-LABOUR_DIVISION_PATTERN = "(15|18|21)$"
+# `labour_only` reads whole 100-record pages and gives up after this many of them in one call.
+SCAN_PAGE_SIZE = 100
+SCAN_MAX_PAGES = 5
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 # What SAOS held on the day it was measured (tests/fixtures/saos/PROVENANCE.md). Static on purpose and
@@ -285,18 +291,7 @@ def search_hints(
                 parameters={**query.tool_parameters(), "limit": limit, "offset": next_offset},
             )
         )
-    without_link = next((r for r in records if r.portal_url is None), None)
-    if without_link is not None and (portal_links is None or portal_links.skipped_for_budget or portal_links.failed):
-        hints.append(
-            Hint(
-                message=(
-                    "Odnośnik do orzeczenia w portalu sądu pobierzesz szczegółami orzeczenia (jedno żądanie do SAOS); "
-                    f"dla pierwszych {PORTAL_LINK_CAP} wyników strony zrobi to też parametr include_portal_links=true."
-                ),
-                tool=TOOL_DETAILS,
-                parameters={"source_id": without_link.source_id},
-            )
-        )
+    hints.extend(_details_hints(records, portal_links))
     if result_set_id and query.court_type in (None, "COMMON"):
         hints.append(
             Hint(
@@ -313,6 +308,53 @@ def search_hints(
                 },
             )
         )
+    hints.extend(
+        _set_hints(
+            query,
+            records,
+            result_set_id=result_set_id,
+            scope=scope,
+            filter_max_records=filter_max_records,
+            repeat_parameters={"limit": filter_max_records, "offset": offset},
+        )
+    )
+    if offset == 0:
+        hints.append(Hint(message=COVERAGE_SENTENCE))
+    return hints
+
+
+def _details_hints(records: list[JudgmentSummaryOutput], portal_links: PortalLinks | None) -> list[Hint]:
+    """Offer the details tool for the first result that has no court portal link."""
+    without_link = next((r for r in records if r.portal_url is None), None)
+    if without_link is None or not (portal_links is None or portal_links.skipped_for_budget or portal_links.failed):
+        return []
+    return [
+        Hint(
+            message=(
+                "Odnośnik do orzeczenia w portalu sądu pobierzesz szczegółami orzeczenia (jedno żądanie do SAOS); "
+                f"dla pierwszych {PORTAL_LINK_CAP} wyników strony zrobi to też parametr include_portal_links=true."
+            ),
+            tool=TOOL_DETAILS,
+            parameters={"source_id": without_link.source_id},
+        )
+    ]
+
+
+def _set_hints(
+    query: SearchQuery,
+    records: list[JudgmentSummaryOutput],
+    *,
+    result_set_id: str | None,
+    scope: ResultSetScope | None,
+    filter_max_records: int,
+    repeat_parameters: dict[str, Any],
+) -> list[Hint]:
+    """Hints about the stored set, shared by the plain search and the labour scan.
+
+    `repeat_parameters` are the arguments that, added to the search arguments, repeat the call with the
+    smaller `limit` that `filter_results` accepts (the labour scan adds `labour_only` and its SAOS position).
+    """
+    hints: list[Hint] = []
     if result_set_id and len(records) > filter_max_records:
         hints.append(
             Hint(
@@ -322,7 +364,7 @@ def search_hints(
                     f"filtrować, powtórz wyszukiwanie z limit={filter_max_records}."
                 ),
                 tool=TOOL_SEARCH,
-                parameters={**query.tool_parameters(), "limit": filter_max_records, "offset": offset},
+                parameters={**query.tool_parameters(), **repeat_parameters},
             )
         )
     if scope is not None and scope.scope is SetScope.PAGE:
@@ -346,9 +388,95 @@ def search_hints(
                 parameters={"signature": first.signature},
             )
         )
-    if offset == 0:
+    return hints
+
+
+def labour_hints(
+    query: SearchQuery,
+    records: list[JudgmentSummaryOutput],
+    scan: LabourScan,
+    *,
+    limit: int,
+    result_set_id: str | None,
+    scope: ResultSetScope | None,
+    filter_max_records: int,
+) -> list[Hint]:
+    """Next steps for a labour scan: the exact call that continues it, and what the rule leaves out."""
+    hints: list[Hint] = []
+    span = f"pozycje SAOS od {scan.scanned_from} do {scan.scanned_to} wyłącznie, {scan.pages_fetched} str. SAOS"
+    if not records:
+        if scan.scan_complete and scan.scanned_to == scan.scanned_from:
+            hints.append(
+                Hint(message=f"Offset {scan.scanned_from} leży na końcu albo za końcem listy SAOS dla tego zapytania.")
+            )
+        elif scan.scan_complete:
+            hints.append(
+                Hint(
+                    message=(
+                        f"Skan dotarł do końca listy SAOS ({span}) i nie znalazł orzeczeń wydziałów pracy. "
+                        "Poluzuj filtry: rozszerz zakres dat albo skróć frazę."
+                    )
+                )
+            )
+        else:
+            hints.append(
+                Hint(message=f"W przeskanowanym zakresie ({span}) nie było orzeczeń wydziałów pracy; skan trwa dalej.")
+            )
+    if scan.next_offset is not None:
+        interrupted = (
+            " Kolejna strona SAOS nie odpowiedziała; to samo wywołanie wznowi skan od tego miejsca."
+            if scan.interrupted
+            else ""
+        )
+        hints.append(
+            Hint(
+                message=(
+                    f"Skan zatrzymał się na pozycji {scan.next_offset} listy SAOS (przeskanowano "
+                    f"{scan.saos_records_scanned} rekordów). Kolejne orzeczenia wydziałów pracy: offset="
+                    f"{scan.next_offset}. W trybie labour_only offset to pozycja na liście SAOS, a nie numer "
+                    f"trafienia.{interrupted}"
+                ),
+                tool=TOOL_SEARCH,
+                parameters={**query.tool_parameters(), "labour_only": True, "limit": limit, "offset": scan.next_offset},
+            )
+        )
+    if result_set_id:
+        hints.append(
+            Hint(
+                message=(
+                    "Wzorzec '(15|21)$' pominie wydziały wyłącznie ubezpieczeń społecznych (kod kończący się na 18), "
+                    "które skan zalicza do spraw pracy."
+                ),
+                tool="filter_results",
+                parameters={"result_set_id": result_set_id, "pattern": "(15|21)$", "field": "division_code"},
+            )
+        )
+    hints.extend(_details_hints(records, None))
+    hints.extend(
+        _set_hints(
+            query,
+            records,
+            result_set_id=result_set_id,
+            scope=scope,
+            filter_max_records=filter_max_records,
+            repeat_parameters={"labour_only": True, "limit": filter_max_records, "offset": scan.scanned_from},
+        )
+    )
+    if scan.scanned_from == 0:
         hints.append(Hint(message=COVERAGE_SENTENCE))
     return hints
+
+
+@dataclass(frozen=True, slots=True)
+class ScanResult:
+    """What a scan found and where it stopped; positions are positions in the SAOS result list."""
+
+    hits: list[SaosSearchItem]
+    scanned_from: int
+    scanned_to: int
+    pages_fetched: int
+    complete: bool
+    interrupted: bool
 
 
 class SaosSearchService:
@@ -387,6 +515,112 @@ class SaosSearchService:
             items.extend(item for item in follow.items if item.id not in seen)
             requests = 2
         return items[skip : skip + limit], total, requests
+
+    async def _scan(self, query: SearchQuery, rule: LabourRule, *, limit: int, offset: int) -> ScanResult:
+        """Walk the SAOS list from `offset` and keep the records the rule accepts.
+
+        Reads whole pages of `SCAN_PAGE_SIZE` records, at most `SCAN_MAX_PAGES` of them, and stops earlier
+        when it holds `limit` hits or the list ends. The position it reports is the SAOS position right
+        after the last record it looked at: after the last hit when it stopped on `limit` (so the next call
+        neither skips nor repeats a record), after the last page otherwise. The first page failing fails
+        the call; a later page failing ends the scan with what was found (`interrupted`).
+        """
+        base = query.api_params()
+        first_page, skip = divmod(offset, SCAN_PAGE_SIZE)
+        hits: list[SaosSearchItem] = []
+        seen: set[int] = set()
+        position = offset
+        pages = 0
+        complete = interrupted = False
+        for number in range(first_page, first_page + SCAN_MAX_PAGES):
+            try:
+                page = await self._client.search({"pageSize": SCAN_PAGE_SIZE, "pageNumber": number, **base})
+            except (SejmApiError, EgressRedirectRefusedError):
+                if pages == 0:
+                    raise
+                interrupted = True
+                break
+            pages += 1
+            start = skip if number == first_page else 0
+            for index in range(start, len(page.items)):
+                item = page.items[index]
+                position = number * SCAN_PAGE_SIZE + index + 1
+                if item.id in seen:  # SAOS inserted a record between two requests
+                    continue
+                seen.add(item.id)
+                if rule.matches(item):
+                    hits.append(item)
+                    if len(hits) == limit:
+                        break
+            if len(hits) == limit:
+                complete = position >= page.info.total_results
+                break
+            # A short page is the end of the list, whatever the total says.
+            if position >= page.info.total_results or len(page.items) < SCAN_PAGE_SIZE:
+                complete = True
+                break
+        return ScanResult(
+            hits=hits,
+            scanned_from=offset,
+            scanned_to=position,
+            pages_fetched=pages,
+            complete=complete,
+            interrupted=interrupted,
+        )
+
+    async def _labour_search(
+        self, query: SearchQuery, *, limit: int, offset: int, rule: LabourRule
+    ) -> EnrichedResponse[SearchSaosJudgmentsOutput]:
+        """The `labour_only` mode: a bounded scan, stored as a window, with a cursor instead of page numbers."""
+        result = await self._scan(query, rule, limit=limit, offset=offset)
+        records = [to_judgment(item) for item in result.hits]
+        scan = LabourScan(
+            rule=rule.description,
+            scanned_from=result.scanned_from,
+            scanned_to=result.scanned_to,
+            pages_fetched=result.pages_fetched,
+            saos_records_scanned=result.scanned_to - result.scanned_from,
+            next_offset=None if result.complete else result.scanned_to,
+            scan_complete=result.complete,
+            interrupted=result.interrupted,
+        )
+        summary = (
+            f"{query.summary()} | labour_only=skan pozycji SAOS od {scan.scanned_from} do {scan.scanned_to} (wyłącznie)"
+        )
+        result_set_id: str | None = None
+        scope: ResultSetScope | None = None
+        if records:
+            # A scan reads a window of an unknown-size list: PAGE scope, so `filter_results` never calls it complete.
+            result_set_id, scope = await self._result_store.store(
+                records,
+                summary,
+                len(records),
+                window_offset=offset,
+                scope=SetScope.PAGE,
+                document_kind=DocumentKind.JUDGMENT,
+            )
+        output = SearchSaosJudgmentsOutput(
+            source=SOURCE,
+            results=records,
+            total_count=None,
+            returned_count=len(records),
+            query_summary=summary,
+            result_set_id=result_set_id,
+            result_set_scope=scope,
+            page_info=None,
+            portal_links=None,
+            scan=scan,
+        )
+        hints = labour_hints(
+            query,
+            records,
+            scan,
+            limit=limit,
+            result_set_id=result_set_id,
+            scope=scope,
+            filter_max_records=self._filter_max_records or settings.effective_filter_max_records,
+        )
+        return EnrichedResponse[SearchSaosJudgmentsOutput](data=output, hints=hints)
 
     async def _with_portal_links(
         self, records: list[JudgmentSummaryOutput], *, search_requests: int
@@ -442,8 +676,9 @@ class SaosSearchService:
         limit: str | int | None = None,
         offset: str | int | None = None,
         include_portal_links: bool | str | None = False,
+        labour_only: bool | str | None = False,
     ) -> EnrichedResponse[SearchSaosJudgmentsOutput]:
-        """Validate, fetch the window, store it as a judgment set and build the response."""
+        """Validate, fetch the window (or scan for labour judgments), store it as a judgment set, build the response."""
         today = (self._today or current_date)()
         query = build_query(
             phrase=phrase,
@@ -457,6 +692,16 @@ class SaosSearchService:
         page_limit = _page_limit(limit)
         page_offset = parse_non_negative(offset, name="offset", default=0)
         with_links = _flag(include_portal_links, name="include_portal_links")
+        if _flag(labour_only, name="labour_only"):
+            if with_links:
+                raise ValueError(
+                    "Parametry 'labour_only' i 'include_portal_links' nie łączą się (skan i pobieranie odnośników "
+                    "razem przekroczyłyby budżet żądań do SAOS). Odnośniki pobierzesz get_saos_judgment_details."
+                )
+            # A scan without a court type means common courts: they are the only ones with division codes.
+            scan_query = replace(query, court_type=query.court_type or "COMMON")
+            rule = labour_rule_for(scan_query.court_type or "COMMON")
+            return await self._labour_search(scan_query, limit=page_limit, offset=page_offset, rule=rule)
 
         items, saos_total, search_requests = await self._window(query, limit=page_limit, offset=page_offset)
         records = [to_judgment(item) for item in items]
@@ -518,6 +763,7 @@ async def search_saos_judgments(
     limit: str | int | None = None,
     offset: str | int | None = None,
     include_portal_links: bool | str | None = False,
+    labour_only: bool | str | None = False,
 ) -> EnrichedResponse[SearchSaosJudgmentsOutput]:
     """Entry point of the tool: builds the service from the module state and the shared result store."""
     service = SaosSearchService(saos_state(app_context).client, app_context.result_store)
@@ -531,6 +777,7 @@ async def search_saos_judgments(
         limit=limit,
         offset=offset,
         include_portal_links=include_portal_links,
+        labour_only=labour_only,
     )
 
 

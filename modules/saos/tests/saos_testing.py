@@ -109,6 +109,39 @@ def detail_body(
     return {"links": [{"rel": "self", "href": item["href"]}], "data": data}
 
 
+COURT_DICTIONARY = "common_courts_page0.json"
+DERIVED_ID_BASE = 9_000_000
+
+
+def dictionary_division_codes() -> list[str]:
+    """Every division code of the recorded common-court dictionary."""
+    return [str(division["code"]) for court in recording(COURT_DICTIONARY)["items"] for division in court["divisions"]]
+
+
+def derived_list(layout: str) -> list[dict[str, Any]]:
+    """A list of search items cut from the recorded ones, one per character of `layout`, with fresh ids.
+
+    `L` is a recorded record of a labour division (code ends in 21), `5` and `8` the same record with a
+    recorded division code that ends in 15 and 18, `.` a recorded record of another common-court division,
+    `-` a recorded record whose `division` is missing. Only `id` (and the division key where stated) differs
+    from the recording, so a test can place hits at exact positions without inventing a SAOS record.
+    """
+    records = [item for item in corpus() if item["courtType"] == "COMMON" and "division" in item]
+    labour = next(item for item in records if item["division"]["code"].endswith("21"))
+    other = next(item for item in records if not item["division"]["code"].endswith(("15", "18", "21")))
+    codes = dictionary_division_codes()
+    code_15 = next(code for code in codes if code.endswith("15"))
+    code_18 = next(code for code in codes if code.endswith("18"))
+    templates: dict[str, dict[str, Any]] = {
+        "L": labour,
+        "5": {**labour, "division": {**labour["division"], "code": code_15}},
+        "8": {**labour, "division": {**labour["division"], "code": code_18}},
+        ".": other,
+        "-": {key: value for key, value in labour.items() if key != "division"},
+    }
+    return [{**templates[char], "id": DERIVED_ID_BASE + index} for index, char in enumerate(layout)]
+
+
 def page_body(items: list[dict[str, Any]], total: int) -> dict[str, Any]:
     """A search page in the recorded envelope."""
     return {"links": [], "items": items, "queryTemplate": {}, "info": {"totalResults": total}}
@@ -135,7 +168,7 @@ class FakeSaos:
         self.total = len(self.items) if total is None else total
         self.failing_pages = set(failing_pages)
         self.status = status
-        self.details = {item["id"]: detail_body(item) for item in self.items} | (details or {})
+        self._detail_overrides = details or {}
         self.failing_details = set(failing_details)
         self.missing_details = set(missing_details)
         self.calls: list[dict[str, str]] = []
@@ -163,9 +196,15 @@ class FakeSaos:
         source_id = int(request.url.path.rsplit("/", 1)[-1])
         if source_id in self.failing_details:
             return httpx.Response(self.status, text="upstream failure")
-        if source_id in self.missing_details or source_id not in self.details:
+        if source_id in self.missing_details:
             return httpx.Response(404)
-        return httpx.Response(200, json=self.details[source_id])
+        if source_id in self._detail_overrides:
+            return httpx.Response(200, json=self._detail_overrides[source_id])
+        # Built on demand: a list of thousands of items would otherwise cost a file read per item up front.
+        item = next((candidate for candidate in self.items if candidate["id"] == source_id), None)
+        if item is None:
+            return httpx.Response(404)
+        return httpx.Response(200, json=detail_body(item))
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)

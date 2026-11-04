@@ -10,8 +10,8 @@ from __future__ import annotations
 import asyncio
 import socket
 
-import httpx
 import pytest
+from saos_testing import make_saos_client
 
 SAOS_HOST = "www.saos.org.pl"
 
@@ -33,11 +33,19 @@ def test_a_loopback_lookup_still_works(host: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_real_http_client_cannot_reach_the_saos_host_without_a_mock() -> None:
+async def test_the_module_client_cannot_reach_the_saos_host_without_a_mock() -> None:
     """The whole stack, no `respx` router: the request must die at the name lookup, before any connection."""
-    async with httpx.AsyncClient() as client:
-        with pytest.raises(RuntimeError, match="never reach the network"):
-            await client.get(f"https://{SAOS_HOST}/api/search/judgments")
+    client, hub = make_saos_client()
+    try:
+        with pytest.raises(Exception) as excinfo:
+            await client.search({"pageSize": 1, "pageNumber": 0})
+    finally:
+        await hub.close()
+
+    chain = [excinfo.value]
+    while chain[-1].__cause__ or chain[-1].__context__:
+        chain.append(chain[-1].__cause__ or chain[-1].__context__)  # type: ignore[arg-type]
+    assert any("never reach the network" in str(error) for error in chain), [repr(error) for error in chain]
 
 
 @pytest.mark.asyncio

@@ -18,7 +18,7 @@ request.
 uv sync --extra dev --all-packages
 
 # Module tests (against the installed distribution; they never reach the network)
-.venv/Scripts/python.exe -m pytest modules/voivodeship-journals/tests -v
+uv run pytest modules/voivodeship-journals/tests -v
 ```
 
 Every installed module is active unless switched off by `LAW_MCP_SOURCE_MODULES`.

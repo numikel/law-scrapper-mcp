@@ -43,6 +43,9 @@ module = SourceModule(
         "pobierze też parametr include_portal_links=true.\n"
         "Wyrok i jego uzasadnienie to dwa osobne rekordy tej samej sprawy. Wydziały pracy sądów powszechnych "
         'rozpoznasz po kodzie wydziału: filter_results z pattern="(15|18|21)$" i field="division_code". '
+        "Gdy chcesz tylko orzeczenia pracy, użyj search_saos_judgments z labour_only=true: serwer skanuje do 5 stron "
+        "SAOS (do 5 żądań) i zwraca kursor scan.next_offset zamiast total_count; dla Sądu Najwyższego "
+        "(court_type=SUPREME) wybiera Izbę Pracy, a dla pozostałych rodzajów sądów odmawia. "
         "Fraza i sygnatura są wysyłane do serwisu saos.org.pl; awaria SAOS nie wpływa na inne źródła."
     ),
     register_tools=register_all_tools,

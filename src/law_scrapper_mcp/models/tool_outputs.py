@@ -42,6 +42,41 @@ class ActSummaryOutput(BaseModel):
     in_force: str | None = None
 
 
+class DocumentKind(StrEnum):
+    """What a stored result set holds: legal acts or court judgments."""
+
+    ACT = "act"
+    JUDGMENT = "judgment"
+
+
+class JudgmentSummaryOutput(BaseModel):
+    """Source-neutral summary of one court judgment.
+
+    The core knows nothing about the source that produced the record: a source module maps its own
+    API shape onto this model and names itself in `source`.
+    """
+
+    source: str = Field(description="Nazwa źródła orzeczeń, np. 'saos'. Wskazuje narzędzia, które obsługują rekord.")
+    source_id: str = Field(description="Identyfikator orzeczenia w źródle (przekaż go narzędziu szczegółów źródła).")
+    signature: str = Field(description="Sygnatura (sygnatury) sprawy, np. 'VIII U 1/20'.")
+    title: str = Field(description="Etykieta cytowania: sygnatura, rodzaj orzeczenia, sąd i data.")
+    court: str = Field(description="Nazwa sądu lub trybunału.")
+    court_type: str | None = Field(default=None, description="Rodzaj sądu w nazwach źródła, np. 'COMMON'.")
+    division: str | None = Field(default=None, description="Wydział (dla Sądu Najwyższego: izba i wydział).")
+    division_code: str | None = Field(
+        default=None, description="Kod wydziału sądu powszechnego; kończy się numerem wydziału (np. '...15')."
+    )
+    judgment_type: str = Field(description="Rodzaj orzeczenia po polsku: Wyrok, Postanowienie, Uchwała, itp.")
+    judgment_date: str | None = Field(default=None, description="Data orzeczenia (YYYY-MM-DD).")
+    source_url: str = Field(description="Adres orzeczenia w źródle.")
+    portal_url: str | None = Field(
+        default=None,
+        description="Drugi odnośnik: adres orzeczenia w portalu sądu. Puste, dopóki nie pobrano szczegółów.",
+    )
+    ecli: str | None = Field(default=None, description="Identyfikator ECLI, gdy źródło go podaje.")
+    excerpt: str | None = Field(default=None, description="Początek tekstu orzeczenia (skrót, nie pełna treść).")
+
+
 class SetScope(StrEnum):
     """Whether a stored result set is the whole answer or a window into it."""
 
@@ -203,6 +238,17 @@ class FilterOutput(BaseModel):
     source_result_set_id: str
     result_set_id: str | None = None
     results: list[ActSummaryOutput]
+    document_kind: DocumentKind = Field(
+        default=DocumentKind.ACT,
+        description=(
+            "Rodzaj filtrowanego zestawu: 'act' — wyniki są w polu results, "
+            "'judgment' — wyniki są w polu judgments, a results jest puste."
+        ),
+    )
+    judgments: list[JudgmentSummaryOutput] = Field(
+        default_factory=list,
+        description="Przefiltrowane orzeczenia (strona wyników). Puste dla zestawu aktów.",
+    )
     original_count: int
     filtered_count: int
     filters_applied: dict[str, Any] = {}
@@ -244,6 +290,10 @@ class ResultSetInfo(BaseModel):
     total_count: int
     scope: SetScope = Field(
         description="Zasięg zestawu: 'complete' (cały zbiór) albo 'page' (okno z większego zbioru)."
+    )
+    document_kind: DocumentKind = Field(
+        default=DocumentKind.ACT,
+        description="Co zawiera zestaw: 'act' (akty prawne) albo 'judgment' (orzeczenia).",
     )
     created_at: str
 

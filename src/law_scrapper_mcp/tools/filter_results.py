@@ -12,10 +12,12 @@ from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext, get_app_context
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import (
+    DocumentKind,
     EnrichedResponse,
     FilterOutput,
     ResultSetListOutput,
 )
+from law_scrapper_mcp.services.judgment_filters import judgment_filter_hints
 from law_scrapper_mcp.services.pagination import parse_non_negative
 from law_scrapper_mcp.services.pattern_matching import SUPPORTED_SYNTAX_HINT
 from law_scrapper_mcp.services.response_enrichment import filter_hints, result_sets_hints
@@ -40,7 +42,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Identyfikator zestawu wyników z poprzedniego wyszukiwania (np. 'rs_1'). "
-                    "Zwracany przez search_legal_acts, browse_acts lub track_legal_changes w polu result_set_id."
+                    "Zwracany przez search_legal_acts, browse_acts lub track_legal_changes w polu result_set_id, "
+                    "a także przez narzędzia wyszukiwania orzeczeń modułów źródeł (zestaw orzeczeń)."
                 ),
             ),
         ],
@@ -59,7 +62,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
             str,
             Field(
                 description=(
-                    "Pole do przeszukania wzorcem RE2. Dostępne: 'title' (domyślne), 'eli', 'status', 'type', 'publisher'."
+                    "Pole do przeszukania wzorcem RE2. Dla aktów: 'title' (domyślne), 'eli', 'status', 'type', "
+                    "'publisher'. Dla zestawów orzeczeń: 'title' (domyślne; etykieta z sygnaturą, rodzajem, sądem "
+                    "i datą), 'type', oraz tylko dla zestawów orzeczeń 'signature', 'court', 'division', "
+                    "'division_code', 'excerpt'."
                 ),
             ),
         ] = "title",
@@ -68,8 +74,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Filtruj po typie dokumentu (dokładne dopasowanie). "
-                    "Wartości: 'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
-                    "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'"
+                    "Wartości dla aktów: 'Ustawa', 'Rozporządzenie', 'Obwieszczenie', 'Komunikat', "
+                    "'Uchwała', 'Zarządzenie', 'Wyrok', 'Postanowienie', 'Oświadczenie rządowe'. "
+                    "Wartości dla orzeczeń: 'Wyrok', 'Postanowienie', 'Uchwała', 'Zarządzenie', 'Uzasadnienie'."
                 ),
             ),
         ] = None,
@@ -77,7 +84,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             str | None,
             Field(
                 description=(
-                    "Filtruj po statusie aktu (dokładne dopasowanie). "
+                    "Filtruj po statusie aktu (dokładne dopasowanie); tylko dla zestawów aktów — "
+                    "dla zestawu orzeczeń zwraca błąd. "
                     "Wartości: 'akt obowiązujący', 'akt uchylony', 'akt jednorazowy', "
                     "'obowiązujący', 'uchylony', 'uznany za uchylony', 'nieobowiązujący'"
                 ),
@@ -92,7 +100,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Pole daty do filtrowania zakresem: 'promulgation_date' (data ogłoszenia) "
-                    "lub 'effective_date' (data wejścia w życie)."
+                    "lub 'effective_date' (data wejścia w życie) dla aktów; 'judgment_date' (data orzeczenia) "
+                    "dla zestawów orzeczeń."
                 ),
             ),
         ] = None,
@@ -108,7 +117,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
             str | None,
             Field(
                 description=(
-                    "Pole do sortowania: 'title', 'year', 'pos', 'promulgation_date', 'effective_date', 'type', 'status'."
+                    "Pole do sortowania. Dla aktów: 'title', 'year', 'pos', 'promulgation_date', "
+                    "'effective_date', 'type', 'status'. Dla zestawów orzeczeń: 'title', 'signature', 'court', "
+                    "'type', 'judgment_date'."
                 ),
             ),
         ] = None,
@@ -126,11 +137,18 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ] = 0,
     ) -> EnrichedResponse[FilterOutput]:
         """
-        Filtruj i zawężaj wyniki wcześniejszego wyszukiwania aktów prawnych.
+        Filtruj i zawężaj wyniki wcześniejszego wyszukiwania aktów prawnych lub orzeczeń.
 
-        Działa jak grep/filtr na wynikach z search_legal_acts, browse_acts lub track_legal_changes.
+        Działa jak grep/filtr na wynikach z search_legal_acts, browse_acts lub track_legal_changes
+        oraz na zestawach orzeczeń z narzędzi wyszukiwania orzeczeń modułów źródeł.
         Wymaga result_set_id zwróconego przez te narzędzia. Przefiltrowane wyniki
         zapisywane są jako nowy zestaw (nowe result_set_id), który można filtrować dalej.
+
+        Zestaw orzeczeń: wyniki są w polu judgments (pole results jest puste, document_kind = 'judgment'),
+        a wzorzec można dopasować do pól 'signature', 'court', 'division', 'division_code', 'excerpt'.
+        Filtr status_equals dotyczy tylko aktów. Orzeczenia wydziałów pracy sądów powszechnych zawęzisz
+        wzorcem na kodzie wydziału: pattern="(15|18|21)$", field="division_code" (wzorzec "(15|21)$"
+        pomija wydziały wyłącznie ubezpieczeń społecznych; nazwy wydziałów: field="division").
 
         Limit rozmiaru wejścia: pojedyncze wywołanie przetwarza maksymalnie 100 rekordów
         (wartość domyślna, konfigurowalna przez operatora). Większy zestaw kończy się
@@ -138,6 +156,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         przeszukanie całego zestawu. Zawęź wyszukiwanie przed filtrowaniem.
 
         Kiedy użyć: Po search_legal_acts/browse_acts/track_legal_changes aby zawęzić wyniki.
+        Kiedy użyć: Po wyszukiwaniu orzeczeń, aby zawęzić zestaw orzeczeń (wydział, sąd, rodzaj, data).
         Kiedy NIE używać: Gdy potrzebujesz nowych wyników z API → użyj search_legal_acts.
         Kiedy NIE używać: Do dowodzenia, że akt nie istnieje, dopóki pole source_scope
         odpowiedzi ma wartość 'page' — filtrowane jest wtedy okno, a nie cały zbiór,
@@ -151,6 +170,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - filter_results(result_set_id="rs_1", date_field="promulgation_date", date_from="2024-01-01", date_to="2024-06-30") - Ogłoszone w I połowie 2024
         - filter_results(result_set_id="rs_1", sort_by="promulgation_date", sort_desc=True, limit=10) - 10 najnowszych na pierwszej stronie
         - filter_results(result_set_id="rs_1", pattern="\\p{L}+ o ochronie") - Wzorzec z klasą unikodową
+        - filter_results(result_set_id="rs_2", pattern="(15|18|21)$", field="division_code") - Orzeczenia wydziałów pracy (zestaw orzeczeń)
         """
         result_store = get_app_context(ctx).result_store
 
@@ -180,9 +200,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
             offset=offset_int,
         )
 
+        build_hints = judgment_filter_hints if output.document_kind is DocumentKind.JUDGMENT else filter_hints
         return EnrichedResponse[FilterOutput](
             data=output,
-            hints=filter_hints(output, filter_max_records=settings.effective_filter_max_records),
+            hints=build_hints(output, filter_max_records=settings.effective_filter_max_records),
         )
 
     @mcp.tool(

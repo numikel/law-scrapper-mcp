@@ -456,3 +456,145 @@ def test_no_name_follows_a_role_cue_in_an_excerpt() -> None:
     for name, item in search_items():
         for match in PERSON_CUE.finditer(item["textContent"]):
             assert match.group("next") in ALLOWED_AFTER_CUE, (name, item["id"], match.group(0))
+
+
+OUT_OF_RANGE = "search_out_of_range_page.json"
+
+
+def probe_facts() -> dict[str, tuple[dict[str, str], int]]:
+    """Facts of the requests whose body is not stored, keyed by probe name, with the body size."""
+    out: dict[str, tuple[dict[str, str], int]] = {}
+    for line in provenance_text().splitlines():
+        if not line.startswith("| `probe_"):
+            continue
+        cells = table_cells(line)
+        out[cells[0]] = (dict(pair.split("=", 1) for pair in cells[7].split("; ")), int(re.sub(r"\D", "", cells[4])))
+    return out
+
+
+def test_page_numbers_are_zero_based_and_a_hundred_record_page_is_about_140_kb() -> None:
+    facts, size = probe_facts()["probe_page_number_base"]
+    recorded = load_json(DIVISION_VIII)
+    rels = {link["rel"]: link["href"] for link in recorded["links"]}
+
+    assert "pageNumber=0" in rels["self"] and "pageNumber=1" in rels["next"]
+    assert facts["overlapWithRecordedPage0"] == "0"
+    assert facts["selfLinkPageNumber"] == facts["pageNumber"] == "1"
+    assert facts["items"] == facts["pageSize"] == "100"
+    assert 100_000 < size < 200_000
+
+
+def test_a_page_past_the_end_is_empty_keeps_the_total_and_has_no_next_link() -> None:
+    page = load_json(OUT_OF_RANGE)
+    params = request_params(OUT_OF_RANGE)
+    page_size, page_number = int(params["pageSize"]), int(params["pageNumber"])
+
+    assert page["items"] == []
+    assert provenance_rows()[OUT_OF_RANGE][2] == "200"
+    assert [link["rel"] for link in page["links"]] == ["self", "prev"]
+    # The first page number past the end: it starts at or beyond the total, and the one before it does not.
+    assert page_number * page_size >= total(OUT_OF_RANGE) > (page_number - 1) * page_size
+    assert total(OUT_OF_RANGE) >= total(DIVISION_VIII)
+
+
+def test_the_division_code_filter_is_an_exact_value_that_selects_the_division() -> None:
+    facts, _size = probe_facts()["probe_division_code_filter"]
+    recorded_codes = {item["division"]["code"] for item in load_json(DIVISION_VIII)["items"]}
+
+    assert recorded_codes == {facts["ccDivisionCode"]} == {facts["codesReturned"]}
+    assert facts["items"] == facts["pageSize"] == "20"
+    assert int(facts["totalResults"]) >= total(DIVISION_VIII)
+    assert int(facts["distinctCourts"]) >= 2
+
+
+def test_the_supreme_court_labour_chamber_name_as_written_matches_no_record() -> None:
+    """The exact-name chamber filter returned nothing: the stored chamber name differs from this spelling."""
+    facts, _size = probe_facts()["probe_supreme_labour_chamber_name"]
+    recorded_chambers = {
+        chamber["name"] for item in load_json(SUPREME)["items"] for chamber in item["division"]["chambers"]
+    }
+
+    assert facts["courtType"] == "SUPREME"
+    assert facts["items"] == facts["totalResults"] == "0"
+    assert facts["queryTemplateScChamberName"] == "echoed"
+    assert facts["scChamberName"] not in recorded_chambers
+    assert recorded_chambers == {"Izba Karna"}
+
+
+CHAMBERS = "supreme_chambers_metadata_2016.json"
+LABOUR_CHAMBER = "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
+
+
+def test_the_supreme_court_chamber_page_is_metadata_only_and_the_newest_up_to_the_last_date() -> None:
+    page = load_json(CHAMBERS)
+    items = page["items"]
+    row = provenance_rows()[CHAMBERS]
+    params = request_params(CHAMBERS)
+
+    assert set(page) == {"links", "items", "info"}
+    assert len(items) == int(params["pageSize"]) == 100
+    assert all(set(item) == {"id", "courtType", "division", "judgmentDate"} for item in items)
+    assert all(item["courtType"] == "SUPREME" for item in items)
+    assert all(set(item["division"]) == {"href", "id", "name", "chambers"} for item in items)
+    assert all(set(chamber) == {"href", "id", "name"} for item in items for chamber in item["division"]["chambers"])
+    dates = [item["judgmentDate"] for item in items]
+    assert dates == sorted(dates, reverse=True)
+    assert dates[0] <= params["judgmentDateTo"] == "2016-06-22"
+    assert page["info"]["totalResults"] == total(SUPREME)
+    assert row[2] == "200" and row[9] == "yes"
+    assert len((FIXTURES / CHAMBERS).read_bytes()) < 100_000
+
+
+def test_the_supreme_court_labour_chamber_is_recorded_under_its_older_long_name() -> None:
+    """The chamber names on the page, and which of them concern labour; the rule of `labour_only` follows this."""
+    items = load_json(CHAMBERS)["items"]
+    names = collections.Counter(chamber["name"] for item in items for chamber in item["division"]["chambers"])
+    labour_names = {name for name in names if "prac" in name.casefold() or "ubezpiecz" in name.casefold()}
+    probe_5, _size = probe_facts()["probe_supreme_labour_chamber_name"]
+
+    assert set(names) == {"Izba Cywilna", "Izba Karna", "Izba Wojskowa", LABOUR_CHAMBER}
+    assert labour_names == {LABOUR_CHAMBER}
+    assert names[LABOUR_CHAMBER] == 15
+    assert LABOUR_CHAMBER.startswith("Izba Pracy")
+    assert probe_5["scChamberName"] not in names
+    assert all(len(item["division"]["chambers"]) == 1 for item in items)
+
+
+DETAIL = "judgment_labour_sentence_metadata.json"
+DETAIL_RECORDING = "detail_labour_sentence_split"
+
+
+def private_rows() -> dict[str, list[str]]:
+    """Cells of the table of recordings kept outside the repository, keyed by recording name."""
+    return {
+        table_cells(line)[0]: table_cells(line)
+        for line in provenance_text().splitlines()
+        if line.startswith("| `detail_")
+    }
+
+
+def test_the_stored_judgment_detail_is_metadata_only() -> None:
+    """The reduction keeps the wrapper, the id, the portal address and the division type, and nothing else."""
+    body = load_json(DETAIL)
+
+    assert set(body) == {"links", "data"}
+    assert all(set(link) == {"rel", "href"} for link in body["links"])
+    assert set(body["data"]) == {"id", "source", "division"}
+    assert set(body["data"]["source"]) == {"judgmentUrl"}
+    assert set(body["data"]["division"]) == {"type"}
+    assert len((FIXTURES / DETAIL).read_bytes()) < 1000
+
+
+def test_the_stored_judgment_detail_is_the_record_pinned_in_the_private_table() -> None:
+    """Same request, same size and hash of the original body, same division type and portal scheme."""
+    body = load_json(DETAIL)
+    row = provenance_rows()[DETAIL]
+    private = private_rows()[DETAIL_RECORDING]
+    facts = private_facts()[DETAIL_RECORDING]
+
+    assert row[1] == private[1] == f"https://www.saos.org.pl/api/judgments/{body['data']['id']}"
+    assert (row[6], row[7]) == (private[4], private[5])
+    assert body["data"]["division"]["type"] == facts["divisionType"] == "Pracy i Ubezpieczeń Społecznych"
+    assert body["data"]["source"]["judgmentUrl"].split(":", 1)[0] == facts["judgmentUrlScheme"]
+    assert [link["rel"] for link in body["links"]] == ["self"]
+    assert body["links"][0]["href"] == row[1]

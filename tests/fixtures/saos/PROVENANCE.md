@@ -18,7 +18,12 @@ not in this repository either.
 ```
 Round 1:  2026-11-02, 11:27:49 - 11:33:18 UTC, 15 requests: 14 x 200 and one deliberate 400
 Round 2:  2026-11-02, 12:20:34 - 12:20:54 UTC, 14 requests, all 200
+Round 3:  2026-11-03, 19:27:50 - 20:06:29 UTC, 4 requests, all 200 (page numbering, end of list, division code,
+          one judgment detail)
+Round 4:  2026-11-04, 20:00:53 UTC, 1 request, 200 (the Supreme Court labour chamber, no records returned)
+Round 5:  2026-11-04, 22:01:50 UTC, 1 request, 200 (the Supreme Court chamber names, one page of 100 records)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
+          (rounds 3 to 5: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
 Headers:  User-Agent: law-scrapper-mcp/4.4.2 (+https://github.com/numikel/law-scrapper-mcp)
           Accept: application/json, omitted on one request (see the Accept column)
@@ -112,6 +117,27 @@ original is not in the repository, so no test can check them. `.gitattributes` m
 | `search_viii_reasons_2022.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2022-01-01&judgmentDateTo=2022-12-31 | 200 | application/json;charset=UTF-8 | 6 017 | d194a6c6f03b298db1108812aec7d64241aa3eef14d16f6b4862129689267b05 | 4 690 | d7c5ed32d48206a041363ba4cf020091072ba46a0920b690cb3c5c44425d1b81 | 2026-11-02 12:20:51 | yes |
 | `search_viii_sentence_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=SENTENCE&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 041 | 046736c449a94909403e17d66b8c65a34ebeedd8d01a49f739cdc44dee8c7ae1 | 4 714 | 77e3dac83da4cbe9285138eabf25fecf0fdbdef80090dbae2a06313ed88e3b79 | 2026-11-02 12:20:52 | yes |
 | `search_viii_reasons_2025.json` | https://www.saos.org.pl/api/search/judgments?pageSize=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentTypes=REASONS&judgmentDateFrom=2025-01-01&judgmentDateTo=2025-12-31 | 200 | application/json;charset=UTF-8 | 6 042 | 00689d67624d8fc91fc3c80b06f14797d4f2d2e4c6b90e27dac6a4c588c5816f | 4 715 | 7039f22eb6ee3dfba7a0fcada21423290250ceeb92232b86b4ec8a4915b3ff16 | 2026-11-02 12:20:54 | yes |
+| `search_out_of_range_page.json` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=269&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 4 132 | ae772aa2126c2b033de96aa776d313adcf2ccd254816b585922a6a609bb1be00 | 3 161 | 539a4355a81348197520a803b164c3ef0f51aea17a67e79efb8c7d03c4ba9e4d | 2026-11-03 19:27:59 | yes |
+| `supreme_chambers_metadata_2016.json` | https://www.saos.org.pl/api/search/judgments?courtType=SUPREME&judgmentDateTo=2016-06-22&pageSize=100&pageNumber=0&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 42 475 | a55310b01f25317237d9dee46932694481bda78eb3230db06e374dbca0e351f2 | 156 655 | 694222618aec8475ef07fa3979a99901a60dbefdfb991b6eb966ba9b0f77d271 | 2026-11-04 22:01:50 | yes |
+| `judgment_labour_sentence_metadata.json` | https://www.saos.org.pl/api/judgments/554697 | 200 | application/json;charset=UTF-8 | 395 | 28d09af44270faeb851f721d36ef7cab7af2b3b809360b322c3fc4768ae6ecea | 3 574 | 49a9d3dd2092dd2f8dd4eca56e8cf2ac2ab6c1d9987ebe9ff48e4dd6fd936f50 | 2026-11-03 20:06:29 | yes |
+## Detail metadata, reduced
+
+`judgment_labour_sentence_metadata.json` is the one stored recording of a judgment detail (`/api/judgments/{id}`). The full body
+holds the whole text of the judgment, the judges' names and the names of court staff, so it was not
+stored. A deterministic reduction keeps only the `links` (`rel` and `href`), `data.id`,
+`data.source.judgmentUrl` (the court portal address) and `data.division.type`; every other key was
+dropped, and the raw body was deleted after the reduction. The record is the one pinned as
+`detail_labour_sentence_split` below (same id, same size and hash as the original body).
+
+## Supreme Court chambers, reduced
+
+`supreme_chambers_metadata_2016.json` is one page of 100 Supreme Court records (the newest up to 2016-06-22, the
+last date SAOS holds for this court), reduced to what names a chamber: for each record only `id`, `courtType`,
+`division` (`href`, `id`, `name`, `chambers[]` with `href`, `id`, `name`) and `judgmentDate`, plus the `links` of
+the page and `info.totalResults`. The excerpts, case numbers, judges, personnel type and keywords of the
+captured body were dropped, and the raw body was deleted after the reduction. It exists to record the names of
+the chambers; the facts are asserted in `tests/unit/test_saos_fixtures.py`.
+
 ## Recorded, kept private
 
 Four detail recordings hold the whole text of a judgment record (and, for three of them, the names
@@ -132,6 +158,19 @@ numeric journal year and entry. `detail_labour_sentence_split` and `detail_labou
 two records of one case; `detail_sentence_with_reasoning` is a 2013 judgment that carries its
 reasoning inside the same record.
 
+## Probes without a stored body
+
+Round 3 made two requests whose bodies hold judgment excerpts and judges' names and are therefore not
+stored. Only counts and measurements taken from them are kept, as `key=value` pairs asserted by the test.
+The hash is that of the discarded body and is provenance only. Round 4 made one request whose body holds
+no record at all; it is not stored either, because it would add no fact beyond the row below.
+
+| Probe | Request | Status | Content-Type | Bytes | SHA-256 (body, not in repo) | Captured (UTC) | Facts |
+|---|---|---|---|---|---|---|---|
+| `probe_page_number_base` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=1&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 142 130 | 4176661558e9a55c8f6416cb1ac8de975bc5ac703654fd53ee8f189e119275d0 | 2026-11-03 19:27:50 | pageNumber=1; pageSize=100; items=100; totalResults=26891; overlapWithRecordedPage0=0; selfLinkPageNumber=1; linkRels=self,prev,next |
+| `probe_division_code_filter` | https://www.saos.org.pl/api/search/judgments?pageSize=20&ccDivisionCode=0004021&courtType=COMMON&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 31 307 | 72f3e4782fc8d8ba2b8b04c97cf34f8e3f279466b0f0c829cee77daec6a6cbb6 | 2026-11-03 19:28:01 | ccDivisionCode=0004021; pageSize=20; items=20; totalResults=26891; codesReturned=0004021; distinctCourts=2 |
+| `probe_supreme_labour_chamber_name` | https://www.saos.org.pl/api/search/judgments?courtType=SUPREME&scChamberName=Izba+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&pageSize=1&pageNumber=0&judgmentDateTo=2026-11-04 | 200 | application/json;charset=UTF-8 | 2 846 | 71fa54a83d01c2f0bb30344be0897020f7a4786a9ade4ddc5046189875152472 | 2026-11-04 20:00:53 | scChamberName=Izba Pracy i Ubezpieczeń Społecznych; courtType=SUPREME; pageSize=1; items=0; totalResults=0; queryTemplateScChamberName=echoed |
+
 ## What the recordings establish
 
 Numbers below are taken from the `info.totalResults` of the stored files.
@@ -150,6 +189,13 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | `lawJournalEntryCode=1964/296` (Code of Civil Procedure), common courts | 317 900 |
 | `caseNumber=VIII U 2924/25` | 2 records: the `SENTENCE` and the `REASONS` of one case |
 | `pageSize=101` | HTTP 400, `{"error": {..., "propertyName": "pageSize", "message": "parameter 'pageSize' : may not be greater than 100"}}` |
+| `pageNumber` numbering | Zero-based: page 1 of 100 records shares none of the 20 records of page 0 of the 20-record page, and the `self` link of that response says `pageNumber=1` |
+| Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
+| A page past the end (`pageNumber=269`, `pageSize=100`) | HTTP 200, `items` empty, `info.totalResults` still 26 891, links `self` and `prev` only (no `next`) |
+| `ccDivisionCode=0004021` instead of the division name | Honoured as an exact value: every returned record has that code; `totalResults` 26 891, the same as the name filter, in at least 2 courts |
+| `scChamberName=Izba Pracy i Ubezpieczeń Społecznych` with `courtType=SUPREME` | 0 results. The parameter is known to the service (it is echoed in `queryTemplate`), and the filter is an exact whole-name match, so the name as written is not the name SAOS stores |
+| Chambers on the newest page of 100 Supreme Court records (2016-05-12 to 2016-06-22) | Four names: `Izba Cywilna`, `Izba Karna`, `Izba Wojskowa` and `Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych`, the labour chamber, with 15 of the 100 records (its divisions I, II and III). The spelling `Izba Pracy i Ubezpieczeń Społecznych` tried in the earlier request matched no record |
+| The judgment detail (`/api/judgments/{id}`) | A wrapper `{links, data}`; the court portal address is `data.source.judgmentUrl` and the division type `data.division.type`; the body of a short labour `SENTENCE` is 3 574 B |
 
 Records of division VIII by calendar year of their own `judgmentDate`, `pageSize=1`:
 

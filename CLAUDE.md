@@ -46,6 +46,12 @@ there. Policy tests that fail on edits outside `src/`:
 - `test_dependency_policy.py` — `mcp[cli]` stays pinned with `==`, `pyjwt` and `uvicorn` stay direct
   dependencies, no `fastmcp` anywhere
 
+Module tests never reach the network. Each module's `tests/conftest.py` carries an autouse guard that fails
+any lookup of a non-local host (pattern: `modules/voivodeship-journals/tests/conftest.py`), added in the
+module's first change; a test that forgets its mock then fails instead of sending traffic to a real host.
+A live probe of a real host is a one-off script with a stated request budget, never a test. Test file
+names are unique across all modules, because CI collects `modules/*/tests` in one run.
+
 ## Release
 
 Run `/prepare-release X.Y.Z` (maintainers). The version lives in 7 places, listed in

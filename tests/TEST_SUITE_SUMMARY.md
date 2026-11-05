@@ -23,6 +23,7 @@ core-only either way (`LAW_MCP_SOURCE_MODULES=-*`, see `tests/conftest.py`).
 uv sync --extra dev --all-packages
 uv run pytest modules/reference/tests -v
 uv run pytest modules/voivodeship-journals/tests -v
+uv run pytest modules/saos/tests -v
 ```
 
 Several members can be installed at once and test directories are collected in one run
@@ -43,6 +44,23 @@ a module active in the `modules` job (same pinned command as the core-only one i
 | `modules/voivodeship-journals/tests/test_journals_isolation.py` | A 503 storm on one journal opens only its own breaker (read from the list `/health` serves), names that source and says the others are unaffected; another journal and DU still answer; an open breaker sends nothing; no limiter or breaker is shared with any other host |
 | `modules/voivodeship-journals/tests/test_journals_install_and_disable.py` | Real STDIO server: the module block is present for `unset`, `-*,voivodeship-journals`, a bare name and `-reference`, and the tool set equals the same configuration with this module off (it adds none); absent for `-voivodeship-journals`, `-*`, `voivodeship-journals,-*`; the package is never imported when off |
 | `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution, a positive control for the offline guard |
+| `modules/saos/tests/saos_testing.py`, `conftest.py` | Not tests: the helpers (recordings, `derived_list` that cuts search items from them with fresh ids, the respx-backed `FakeSaos`, the in-memory `Session`) and the fixtures, among them the autouse `no_real_network` guard that makes a name lookup for a non-local host fail and the waits made instant |
+| `modules/saos/tests/test_saos_network_guard.py` | Positive controls for that guard: a public name is refused, the module's own client cannot reach `www.saos.org.pl` without a mock, loopback names and an in-process server still work |
+| `modules/saos/tests/test_saos_mapping.py` | Every recorded page shape (labour division, Supreme Court chambers, Tribunal and Chamber without a division, empty page, error body) maps onto the core judgment record; judges are never mapped |
+| `modules/saos/tests/test_saos_pagination.py` | Any `limit` and `offset`: one SAOS request when aligned, two when not, the cut window, the end of the list, the seam of two pages, the cache, the stored window and its scope |
+| `modules/saos/tests/test_saos_service.py` | The exact query sent to SAOS, the date clamp and bounds, input limits, the hints (next page, narrowing by division code or by chamber, the set above the filter limit), what the output never contains |
+| `modules/saos/tests/test_saos_coverage.py` | Every figure and date of the static coverage sentence comes from a recording |
+| `modules/saos/tests/test_saos_egress_pacing.py` | The pace SAOS is asked for (2 requests per second, burst 4), the start hook, the limiter on a fake clock |
+| `modules/saos/tests/test_saos_search_tool.py` | `search_saos_judgments` through the MCP protocol: registration, input and output schema, description (decision tree, examples, dated coverage), structured content, filterability, errors |
+| `modules/saos/tests/test_saos_judgment_details.py` | `get_saos_judgment_details`: the recorded detail, portal address validation, 404 as a Polish error, metadata only |
+| `modules/saos/tests/test_saos_portal_links.py` | `include_portal_links`: the first results get a detail each, the six-request budget over a grid, the failure policy (a failing detail, the first outage), links in the stored set |
+| `modules/saos/tests/test_saos_labour_scan.py` | `labour_only`: the cursor (stop on `limit`, resume without skipping or repeating), the five-page cap, the end of the list, an offset past it, interruption, a failing first page, common-court and Supreme Court rules on lists cut from recordings, the combination and court-type refusals, page scope and the inconclusive empty narrowing, the set above the filter limit, structured content |
+| `modules/saos/tests/test_saos_labour_predicate.py` | The labour rules: the documented patterns agree with the predicates on every recorded division code and chamber name, the registry, a rule added for another court type needs no change in the scan |
+| `modules/saos/tests/test_saos_filter_flow.py` | Search, then the core `filter_results` on the stored set: division code, type, year, date range, sort, chained narrowing, an inconclusive window, `list_result_sets` kinds, a labour scan set, act-only filter and unknown field refused |
+| `modules/saos/tests/test_saos_source_isolation.py` | A SAOS outage opens only its own breaker and names that source; the Sejm, a journal and a stored act set keep working; an open breaker sends nothing; a Sejm outage leaves SAOS up; no limiter or breaker is shared |
+| `modules/saos/tests/test_saos_output_contract.py` | The advertised `outputSchema` of both tools (which fields may be null, the scan and portal-link blocks described, no judges and no text) and that every mode of a call validates against it; refusals carry no structured content |
+| `modules/saos/tests/test_saos_install_and_disable.py` | The entry point of the installed distribution, discovery over it, and on a real STDIO server the two tools and the module block present for `unset`, `-*,saos`, a bare name, `-reference` and the last-token case, absent for `-saos`, `-*`, `saos,-*`; counts relative to the same configuration with the module off; the package is never imported when off |
+| `modules/saos/tests/test_saos_readme.py` | The module README agrees with the code: coverage figures, pace, request budgets, labour rules, named settings and parameters, no licence claim, no private names |
 
 **Full integration suite:**
 
@@ -74,13 +92,14 @@ tests/
 ├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions; `EXPECTED_TOOLS`; `CORE_ONLY_ENV` (the `-*` value the root suite and its server subprocesses run with)
 ├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
 ├── fake_act_source.py          # In-memory `ActSource` that records its calls; drives the act-source routing tests
+├── judgment_samples.py         # Hand-built `JudgmentSummaryOutput` records (our own model, invented placeholder values) for the core judgment tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
 │   ├── edziennik/              # 14 recorded e-Dziennik ELI files (JSON, HTML, PDF), three of them the keyword-list probe; one PROVENANCE.md for all sessions
-│   ├── saos/                   # 25 recorded SAOS API files (search pages, counts, an error body, the court dictionary) with personal names redacted; one PROVENANCE.md; no full judgment texts
+│   ├── saos/                   # 28 recorded SAOS API files (search pages, counts, an error body, the court dictionary, a page past the end, a judgment detail reduced to metadata, a Supreme Court page reduced to chamber names) with personal names redacted; one PROVENANCE.md; no full judgment texts
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
@@ -98,7 +117,9 @@ tests/
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
 │   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause
 │   ├── test_health_endpoint.py         # `/health` reports breaker state (unknown, closed, open, half-open) without lying
+│   ├── test_filter_results_judgments_tool.py # `filter_results` through the MCP protocol on a judgment set seeded by a fake module: narrowing, scope, hints, act-only filters refused
 │   ├── test_jwt_verifier.py            # OAuth 2.1 resource-server mode: signature, audience, issuer, scopes, JWKS discovery
+│   ├── test_judgment_schema_additivity.py # Judgment support is additive: `FilterOutput` and `ResultSetInfo` gain only defaulted fields, `filter_results` keeps exactly its arguments
 │   ├── test_logging_config.py          # Log contract: UTF-8 stderr, request-id correlation, timestamps, httpx loggers held at WARNING
 │   ├── test_models.py                  # ELI parsing, enums, tool I/O models, PageInfo, API response models
 │   ├── test_paginated_tool_outputs.py  # Every paginated output model requires `page_info`
@@ -106,7 +127,7 @@ tests/
 │   ├── test_readme_tool_table.py       # README tool-properties table matches the live `tools/list` (title, readOnlyHint, openWorldHint)
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
-│   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, judge names and names after role cues redacted, catalogue and stored-file hashes vs PROVENANCE.md
+│   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, zero-based pages, an empty page past the end, the division-code filter, the judgment detail reduced to metadata, the Supreme Court chambers (the labour chamber under its long name, the spelling that matched nothing), judge names and names after role cues redacted, catalogue and stored-file hashes vs PROVENANCE.md
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
@@ -138,6 +159,7 @@ tests/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading
 │   │   ├── test_act_sources.py         # ActSourceRegistry: exact code before prefix, reserved DU/MP, conflicts leave nothing half registered, unregister
 │   │   ├── test_browse_paging.py       # `browse()` fetches one page, reports the year's count, does not re-slice, reads `effective_date` from entryIntoForce
+│   │   ├── test_judgment_filters.py    # Shared `filter_results` filters on judgments: fields, type, year, date range, sort, every refusal listing the valid values, judgment hints
 │   │   ├── test_changes_service.py     # ChangesService: date/keyword/publisher params, paged upstream window
 │   │   ├── test_comparison_service.py  # ComparisonService: concurrent fetches, sibling cancellation, comparison mapping
 │   │   ├── test_content_load_failures.py # Transient loading failures propagate; permanent absence (no format, 404, empty extraction) is a documented `unavailable`, not a placeholder
@@ -150,6 +172,7 @@ tests/
 │   │   ├── test_source_dispatch.py     # Empty registry issues the 4.4.2 upstream calls; a registered code never reaches the Sejm: search (limit 101 rejected), browse, change tracking, details, relations, PDF-only loading and its outcomes
 │   │   ├── test_pattern_matching.py    # RE2 pattern compilation: supported subset, rejections, no stderr pollution
 │   │   ├── test_relationship_service.py# RelationshipService: category filtering, response-shape normalisation
+│   │   ├── test_result_store_judgments.py # ResultStore with judgment sets: kind validation (no mixing), filtering, inherited scope, listing, call-compatibility of `store`
 │   │   ├── test_result_store.py        # ResultStore: ids, LRU, TTL, filtering, ReDoS regression, record cap, scope
 │   │   ├── test_search_corpus_size.py  # `search()` reports the corpus size and pays for one page
 │   │   ├── test_search_pagination.py   # PageInfo for search and browse windows

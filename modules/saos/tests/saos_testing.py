@@ -23,8 +23,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import jsonschema
 import respx
 from mcp import Client
+from mcp.types import Tool
 
 from law_scrapper_mcp.client.cache import TTLCache
 from law_scrapper_mcp.client.egress import CallerIdentity, EgressClient, EgressDefaults, EgressHub
@@ -300,3 +302,38 @@ async def connected(router: respx.MockRouter, fake: FakeSaos | None = None) -> A
     (fake or FakeSaos()).install(router)
     async with Client(build_app([loaded()])) as client:
         yield client
+
+
+@dataclass
+class Session:
+    """An in-memory client with the tools it listed, for calls that must succeed or must refuse."""
+
+    client: Client
+    tools: dict[str, Tool]
+
+    async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Call a tool, require success, validate the payload against the tool's `outputSchema`, return `data`."""
+        result = await self.client.call_tool(name, arguments)
+        assert result.is_error is False, result.content
+        payload = result.structured_content
+        assert payload is not None
+        schema = self.tools[name].output_schema
+        assert schema is not None, name
+        jsonschema.validate(payload, schema)
+        assert isinstance(payload["hints"], list)
+        data: dict[str, Any] = payload["data"]
+        return data
+
+    async def fail(self, name: str, arguments: dict[str, Any]) -> str:
+        """Call a tool that must refuse; return the text the agent reads."""
+        result = await self.client.call_tool(name, arguments)
+        assert result.is_error is True, result.structured_content
+        assert result.structured_content is None
+        return str(result.content[0].text)  # type: ignore[union-attr]
+
+
+@asynccontextmanager
+async def saos_session(router: respx.MockRouter, fake: FakeSaos | None = None) -> AsyncIterator[Session]:
+    """The server with only the SAOS module, a fake SAOS behind it, and a session on top."""
+    async with connected(router, fake) as client:
+        yield Session(client=client, tools={tool.name: tool for tool in (await client.list_tools()).tools})

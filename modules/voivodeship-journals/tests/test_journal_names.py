@@ -12,6 +12,7 @@ from law_scrapper_mcp.client.egress import EgressDefaults, EgressHub
 from law_scrapper_mcp.client.exceptions import ApiUnavailableError
 from law_scrapper_mcp.config import Settings, settings
 from law_scrapper_mcp.services.act_sources import (
+    MAX_PUBLISHER_NAME_LENGTH,
     ActSource,
     ActSourceRegistry,
     SourceSearchQuery,
@@ -20,6 +21,7 @@ from law_scrapper_mcp.services.act_sources import (
 )
 from law_scrapper_mcp.source_modules.contract import ModuleHost
 from law_scrapper_mcp_voivodeship_journals import catalog, start
+from law_scrapper_mcp_voivodeship_journals import source as source_module
 from law_scrapper_mcp_voivodeship_journals.catalog import (
     BY_CODE,
     JOURNALS,
@@ -84,6 +86,22 @@ async def test_the_source_resolves_names_from_the_catalog_it_was_given() -> None
     assert excinfo.value.source == "POL_WOJ_ZZ" and "wyłączony na próbę" in str(excinfo.value)
     with pytest.raises(UnknownPublisherError):
         await source.search("pomorskie", SourceSearchQuery(year=2025))
+
+
+async def test_a_value_too_long_to_be_a_name_is_refused_without_being_normalised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under the claimed prefix a caller can send any length; the fold must not run over it."""
+
+    def forbidden(_text: str) -> str:
+        raise AssertionError("a value longer than any name was normalised")
+
+    monkeypatch.setattr(source_module, "fold_publisher_name", forbidden)
+    source = JournalActSource({}, JOURNALS, Settings())
+    too_long = "POL_WOJ_" + "x" * (MAX_PUBLISHER_NAME_LENGTH + 1)
+
+    with pytest.raises(UnknownPublisherError):
+        await source.search(too_long, SourceSearchQuery(year=2025))
 
 
 async def test_two_names_that_fold_to_the_same_text_fail_at_import_time(monkeypatch: pytest.MonkeyPatch) -> None:

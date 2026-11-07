@@ -155,6 +155,11 @@ What the core guarantees:
   listed bare), so the whole message fits the tool error budget (`error_message_max_chars`, 500) for
   twelve entries. A value longer than 100 characters cannot be a name and is not normalised. With nothing
   registered the value goes to the Sejm as before, without any normalisation.
+- **`DU` and `MP` typed loosely reach the Sejm canonical, while a source is registered.** A caller that
+  takes the publisher as a parameter (`search`, `browse`, `track_changes`) first passes it through
+  `registry.canonical_publisher`: `" du"` and `"Mp "` become `DU` and `MP`; every other value is left as
+  typed, and with an empty registry nothing changes at all. A publisher inside an ELI is not
+  normalised, for the reason in the next rule.
 - **A name is accepted in the `publisher` parameter only, never inside an ELI.** The core stores a loaded
   document under the ELI as the caller typed it, while every answer carries the canonical ELI, so an ELI
   with a name would load a document the next call cannot find. A source that accepts names must refuse a

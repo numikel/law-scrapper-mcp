@@ -125,6 +125,34 @@ async def test_the_registry_is_read_at_call_time_not_at_construction(
 
 
 @respx.mock
+@pytest.mark.parametrize("category", [MetadataCategory.PUBLISHERS, MetadataCategory.ALL])
+async def test_the_registry_is_asked_once_per_call(
+    mock_client: SejmApiClient, publishers_data: list, monkeypatch: pytest.MonkeyPatch, category: MetadataCategory
+) -> None:
+    for name, payload in (
+        ("keywords", ["prawo"]),
+        ("acts", publishers_data),
+        ("statuses", ["akt obowiązujący"]),
+        ("types", ["Ustawa"]),
+        ("institutions", ["Sejm RP"]),
+    ):
+        respx.get(f"https://api.sejm.gov.pl/eli/{name}").mock(return_value=Response(200, json=payload))
+    registry = registry_with(described("ZZ_A", "alfa"))
+    asked: list[int] = []
+    original = registry.describe
+
+    def counting() -> tuple[PublisherInfo, ...]:
+        asked.append(1)
+        return original()
+
+    monkeypatch.setattr(registry, "describe", counting)
+
+    await service_for(mock_client, registry).get_metadata_page(category)
+
+    assert len(asked) == 1, "the descriptions are read from the registry once and passed along"
+
+
+@respx.mock
 async def test_paging_and_totals_count_the_described_publishers(
     mock_client: SejmApiClient, publishers_data: list
 ) -> None:

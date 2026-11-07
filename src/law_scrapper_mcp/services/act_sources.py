@@ -94,7 +94,7 @@ def unknown_publisher_message(value: str, infos: Iterable[PublisherInfo], *, und
         shown = f"{shown[:UNKNOWN_PUBLISHER_VALUE_LIMIT]}…"
     parts = [f"Nieznany wydawca: {shown}."]
     if available:
-        parts.append(f"Zamiast kodu można podać nazwę, np. {available[0].label}.")
+        parts.append(f"Zamiast kodu można podać nazwę w parametrze publisher (nie w ELI), np. {available[0].label}.")
     valid = [
         *sorted(RESERVED_PUBLISHERS),
         *(f"{info.code} ({info.label})" for info in available),
@@ -312,6 +312,20 @@ class ActSourceRegistry:
             return None
         undescribed = [registered for registered in self._by_code if registered not in self._info]
         raise UnknownPublisherError(unknown_publisher_message(code, self.describe(), undescribed=undescribed))
+
+    def canonical_publisher(self, code: str) -> str:
+        """`DU` or `MP` for those codes typed in another letter case or with surrounding whitespace.
+
+        Only while a source is registered: with an empty registry every value, padded or not, goes to
+        the Sejm exactly as typed, as before the source mechanism. Any other value is returned
+        unchanged. It is for callers that take the publisher as a parameter; a publisher inside an
+        ELI is left as typed, because the core stores a loaded document under the ELI as typed.
+        """
+        if self._by_code or self._by_prefix:
+            reserved = code.strip().upper()
+            if reserved in RESERVED_PUBLISHERS:
+                return reserved
+        return code
 
     def publishers(self) -> tuple[str, ...]:
         """Exact publisher codes currently registered, sorted."""

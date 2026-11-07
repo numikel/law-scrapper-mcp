@@ -95,6 +95,7 @@ class ChangesService:
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         page_offset = parse_non_negative(offset, name="offset", default=0)
 
+        publisher = self._sources.canonical_publisher(publisher)
         source = self._sources.for_publisher(publisher)
         if source is not None:
             # "Changes" means the acts announced in the window, which is also what the Sejm

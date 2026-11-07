@@ -60,6 +60,13 @@ _INTERNAL_MESSAGE = "Wystąpił wewnętrzny błąd narzędzia."
 # The Sejm's texts predate this sentence and stay byte-identical.
 _OTHER_SOURCES_UNAFFECTED = "Pozostałe źródła nie są objęte tym błędem."
 
+# A status from a source other than the Sejm that says "I refuse this server" rather than "I
+# broke": unauthorized, forbidden, unavailable for legal reasons. The retry loop already treats
+# them as terminal; what was missing is telling the agent so (the honest-identification NFR
+# reports a host that blocks an honest client as unavailable). Chosen by status, not by
+# exception type, because the client raises the same `SejmApiError` for every other 4xx.
+_REFUSAL_STATUSES = frozenset({401, 403, 451})
+
 # One fixed sentence per category, appended to every public message (D4). Fixed,
 # because it enters the caller's context on every failure (O7); a sentence rather
 # than the category name, because the name would read as leaked internals and
@@ -76,6 +83,7 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
     "precondition": "Wykonaj najpierw krok wymagany przez to narzędzie.",
     "content_too_large": "Ponowne wywołanie niczego nie zmieni — pobierz treść z podanego adresu.",
     "source_address": "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, że konfiguracja adresu tego źródła jest błędna.",
+    "source_refused": "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, że źródło odmawia obsługi.",
     "unavailable": "Ponów wywołanie za chwilę.",
     "upstream": "Ponów wywołanie za chwilę.",
     "internal": "Ponów wywołanie; jeśli błąd wraca, zgłoś go opiekunowi serwera.",
@@ -89,7 +97,10 @@ _CATEGORY_GUIDANCE: dict[str, str] = {
 # DEBUG. `TypeError` also lands in `validation` even though it usually signals
 # an internal bug rather than caller input — narrowing that classification is
 # out of scope here, and redacting it costs only log detail.
-_REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream"})
+#
+# `source_refused` is there for the same reason as `upstream`: its exception carries the host's
+# response body, while its public message is built from the source label and the status only.
+_REDACTED_DETAIL_CATEGORIES = frozenset({"validation", "upstream", "source_refused"})
 
 # Categories whose message body is `str(exc)` and therefore unbounded in
 # length. `unavailable` is included even though its text is project-authored at
@@ -114,7 +125,24 @@ class ToolExecutionError(ToolError):
     """
 
 
+def _is_refusal(exc: Exception) -> bool:
+    """Whether a source other than the Sejm answered 401, 403 or 451.
+
+    The Sejm and an exception without a source keep the legacy `upstream` text, which a
+    golden test pins byte for byte. A 5xx never lands here: those are `ApiUnavailableError`.
+    """
+    return (
+        isinstance(exc, SejmApiError)
+        and not isinstance(exc, ApiUnavailableError)
+        and getattr(exc, "status_code", None) in _REFUSAL_STATUSES
+        and _named_source(exc) is not None
+    )
+
+
 def _classify_error(exc: Exception) -> str:
+    # Before the table: it needs the status and the source, which an `isinstance` lookup cannot see.
+    if _is_refusal(exc):
+        return "source_refused"
     for exc_type, category in _ERROR_CATEGORIES.items():
         if isinstance(exc, exc_type):
             return category
@@ -217,11 +245,14 @@ def _public_message(exc: Exception, category: str) -> str:
         body = _truncate(_terminated(str(exc)))
     elif category == "upstream":
         body = _terminated(_upstream_message(source))
+    elif category == "source_refused":
+        # Label and status only: the exception text is the host's own response.
+        body = f"Źródło {source} jest niedostępne: odrzuciło zapytanie tego serwera{_status_suffix(exc)}."
     else:
         body = _terminated(_INTERNAL_MESSAGE)
     # After the cut, so truncation can never remove it; before the guidance, so every message
     # still ends with its category's closing sentence.
-    if source is not None and category in ("unavailable", "source_address"):
+    if source is not None and category in ("unavailable", "source_address", "source_refused"):
         body = f"{body} {_OTHER_SOURCES_UNAFFECTED}"
     return f"{body} {_CATEGORY_GUIDANCE[category]}".strip()
 

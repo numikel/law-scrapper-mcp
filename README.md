@@ -208,6 +208,7 @@ The list-valued settings — `LAW_MCP_ALLOWED_HOSTS`, `LAW_MCP_ALLOWED_ORIGINS`,
 | `LAW_MCP_RATE_LIMIT_BURST` | `10` | Token bucket capacity — how many requests can arrive back-to-back before `429` |
 | `LAW_MCP_LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` (case-insensitive). Aliases such as `WARN` are rejected at startup on both transports instead of working on one and crashing the other. `httpx`'s own request lines, which carry the full query URL, never go below `WARNING` regardless of this setting |
 | `LAW_MCP_LOG_FORMAT` | `text` | Log format: `text` or `json` |
+| `LAW_MCP_CONTACT` | `https://github.com/numikel/law-scrapper-mcp` | Contact written into the `User-Agent` of every request to an upstream host: an `http(s)://` URL or an e-mail address, in ASCII without spaces or parentheses, at most 200 characters. A URL needs a host and may not carry a user name or password (the value is sent as written to every upstream host). An e-mail is sent as `mailto:<address>`. An invalid or empty value stops startup; unset the variable to keep the default. See "Identity towards upstream hosts" |
 
 Logs go to stderr (stdout carries the MCP protocol on the STDIO transport). Every record carries a `request_id` correlating it with a single tool call — `lifespan` for records emitted outside one:
 
@@ -228,6 +229,33 @@ export LAW_MCP_TRANSPORT=streamable-http
 export LAW_MCP_PORT=7683
 export LAW_MCP_LOG_LEVEL=DEBUG
 export LAW_MCP_CACHE_METADATA_TTL=86400
+```
+
+### Identity towards upstream hosts
+
+Every request the server sends to an upstream host (the Sejm API and any host a source module talks to)
+carries the same identity header, so that a host's administrator can tell what is calling and reach the
+person responsible instead of blocking the address:
+
+```text
+User-Agent: law-scrapper-mcp/<version> (+https://ops.example.org/contact)
+User-Agent: law-scrapper-mcp/<version> (+mailto:ops@example.org)
+```
+
+`LAW_MCP_CONTACT` changes only the contact; the server name and version are the ones the server reports.
+The contact is yours to set, either as an
+`http(s)://` URL or as an e-mail address (the address is written into the header as `mailto:<address>`).
+A source module adds its own `module/version` token after the contact, so a host also sees which module
+generates its traffic.
+
+Unset, the contact is this project's repository. That is fine for your own machine, but behind a shared
+or public deployment it sends complaints about *your* traffic to the project's authors. When the server
+listens beyond the loopback over HTTP and still sends the default contact, it logs one warning at startup
+asking you to set your own. A value that is not a plain URL or e-mail stops startup with a message naming
+the variable; the rejected value is not echoed.
+
+```bash
+export LAW_MCP_CONTACT=ops@example.org
 ```
 
 ### Authenticated remote deployment

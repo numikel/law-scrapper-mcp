@@ -11,9 +11,23 @@ from law_scrapper_mcp.config import (
     FILTER_MAX_RECORDS_FLOOR,
     MAX_PATTERN_LENGTH_CEILING,
     MAX_PATTERN_LENGTH_FLOOR,
+    USER_AGENT_CONTACT,
     Settings,
+    log_default_contact_warning,
     log_pattern_limit_clamping,
 )
+
+CONTACT_REJECTED = (
+    "LAW_MCP_CONTACT musi być adresem http(s):// albo adresem e-mail "
+    "(tylko znaki ASCII, bez spacji i nawiasów, do 200 znaków). "
+    "Aby użyć kontaktu domyślnego, usuń zmienną zamiast ustawiać ją jako pustą."
+)
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An operator who followed the README has `LAW_MCP_CONTACT` exported; the defaults must not see it."""
+    monkeypatch.delenv("LAW_MCP_CONTACT", raising=False)
 
 
 class TestSettingsDefaults:
@@ -416,6 +430,146 @@ class TestPatternLimitClampingLog:
             log_pattern_limit_clamping(settings, log)
 
         assert caplog.text == ""
+
+
+class TestContact:
+    """`LAW_MCP_CONTACT`: the contact the identity header advertises (FR-016).
+
+    Validated at startup because a bad value would otherwise fail on the first upstream
+    request: CR/LF is rejected by h11 on send and a non-ASCII character fails while the
+    request is built.
+    """
+
+    def test_default_is_the_project_repository(self) -> None:
+        assert Settings().contact == USER_AGENT_CONTACT
+
+    def test_the_default_passes_its_own_validator(self) -> None:
+        assert Settings(contact=USER_AGENT_CONTACT).contact == USER_AGENT_CONTACT
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            USER_AGENT_CONTACT,
+            "https://ops.example.org/contact",
+            "https://x.test/a?b=c&d=e#frag",
+            "https://x.test:8080/contact?lang=pl",
+            "http://x.test",
+            "Ops@Firma.PL",
+            "ops+law@mail.example.org",
+            "https://x.test/" + "a" * 185,
+        ],
+    )
+    def test_accepts_a_url_or_an_email(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        assert Settings().contact == value
+
+    def test_accepts_exactly_two_hundred_characters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        value = "https://x.test/" + "a" * 185
+        assert len(value) == 200
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        assert Settings().contact == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            "   ",
+            " https://x.test",
+            "https://x.test ",
+            "https://x.test/a b",
+            "ftp://x.test",
+            "mailto:a@b.co",
+            "plain text",
+            "a@b",
+            "https://x.test/a(b)",
+            "https://x.test/a)b",
+            "https://x.test/\\",
+            "https://x.test/a\r\nX-Evil: 1",
+            "https://x.test/a\nb",
+            "https://zażółć.test",
+            "ż@firma.pl",
+            "https://x.test/" + "a" * 186,
+            # Characters are fine, the shape is not: credentials, no host, a broken bracket.
+            "https://user:pw@x.test/",
+            "https://user@x.test/",
+            "https://:pw@x.test/",
+            "https://@x.test/",
+            "https:///",
+            "https://?a=b",
+            "http://]",
+        ],
+        ids=lambda value: repr(value)[:40],
+    )
+    def test_rejects_anything_that_is_not_a_safe_url_or_email(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings()
+
+        text = str(exc_info.value)
+        assert CONTACT_REJECTED in text
+        if value.strip():
+            assert value.strip() not in text, "the rejected input must not be echoed"
+
+    def test_an_empty_value_is_an_error_not_the_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`LAW_MCP_CONTACT=` must not silently send somebody else's contact."""
+        monkeypatch.setenv("LAW_MCP_CONTACT", "")
+
+        with pytest.raises(ValidationError):
+            Settings()
+
+
+class TestDefaultContactWarning:
+    """One startup warning for an HTTP deployment beyond loopback that still sends the default contact.
+
+    Beyond loopback the traffic is usually somebody else's, and an upstream administrator who
+    wants to report a problem would otherwise write to the project's authors (FR-016).
+    """
+
+    LOGGER = "test_default_contact"
+
+    def _warnings(self, settings: Settings, caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+        with caplog.at_level(logging.WARNING, logger=self.LOGGER):
+            log_default_contact_warning(settings, logging.getLogger(self.LOGGER))
+        return [record for record in caplog.records if record.name == self.LOGGER]
+
+    def test_warns_once_for_http_beyond_loopback_with_the_default_contact(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        current = Settings(transport="streamable-http", host="0.0.0.0", auth_mode="bearer", auth_token="k" * 32)
+
+        records = self._warnings(current, caplog)
+
+        assert len(records) == 1
+        assert records[0].levelno == logging.WARNING
+        assert records[0].getMessage() == (
+            f"Serwer HTTP wysyła domyślny kontakt w nagłówku User-Agent ({USER_AGENT_CONTACT}). "
+            "Zgłoszenia administratorów zewnętrznych serwisów trafią wtedy do autorów projektu, nie do ciebie. "
+            "Ustaw LAW_MCP_CONTACT na własny adres URL lub e-mail."
+        )
+
+    def test_is_silent_when_the_operator_set_a_contact(self, caplog: pytest.LogCaptureFixture) -> None:
+        current = Settings(
+            transport="streamable-http",
+            host="0.0.0.0",
+            auth_mode="bearer",
+            auth_token="k" * 32,
+            contact="ops@example.org",
+        )
+
+        assert self._warnings(current, caplog) == []
+
+    def test_is_silent_for_http_on_loopback(self, caplog: pytest.LogCaptureFixture) -> None:
+        assert self._warnings(Settings(transport="streamable-http"), caplog) == []
+
+    def test_is_silent_for_stdio_even_with_a_remote_looking_host(self, caplog: pytest.LogCaptureFixture) -> None:
+        current = Settings(transport="stdio", host="0.0.0.0", auth_mode="bearer", auth_token="k" * 32)
+
+        assert self._warnings(current, caplog) == []
 
 
 class TestShutdownGrace:

@@ -57,7 +57,9 @@ class TestCategoryGuidance:
     def test_guidance_covers_every_category_the_classifier_can_return(self) -> None:
         from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE, _ERROR_CATEGORIES
 
-        assert set(_ERROR_CATEGORIES.values()) | {"internal"} == set(_CATEGORY_GUIDANCE)
+        # `source_refused` is chosen by the HTTP status of a named source, not by exception type,
+        # so it is not a value of the type table.
+        assert set(_ERROR_CATEGORIES.values()) | {"internal", "source_refused"} == set(_CATEGORY_GUIDANCE)
 
     def test_transient_and_permanent_guidance_differ(self) -> None:
         """The whole point of D4: 'retry' must not read like 'does not exist'."""
@@ -485,8 +487,10 @@ class TestCallerSourcedCategories:
     def test_caller_sourced_categories_cover_every_category_except_internal_and_upstream(self) -> None:
         from law_scrapper_mcp.tools.error_handling import _CALLER_SOURCED_CATEGORIES, _ERROR_CATEGORIES
 
-        all_categories = set(_ERROR_CATEGORIES.values()) | {"internal"}
-        assert _CALLER_SOURCED_CATEGORIES | {"internal", "upstream"} == all_categories
+        # `source_refused` has a project-authored body (label and status only), so it never runs
+        # through the `str(exc)` branch the caller-sourced set stands for.
+        all_categories = set(_ERROR_CATEGORIES.values()) | {"internal", "source_refused"}
+        assert _CALLER_SOURCED_CATEGORIES | {"internal", "upstream", "source_refused"} == all_categories
 
 
 class TestNamedSource:
@@ -663,3 +667,104 @@ class TestNamedSource:
             "Tool sejm_tool failed [unavailable]: down",
             "Tool upstream_tool failed [upstream] source=SAOS (HTTP 418)",
         ]
+
+
+class TestRefusedSource:
+    """FR-005 and the honest-identification NFR: a host that blocks this server is "unavailable".
+
+    HTTP 401, 403 and 451 from a source other than the Sejm mean "I refuse you", not "I broke".
+    Retrying a refusal helps nobody, so the agent is told not to; the Sejm keeps its old text.
+    """
+
+    OTHER_SOURCES = "Pozostałe źródła nie są objęte tym błędem."
+    GUIDANCE = "Nie ponawiaj wywołania; zgłoś użytkownikowi lub operatorowi serwera, że źródło odmawia obsługi."
+
+    @staticmethod
+    def message_of(exc: Exception) -> str:
+        from law_scrapper_mcp.tools.error_handling import _public_message
+
+        return _public_message(exc, _classify_error(exc))
+
+    @pytest.mark.parametrize("status", [401, 403, 451])
+    def test_a_refusal_from_a_named_source_reads_as_unavailable_and_not_to_retry(self, status: int) -> None:
+        exc = SejmApiError(f"HTTP {status}: denied", status_code=status, source="Alpha")
+
+        assert _classify_error(exc) == "source_refused"
+        assert self.message_of(exc) == (
+            f"Źródło Alpha jest niedostępne: odrzuciło zapytanie tego serwera (HTTP {status}). "
+            f"{self.OTHER_SOURCES} {self.GUIDANCE}"
+        )
+
+    @pytest.mark.parametrize("status", [400, 408, 418, 422, 429])
+    def test_other_client_errors_keep_the_upstream_wording(self, status: int) -> None:
+        exc = SejmApiError(f"HTTP {status}: no", status_code=status, source="Alpha")
+
+        assert _classify_error(exc) == "upstream"
+        assert self.message_of(exc) == "Źródło Alpha nie odpowiedziało poprawnie. Ponów wywołanie za chwilę."
+
+    def test_a_missing_page_is_still_not_found(self) -> None:
+        """The client turns a 404 into `ActNotFoundError`, not into a plain `SejmApiError`."""
+        exc = ActNotFoundError("DU/2024/1", source="Alpha")
+
+        assert _classify_error(exc) == "not_found"
+
+    @pytest.mark.parametrize("status", [500, 502, 503])
+    def test_a_server_side_failure_is_still_an_unavailability(self, status: int) -> None:
+        exc = ApiUnavailableError(
+            f"Źródło Alpha jest chwilowo niedostępne (HTTP {status})", status_code=status, source="Alpha"
+        )
+
+        assert _classify_error(exc) == "unavailable"
+
+    def test_an_unavailability_is_never_a_refusal_whatever_status_it_carries(self) -> None:
+        """`ApiUnavailableError` is a `SejmApiError`; the exclusion in `_is_refusal` keeps it `unavailable`."""
+        exc = ApiUnavailableError("Źródło Alpha jest niedostępne", status_code=403, source="Alpha")
+
+        assert _classify_error(exc) == "unavailable"
+
+    @pytest.mark.parametrize("source", [None, "api.sejm.gov.pl"])
+    @pytest.mark.parametrize("status", [401, 403, 451])
+    def test_the_sejm_and_source_less_errors_keep_the_text_they_always_had(
+        self, source: str | None, status: int
+    ) -> None:
+        exc = SejmApiError(f"HTTP {status}: denied", status_code=status, source=source)
+
+        assert _classify_error(exc) == "upstream"
+        assert self.message_of(exc) == "Serwis api.sejm.gov.pl nie odpowiedział poprawnie. Ponów wywołanie za chwilę."
+
+    def test_no_remote_text_reaches_the_message(self) -> None:
+        exc = SejmApiError(
+            "HTTP 403: body-secret-text ?token=query-secret",
+            status_code=403,
+            url="https://alpha.example.test/api?token=query-secret",
+            source="Alpha",
+        )
+
+        message = self.message_of(exc)
+
+        assert "secret" not in message
+        assert "alpha.example.test" not in message
+
+    def test_the_guidance_is_its_own_and_never_says_retry(self) -> None:
+        from law_scrapper_mcp.tools.error_handling import _CATEGORY_GUIDANCE
+
+        refused = _CATEGORY_GUIDANCE["source_refused"]
+        assert refused == self.GUIDANCE
+        assert refused not in {text for name, text in _CATEGORY_GUIDANCE.items() if name != "source_refused"}
+        assert "Ponów" not in refused
+
+    @pytest.mark.asyncio
+    async def test_the_error_log_carries_the_label_and_status_but_not_the_response_body(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        @handle_tool_errors
+        async def refused_tool() -> None:
+            raise SejmApiError("HTTP 403: body-secret-text", status_code=403, source="Alpha")
+
+        with caplog.at_level(logging.ERROR), pytest.raises(ToolExecutionError) as raised:
+            await refused_tool()
+
+        assert [record.getMessage() for record in caplog.records] == [
+            "Tool refused_tool failed [source_refused] source=Alpha (HTTP 403)"
+        ]
+        assert "secret" not in str(raised.value)

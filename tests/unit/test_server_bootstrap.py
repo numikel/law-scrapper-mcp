@@ -157,6 +157,37 @@ def test_main_http_branch_uses_our_own_server(monkeypatch) -> None:
     assert served[0].timeout_graceful_shutdown == server_module.settings.shutdown_grace
 
 
+@pytest.mark.parametrize("transport", ["streamable-http", "stdio"])
+def test_main_logs_the_default_contact_warning_right_after_the_remote_bind_warning(
+    monkeypatch: pytest.MonkeyPatch, transport: str
+) -> None:
+    """FR-016: `main()` hands the live settings to the prompt on both transports.
+
+    The function decides by itself whether to speak (HTTP, beyond loopback, default contact),
+    so `main()` calls it unconditionally, directly after the bind warning it sits beside.
+    """
+    monkeypatch.setattr(server_module.settings, "transport", transport)
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(server_module, "log_remote_bind_warning", lambda current, log: calls.append(("bind", current)))
+    monkeypatch.setattr(
+        server_module, "log_default_contact_warning", lambda current, log: calls.append(("contact", current))
+    )
+
+    class IdleServer:
+        def __init__(self, config: uvicorn.Config) -> None:
+            pass
+
+        def run(self) -> None:
+            return None
+
+    monkeypatch.setattr(server_module.uvicorn, "Server", IdleServer)
+    monkeypatch.setattr(server_module.app, "run", lambda **kwargs: None)
+
+    server_module.main()
+
+    assert calls == [("bind", server_module.settings), ("contact", server_module.settings)]
+
+
 def test_main_stdio_branch_is_untouched(monkeypatch) -> None:
     """O6: the default transport must not change behaviour."""
     monkeypatch.setattr(server_module.settings, "transport", "stdio")

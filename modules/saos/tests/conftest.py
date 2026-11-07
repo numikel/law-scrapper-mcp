@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import socket
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import date
 from typing import Any
 
 import pytest
 import pytest_asyncio
 import respx
+from saos_reading_testing import FakeReading, ReadingHarness, make_reading_harness, pair_fake
 from saos_testing import CLOCK, FakeSaos, Harness, HarnessFactory, make_saos_client, make_service
 
 from law_scrapper_mcp.client import egress as egress_module
@@ -92,3 +93,18 @@ async def make_harness(saos_router: respx.MockRouter) -> AsyncIterator[HarnessFa
     yield build
     for hub in hubs:
         await hub.close()
+
+
+@pytest_asyncio.fixture
+async def make_reading(saos_router: respx.MockRouter) -> AsyncIterator[Callable[[FakeReading], ReadingHarness]]:
+    """Factory of reading harnesses (a fake SAOS with the recorded skeletons, the loader, a document store)."""
+    harnesses: list[ReadingHarness] = []
+
+    def build(fake: FakeReading | None = None) -> ReadingHarness:
+        harness = make_reading_harness(saos_router, fake or pair_fake())
+        harnesses.append(harness)
+        return harness
+
+    yield build
+    for harness in harnesses:
+        await harness.hub.close()

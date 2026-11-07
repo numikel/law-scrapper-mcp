@@ -24,6 +24,7 @@ from law_scrapper_mcp.models.tool_outputs import (
     ResultSetScope,
     SetScope,
 )
+from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.pagination import item_page_info, parse_non_negative
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp_saos.client import SaosClient
@@ -44,9 +45,20 @@ from law_scrapper_mcp_saos.mapping import (
 from law_scrapper_mcp_saos.models import (
     LabourScan,
     PortalLinks,
+    ReasoningStatus,
+    SaosDivision,
     SaosJudgmentDetailsOutput,
+    SaosLoadedJudgment,
     SaosSearchItem,
+    SaosTextData,
     SearchSaosJudgmentsOutput,
+)
+from law_scrapper_mcp_saos.reading import (
+    has_reasoning_heading,
+    index_sections,
+    to_markdown_async,
+    with_no_reasoning_note,
+    with_reasons,
 )
 from law_scrapper_mcp_saos.state import saos_state
 
@@ -841,3 +853,169 @@ async def get_saos_judgment_details(
     record, division_type = to_detail(detail.data)
     output = SaosJudgmentDetailsOutput(source=SOURCE, judgment=record, division_type=division_type)
     return EnrichedResponse[SaosJudgmentDetailsOutput](data=output, hints=details_hints(output))
+
+
+# Loading a judgment sends at most this many calls to SAOS: the detail, a search by case number for the
+# reasons record, and the detail of that record. Both extra calls are paced and counted by the host like
+# every other call; a search answered from the cache still counts here.
+MAX_READ_REQUESTS = 3
+PAIRING_PAGE_SIZE = 10
+SENTENCE = "SENTENCE"
+REASONS = "REASONS"
+COMMON_COURT = "COMMON"
+# What the agent is told when the extra calls cannot settle the question. None of these is a claim that the
+# reasoning is missing: only `ReasoningStatus.ABSENT` says that.
+NOTE_IN_RECORD = "Uzasadnienie jest w tekście tego rekordu (sekcja UZASADNIENIE)."
+NOTE_ABSENT = (
+    "Brak uzasadnienia w źródle: rekord nie ma sekcji uzasadnienia, a SAOS nie ma osobnego rekordu uzasadnienia "
+    "tej sprawy w tym sądzie. Do tekstu dodano oznaczoną uwagę serwera."
+)
+NOTE_REASONING_RECORD = "To rekord uzasadnienia; wyrok tej sprawy znajdziesz wyszukując po sygnaturze."
+NOTE_OTHER_TYPE = (
+    "Nie oceniano uzasadnienia: wyrok i uzasadnienie jako osobne rekordy SAOS sprawdzono tylko dla wyroków sądów "
+    "powszechnych, a to orzeczenie jest innego rodzaju lub sądu."
+)
+NOTE_NO_SIGNATURE = "Nie oceniano uzasadnienia: rekord nie ma sygnatury, więc nie ma po czym szukać osobnego rekordu."
+NOTE_SEARCH_FAILED = "Nie udało się sprawdzić uzasadnienia (SAOS nie odpowiedział na wyszukiwanie); wczytano sam wyrok."
+NOTE_SIBLING_FAILED = "Nie udało się pobrać rekordu uzasadnienia (SAOS nie odpowiedział lub rekord jest nieprawidłowy); wczytano sam wyrok."
+NOTE_TRUNCATED = (
+    "Nie wiadomo, czy uzasadnienie istnieje: SAOS ma więcej rekordów o tej sygnaturze, niż mieści jedna strona "
+    "wyszukiwania, a żaden z nich nie jest uzasadnieniem tego sądu. Wczytano sam wyrok."
+)
+
+
+def document_id(source_id: str) -> str:
+    """The key a judgment is stored and read under, e.g. `SAOS/554697` (not an ELI)."""
+    return f"{SOURCE.upper()}/{source_id}"
+
+
+def _same_court(first: SaosDivision | None, second: SaosDivision | None) -> bool:
+    """Whether two divisions belong to one court: by court id, or by name when an id is missing."""
+    court_a = first.court if first else None
+    court_b = second.court if second else None
+    if court_a is None or court_b is None:
+        return False
+    if court_a.id is not None and court_b.id is not None:
+        return court_a.id == court_b.id
+    return court_a.name is not None and court_a.name == court_b.name
+
+
+@dataclass(frozen=True, slots=True)
+class _Reasoning:
+    """What was settled about the reasoning of one judgment, and what to store."""
+
+    status: ReasoningStatus
+    note: str
+    markdown: str
+    requests: int
+    sibling_source_id: str | None = None
+    candidates: tuple[str, ...] = ()
+
+
+class SaosReadingService:
+    """Loads a judgment into the document store, with its reasons when they are a separate SAOS record."""
+
+    def __init__(self, client: SaosClient, document_store: DocumentStore) -> None:
+        self._client = client
+        self._document_store = document_store
+
+    async def load(self, source_id: str | int) -> SaosLoadedJudgment:
+        """Fetch the judgment, settle where its reasoning is, and store the text as one document.
+
+        The first call must succeed; the later ones (a search, the reasons record) may fail without
+        losing the judgment, which is then stored alone with a status that makes no claim.
+
+        Raises:
+            ValueError: `source_id` is not a number, SAOS has no such judgment, or it has no text.
+            SejmApiError: The detail cannot be fetched (the text of the error says which source failed).
+        """
+        identifier = _source_id(source_id)
+        detail = await self._client.judgment_with_text(identifier)
+        data = detail.data
+        if not data.text_content or not data.text_content.strip():
+            raise ValueError(f"Orzeczenie {identifier} nie ma w SAOS tekstu, więc nie ma czego wczytać.")
+        markdown = await to_markdown_async(data.text_content)
+        reasoning = await self._settle(data, markdown, requests=1)
+
+        key = document_id(identifier)
+        sections = index_sections(reasoning.markdown)
+        await self._document_store.load(key, reasoning.markdown, sections, kind=DocumentKind.JUDGMENT)
+        return SaosLoadedJudgment(
+            document_id=key,
+            size_bytes=len(reasoning.markdown.encode("utf-8")),
+            section_count=len(sections),
+            reasoning=reasoning.status,
+            reasoning_note=reasoning.note,
+            requests_made=reasoning.requests,
+            sibling_source_id=reasoning.sibling_source_id,
+            candidate_source_ids=list(reasoning.candidates),
+        )
+
+    async def _settle(self, data: SaosTextData, markdown: str, *, requests: int) -> _Reasoning:
+        """Decide where the reasoning is; only a common-court sentence without its own heading needs more calls."""
+        if data.judgment_type == REASONS:
+            return _Reasoning(ReasoningStatus.REASONING_RECORD, NOTE_REASONING_RECORD, markdown, requests)
+        if data.judgment_type != SENTENCE or data.court_type != COMMON_COURT:
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_OTHER_TYPE, markdown, requests)
+        if has_reasoning_heading(markdown):
+            return _Reasoning(ReasoningStatus.IN_RECORD, NOTE_IN_RECORD, markdown, requests)
+        return await self._pair(data, markdown, requests=requests)
+
+    async def _pair(self, data: SaosTextData, markdown: str, *, requests: int) -> _Reasoning:
+        """Look for the reasons record of a sentence by its case number: same court, type `REASONS`, exactly one."""
+        number = next((case.case_number for case in data.court_cases if case.case_number), None)
+        if number is None:
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_NO_SIGNATURE, markdown, requests)
+        requests += 1
+        try:
+            page = await self._client.search({"pageSize": PAIRING_PAGE_SIZE, "caseNumber": number})
+        except (ApiUnavailableError, EgressRedirectRefusedError, SejmApiError):
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SEARCH_FAILED, markdown, requests)
+
+        # By id: SAOS may list a record twice when a record is inserted between the pages of one search.
+        candidates = list(
+            {
+                item.id: item
+                for item in page.items
+                if item.judgment_type == REASONS
+                and _same_court(item.division, data.division)
+                and any(case.case_number == number for case in item.court_cases)
+            }.values()
+        )
+        if len(candidates) > 1:
+            ids = tuple(str(item.id) for item in candidates)
+            note = (
+                f"SAOS ma kilka rekordów uzasadnienia o sygnaturze {number} w tym sądzie ({', '.join(ids)}); "
+                "żadnego nie dołączono. Wczytaj wybrany po jego source_id."
+            )
+            return _Reasoning(ReasoningStatus.AMBIGUOUS, note, markdown, requests, candidates=ids)
+        if not candidates:
+            if page.info.total_results > len(page.items):
+                return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_TRUNCATED, markdown, requests)
+            return _Reasoning(ReasoningStatus.ABSENT, NOTE_ABSENT, with_no_reasoning_note(markdown), requests)
+        return await self._merge(markdown, str(candidates[0].id), requests=requests)
+
+    async def _merge(self, markdown: str, sibling_id: str, *, requests: int) -> _Reasoning:
+        """Fetch the reasons record found for a sentence and put its text after the sentence."""
+        if requests >= MAX_READ_REQUESTS:
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
+        requests += 1
+        try:
+            sibling = await self._client.judgment_with_text(sibling_id)
+        except (ApiUnavailableError, EgressRedirectRefusedError, SejmApiError, ValueError):
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
+        text = sibling.data.text_content
+        if sibling.data.judgment_type != REASONS or not text or not text.strip():
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
+        note = (
+            f"Dołączono uzasadnienie z osobnego rekordu SAOS {sibling_id} (ta sama sygnatura i sąd); "
+            "to sekcja UZASADNIENIE."
+        )
+        merged = with_reasons(markdown, await to_markdown_async(text))
+        return _Reasoning(ReasoningStatus.MERGED, note, merged, requests, sibling_source_id=sibling_id)
+
+
+async def load_saos_judgment(app_context: AppContext, *, source_id: str | int) -> SaosLoadedJudgment:
+    """Entry point of the reading path: builds the service from the module state and the shared document store."""
+    service = SaosReadingService(saos_state(app_context).client, app_context.document_store)
+    return await service.load(source_id)

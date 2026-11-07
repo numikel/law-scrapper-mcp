@@ -1,10 +1,14 @@
 """Models of the SAOS API (only what this module reads) and of the module's tool output.
 
-The API models ignore every key they do not name. In particular `judges[]` (names of people) and the
-text and reporters of a detail are never parsed, so they cannot leak into an output by accident.
+The API models ignore every key they do not name. In particular `judges[]` and the court reporters
+(names of people) are never parsed by any model, so they cannot leak into an output by accident. The
+text of a detail is parsed by one model only, `SaosTextData`, which the judgment-reading path alone
+uses; `SaosDetailData`, the model of the details tool, still parses no text.
 """
 
 from __future__ import annotations
+
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,8 +23,9 @@ class SaosModel(BaseModel):
 
 
 class SaosCourt(SaosModel):
-    """The court of a common-court division."""
+    """The court of a common-court division. `id` tells apart two courts of one name."""
 
+    id: int | None = None
     name: str | None = None
 
 
@@ -75,7 +80,7 @@ class SaosDetailDivision(SaosDivision):
 
 
 class SaosDetailData(SaosRecord):
-    """The `data` block of a judgment detail. The text, the judges and the reporters are never parsed."""
+    """The `data` block of a judgment detail. It parses no text (see `SaosTextData`); the judges and the reporters are parsed nowhere."""
 
     division: SaosDetailDivision | None = None  # type: ignore[assignment]
     source: SaosSource | None = None
@@ -85,6 +90,22 @@ class SaosDetail(SaosModel):
     """A judgment detail (`judgments/{id}`)."""
 
     data: SaosDetailData
+
+
+class SaosTextData(SaosDetailData):
+    """The `data` block as the reading path sees it: the metadata of `SaosDetailData` and the text.
+
+    `textContent` is HTML for the common courts and plain text for the Supreme Court. The judges and the
+    court reporters are still not parsed.
+    """
+
+    text_content: str | None = Field(default=None, alias="textContent")
+
+
+class SaosTextDetail(SaosModel):
+    """A judgment detail (`judgments/{id}`) read with its text."""
+
+    data: SaosTextData
 
 
 class SaosPageInfo(SaosModel):
@@ -196,4 +217,43 @@ class SaosJudgmentDetailsOutput(BaseModel):
     division_type: str | None = Field(
         default=None,
         description="Rodzaj wydziału (np. 'Pracy i Ubezpieczeń Społecznych'); brak, gdy SAOS go nie podaje.",
+    )
+
+
+class ReasoningStatus(StrEnum):
+    """Where the reasoning of a loaded judgment is, or why nothing can be said about it."""
+
+    IN_RECORD = "in_record"
+    MERGED = "merged"
+    ABSENT = "absent"
+    AMBIGUOUS = "ambiguous"
+    REASONING_RECORD = "reasoning_record"
+    NOT_ASSESSED = "not_assessed"
+
+
+class SaosLoadedJudgment(BaseModel):
+    """What loading a judgment into the document store did: its identifier, its size and its reasoning status."""
+
+    document_id: str = Field(
+        description="Identyfikator dokumentu w pamięci serwera (np. 'SAOS/554697'); podaj go jako eli w read_act_content."
+    )
+    size_bytes: int = Field(description="Rozmiar wczytanego tekstu w bajtach (UTF-8).")
+    section_count: int = Field(description="Liczba sekcji w spisie treści wczytanego orzeczenia.")
+    reasoning: ReasoningStatus = Field(
+        description=(
+            "Gdzie jest uzasadnienie: in_record (w tekście tego rekordu), merged (dołączone z osobnego rekordu SAOS), "
+            "absent (brak uzasadnienia w źródle), ambiguous (kilka rekordów uzasadnienia, żadnego nie dołączono), "
+            "reasoning_record (to sam rekord uzasadnienia), not_assessed (nie wiadomo, nie oceniano)."
+        )
+    )
+    reasoning_note: str = Field(description="Jedno zdanie o uzasadnieniu, do przytoczenia użytkownikowi.")
+    requests_made: int = Field(
+        description="Liczba wywołań SAOS wykonanych przy wczytaniu (najwyżej 3), także tych obsłużonych z pamięci podręcznej."
+    )
+    sibling_source_id: str | None = Field(
+        default=None, description="source_id rekordu uzasadnienia dołączonego do wyroku; brak, gdy nic nie dołączono."
+    )
+    candidate_source_ids: list[str] = Field(
+        default_factory=list,
+        description="source_id rekordów uzasadnienia, gdy było ich kilka (status ambiguous); brak w pozostałych.",
     )

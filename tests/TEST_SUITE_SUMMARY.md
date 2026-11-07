@@ -44,6 +44,8 @@ a module active in the `modules` job (same pinned command as the core-only one i
 | `modules/voivodeship-journals/tests/test_journals_isolation.py` | A 503 storm on one journal opens only its own breaker (read from the list `/health` serves), names that source and says the others are unaffected; another journal and DU still answer; an open breaker sends nothing; no limiter or breaker is shared with any other host |
 | `modules/voivodeship-journals/tests/test_journals_install_and_disable.py` | Real STDIO server: the module block is present for `unset`, `-*,voivodeship-journals`, a bare name and `-reference`, and the tool set equals the same configuration with this module off (it adds none); absent for `-voivodeship-journals`, `-*`, `voivodeship-journals,-*`; the package is never imported when off |
 | `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution, a positive control for the offline guard |
+| `modules/voivodeship-journals/tests/test_journal_names.py` | The name index (16 names, unique after folding case, diacritics and separators; an empty or clashing name fails at import), the 16 registered descriptions (a reason only for the withheld), a name resolved to its own journal host for each served journal and no other, a withheld journal addressed by name, a name inside an ELI refused with the code on all four ELI operations, an unknown value refused with the same text the registry gives, the refusal within the tool error budget |
+| `modules/voivodeship-journals/tests/test_journals_discovery_end_to_end.py` | Discovery through an in-memory client over the real server with the module active: the listing (DU, MP and 16 journals, four unavailable with their reason, one Sejm request), the hint about names, a name in `publisher` for search, browse and change tracking reaching the journal and never the Sejm, a withheld journal by name, unknown values refused with the valid codes and names, a long value cut in the echo, a name inside an ELI refused for four tools, and parity with the module off |
 | `modules/saos/tests/saos_testing.py`, `conftest.py` | Not tests: the helpers (recordings, `derived_list` that cuts search items from them with fresh ids, the respx-backed `FakeSaos`, the in-memory `Session`) and the fixtures, among them the autouse `no_real_network` guard that makes a name lookup for a non-local host fail and the waits made instant |
 | `modules/saos/tests/test_saos_network_guard.py` | Positive controls for that guard: a public name is refused, the module's own client cannot reach `www.saos.org.pl` without a mock, loopback names and an in-process server still work |
 | `modules/saos/tests/test_saos_mapping.py` | Every recorded page shape (labour division, Supreme Court chambers, Tribunal and Chamber without a division, empty page, error body) maps onto the core judgment record; judges are never mapped |
@@ -123,6 +125,8 @@ tests/
 │   ├── test_logging_config.py          # Log contract: UTF-8 stderr, request-id correlation, timestamps, httpx loggers held at WARNING
 │   ├── test_models.py                  # ELI parsing, enums, tool I/O models, PageInfo, API response models
 │   ├── test_paginated_tool_outputs.py  # Every paginated output model requires `page_info`
+│   ├── test_publisher_discovery_server.py # Publisher discovery through the real tools with a fake module that describes its publishers: the listing after DU and MP and its hint, a name reaching the source and never the Sejm, an unknown value refused whole (also for a long input), DU/MP in any case still going to the Sejm, and 4.4.2 behaviour with no module
+│   ├── test_publisher_sentence.py      # The sentence about source publishers is the same in the three search tools, and the metadata tool no longer claims the publishers are only DU and MP
 │   ├── test_rate_limit.py              # Inbound per-client token bucket in http/: 429 + Retry-After, refill, loopback-only /health exemption
 │   ├── test_readme_tool_table.py       # README tool-properties table matches the live `tools/list` (title, readOnlyHint, openWorldHint)
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py
@@ -159,6 +163,7 @@ tests/
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading
 │   │   ├── test_act_sources.py         # ActSourceRegistry: exact code before prefix, reserved DU/MP, conflicts leave nothing half registered, unregister
+│   │   ├── test_act_source_discovery.py# Publisher names and descriptions in the registry: folding (case, diacritics, separators), exact match only, `describe()`, name and description conflicts, the refusal of an unknown publisher (only with a source registered, DU/MP in any case exempt), the message builder and its length against the tool error budget
 │   │   ├── test_browse_paging.py       # `browse()` fetches one page, reports the year's count, does not re-slice, reads `effective_date` from entryIntoForce
 │   │   ├── test_judgment_filters.py    # Shared `filter_results` filters on judgments: fields, type, year, date range, sort, every refusal listing the valid values, judgment hints
 │   │   ├── test_changes_service.py     # ChangesService: date/keyword/publisher params, paged upstream window
@@ -168,6 +173,7 @@ tests/
 │   │   ├── test_date_service.py        # DateService: accepted formats, offsets, Polish error messages, clock seam
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
 │   │   ├── test_metadata_service.py    # MetadataService pages per category and for `all`
+│   │   ├── test_metadata_sources.py    # The `publishers` category with described publishers: merged after the Sejm's, copies, read at call time, paging and totals, a Sejm outage keeping them (also for one category), the hint
 │   │   ├── test_pagination.py          # Shared paginators: effective limit, negative rejection, page metadata
 │   │   ├── test_pdf_inspection.py      # `inspect_pdf`: scan vs failed read vs text layer vs `(cid:N)`-dominated layer (flagged, never discarded)
 │   │   ├── test_source_dispatch.py     # Empty registry issues the 4.4.2 upstream calls; a registered code never reaches the Sejm: search (limit 101 rejected), browse, change tracking, details, relations, PDF-only loading and its outcomes

@@ -116,7 +116,12 @@ dates and a PDF) does not need tools of its own. It registers an `ActSource`
 async def start(host: ModuleHost) -> AsyncIterator[State]:
     client = host.egress.client_for(EgressHost(name="POL_X_AB", base_url="https://..."), host.caller)
     source = MySource({"POL_X_AB": client}, host.settings)      # implements ActSource
-    host.act_sources.register(source, publishers=["POL_X_AB"], prefixes=("POL_X_",))
+    host.act_sources.register(
+        source,
+        publishers=["POL_X_AB"],
+        prefixes=("POL_X_",),
+        info=[PublisherInfo(code="POL_X_AB", label="ab", available=True, item={"code": "POL_X_AB", "label": "ab"})],
+    )
     try:
         yield State(...)
     finally:
@@ -129,9 +134,29 @@ What the core guarantees:
   registered, or for `DU` and `MP`, they issue exactly the upstream calls they always did;
   `test_empty_registry_issues_the_same_upstream_calls` pins that. `DU` and `MP`, and any prefix that
   would cover them, cannot be claimed; a code or prefix claimed twice stops startup.
-- **Exact code first, then the longest prefix.** A source that claims a prefix receives every code under
-  it, including ones it does not serve, and must refuse those loudly (a Polish `ValueError` listing the
-  served codes) rather than let the request fall through.
+- **Exact code first, then a name, then the longest prefix.** A source that claims a prefix receives every
+  code under it, including ones it does not serve, and must refuse those loudly rather than let the
+  request fall through: raise `UnknownPublisherError(unknown_publisher_message(value, infos))`, the same
+  text the registry itself uses (see "An unknown publisher is refused" below).
+- **Descriptions and names.** `register(..., info=[PublisherInfo(...)])` lets a source describe the codes
+  it registers. `label` is a name the `publisher` parameter accepts in place of the code; names are
+  compared case-folded, without Polish diacritics and with space, underscore and hyphen alike, and an
+  exact match only (`pomorskie` is never a match for `kujawsko-pomorskie`). `available=False` lists a code
+  without offering it as valid, and `item` is the entry `get_system_metadata(category="publishers")` shows
+  after DU and MP; the core does not read its keys. A label must be unique, non-empty and different from
+  every code, or startup stops. `registry.describe()` returns the descriptions sorted by code.
+- **An unknown publisher is refused, but only while a source is registered.** `for_publisher` raises
+  `UnknownPublisherError` (a `ValueError`, so a validation error for the tool layer) for a value that is
+  neither `DU`/`MP` (in any letter case) nor a code, name or prefix some source claims. The text is built
+  by `unknown_publisher_message`: the echoed value is capped at 40 characters, the hint comes before the
+  list, and only available publishers are listed, so the whole message fits the tool error budget
+  (`error_message_max_chars`, 500) for twelve entries. With nothing registered the value goes to the Sejm as
+  before.
+- **A name is accepted in the `publisher` parameter only, never inside an ELI.** The core stores a loaded
+  document under the ELI as the caller typed it, while every answer carries the canonical ELI, so an ELI
+  with a name would load a document the next call cannot find. A source that accepts names must refuse a
+  name in `get_details`, `get_relationships`, `get_pdf` and `pdf_url` and say which code to use (see
+  `_resolve` in `modules/voivodeship-journals`).
 - **The source returns the core output models** (`ActSummaryOutput`, `ActDetailOutput`), so paging,
   result sets, `filter_results`, size gates, section indexing and the negative cache for unavailable
   content are the core's, not the module's.

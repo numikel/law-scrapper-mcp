@@ -132,10 +132,15 @@ class PortalLinks(BaseModel):
     resolved: int = Field(description="Liczba wyników, które dostały odnośnik do portalu sądu.")
     without_link: int = Field(description="Liczba wyników, których szczegóły nie zawierają poprawnego odnośnika.")
     failed: int = Field(
-        description="Liczba wyników bez odnośnika z powodu błędu żądania, także pominiętych po awarii SAOS."
+        description=(
+            "Liczba wyników bez odnośnika z powodu błędu żądania, także pominiętych po awarii lub odmowie SAOS."
+        )
     )
     stopped_after_outage: bool = Field(
-        description="True, gdy po awarii SAOS przerwano dalsze żądania szczegółów (wyszukiwanie zostało zwrócone)."
+        description=(
+            "True, gdy po awarii albo odmowie SAOS (HTTP 401, 403, 429, 451) przerwano dalsze żądania szczegółów "
+            "(wyszukiwanie zostało zwrócone)."
+        )
     )
     skipped_for_budget: int = Field(
         description=(
@@ -207,19 +212,6 @@ class SearchSaosJudgmentsOutput(BaseModel):
     )
 
 
-class SaosJudgmentDetailsOutput(BaseModel):
-    """Output of `get_saos_judgment_details`."""
-
-    source: str = Field(description="Źródło orzeczeń: 'saos'.")
-    judgment: JudgmentSummaryOutput = Field(
-        description="Rekord orzeczenia z odnośnikiem do portalu sądu w polu portal_url (bez fragmentu tekstu)."
-    )
-    division_type: str | None = Field(
-        default=None,
-        description="Rodzaj wydziału (np. 'Pracy i Ubezpieczeń Społecznych'); brak, gdy SAOS go nie podaje.",
-    )
-
-
 class ReasoningStatus(StrEnum):
     """Where the reasoning of a loaded judgment is, or why nothing can be said about it."""
 
@@ -256,4 +248,24 @@ class SaosLoadedJudgment(BaseModel):
     candidate_source_ids: list[str] = Field(
         default_factory=list,
         description="source_id rekordów uzasadnienia, gdy było ich kilka (status ambiguous); brak w pozostałych.",
+    )
+
+
+class SaosJudgmentDetailsOutput(BaseModel):
+    """Output of `get_saos_judgment_details`."""
+
+    source: str = Field(description="Źródło orzeczeń: 'saos'.")
+    judgment: JudgmentSummaryOutput = Field(
+        description="Rekord orzeczenia z odnośnikiem do portalu sądu w polu portal_url (bez fragmentu tekstu)."
+    )
+    division_type: str | None = Field(
+        default=None,
+        description="Rodzaj wydziału (np. 'Pracy i Ubezpieczeń Społecznych'); brak, gdy SAOS go nie podaje.",
+    )
+    loaded: SaosLoadedJudgment | None = Field(
+        default=None,
+        description=(
+            "Wynik wczytania treści orzeczenia do pamięci serwera (identyfikator dokumentu, status uzasadnienia, "
+            "liczba wywołań SAOS). Brak (null), gdy load_content nie było użyte; wtedy treść nie jest wczytana."
+        ),
     )

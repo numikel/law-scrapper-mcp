@@ -11,13 +11,15 @@ test that needs them and are plain placeholders.
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 import respx
-from saos_testing import DETAIL_URL, SEARCH_URL, make_saos_client, page_body, recording
+from mcp import Client
+from saos_testing import DETAIL_URL, SEARCH_URL, Session, loaded, make_saos_client, page_body, recording
 
 from law_scrapper_mcp.client.egress import EgressHub
 from law_scrapper_mcp.services.document_store import DocumentStore
@@ -119,12 +121,18 @@ class FakeReading:
         failing_search: bool = False,
         failing_details: Iterable[int] = (),
         missing_details: Iterable[int] = (),
+        refused_search: bool = False,
+        refused_details: Iterable[int] = (),
+        refusal_status: int = 403,
     ) -> None:
         self.details = details
         self.searches = searches or {}
         self.failing_search = failing_search
         self.failing_details = set(failing_details)
         self.missing_details = set(missing_details)
+        self.refused_search = refused_search
+        self.refused_details = set(refused_details)
+        self.refusal_status = refusal_status
         self.detail_ids: list[int] = []
         self.search_params: list[dict[str, str]] = []
 
@@ -135,6 +143,8 @@ class FakeReading:
     def _detail(self, request: httpx.Request) -> httpx.Response:
         source_id = int(request.url.path.rsplit("/", 1)[-1])
         self.detail_ids.append(source_id)
+        if source_id in self.refused_details:
+            return httpx.Response(self.refusal_status, text="refused")
         if source_id in self.failing_details:
             return httpx.Response(502, text="upstream failure")
         if source_id in self.missing_details or source_id not in self.details:
@@ -144,6 +154,8 @@ class FakeReading:
     def _search(self, request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
         self.search_params.append(params)
+        if self.refused_search:
+            return httpx.Response(self.refusal_status, text="refused")
         if self.failing_search:
             return httpx.Response(502, text="upstream failure")
         page = self.searches.get(params.get("caseNumber", ""))
@@ -167,6 +179,21 @@ class ReadingHarness:
 
 
 MakeReading = Callable[..., ReadingHarness]
+
+
+@asynccontextmanager
+async def reading_session(router: respx.MockRouter, fake: FakeReading) -> AsyncIterator[Session]:
+    """The server with only the SAOS module and a fake SAOS that serves the skeletons, and a session on top.
+
+    A context manager rather than a fixture, like `saos_testing.saos_session`: the client's task group must be
+    entered and left by one task.
+    """
+    # Imported here: importing the server runs discovery, so a broken descriptor fails a named test.
+    from law_scrapper_mcp.server import build_app
+
+    fake.install(router)
+    async with Client(build_app([loaded()])) as client:
+        yield Session(client=client, tools={tool.name: tool for tool in (await client.list_tools()).tools})
 
 
 def make_reading_harness(router: respx.MockRouter, fake: FakeReading) -> ReadingHarness:

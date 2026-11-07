@@ -50,8 +50,31 @@ def test_the_settings_it_names_exist() -> None:
     named = set(re.findall(r"LAW_MCP_([A-Z_]+)", README)) - {"SOURCE_MODULES"}
     fields = {name.upper() for name in Settings.model_fields}
 
-    assert named == {"CACHE_SEARCH_TTL", "FILTER_MAX_RECORDS", "API_RATE_PER_SECOND", "API_RATE_BURST"}
+    assert named == {
+        "CACHE_SEARCH_TTL",
+        "FILTER_MAX_RECORDS",
+        "API_RATE_PER_SECOND",
+        "API_RATE_BURST",
+        "DOC_STORE_TTL",
+        "DOC_STORE_MAX_DOCUMENTS",
+    }
     assert named <= fields
+
+
+def test_the_reading_section_states_what_the_code_does() -> None:
+    from law_scrapper_mcp_saos.models import ReasoningStatus
+    from law_scrapper_mcp_saos.reading import SERVER_NOTE_TITLE
+    from law_scrapper_mcp_saos.service import MAX_READ_REQUESTS, REFUSAL_STATUSES
+
+    assert "load_content" in README
+    assert f"never more than {MAX_READ_REQUESTS}" in README
+    assert f"up to {['zero', 'one', 'two', 'three'][MAX_READ_REQUESTS]}" in README
+    assert SERVER_NOTE_TITLE in README
+    for status in ReasoningStatus:
+        assert f"`{status.value}`" in README, status
+    for code in sorted(REFUSAL_STATUSES):
+        assert str(code) in README, code
+    assert "SAOS/554697" in README
 
 
 @pytest.mark.asyncio

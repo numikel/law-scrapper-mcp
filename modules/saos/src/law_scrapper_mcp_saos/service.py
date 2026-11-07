@@ -71,6 +71,10 @@ TOOL_DETAILS = "get_saos_judgment_details"
 # at most.
 REQUEST_BUDGET = 6
 PORTAL_LINK_CAP = 5
+# SAOS saying "no" (not authorised, forbidden, too many requests, unavailable for legal reasons). The egress
+# client keeps these as a plain `SejmApiError` that carries the status; only 5xx become `ApiUnavailableError`.
+# After one of them no further request goes out in the same call.
+REFUSAL_STATUSES = frozenset({401, 403, 429, 451})
 _SOURCE_ID = re.compile(r"[0-9]{1,12}")
 PHRASE_MAX_LENGTH = 500
 SIGNATURE_MAX_LENGTH = 100
@@ -94,6 +98,11 @@ COVERAGE_SENTENCE = (
 def current_date() -> date:
     """Today's date; looked up at call time so tests can replace it."""
     return date.today()
+
+
+def is_refusal(error: Exception) -> bool:
+    """Whether SAOS refused the request (401, 403, 429 or 451), as opposed to failing or not having the record."""
+    return isinstance(error, SejmApiError) and error.status_code in REFUSAL_STATUSES
 
 
 def _text(value: str | None, *, name: str, max_length: int) -> str | None:
@@ -660,8 +669,9 @@ class SaosSearchService:
 
         Sequential on purpose: SAOS is an academic service, and five requests in a burst are not needed
         for five links. A failing detail leaves that result without a link and the search result stands.
-        The first outage (host down, breaker open, redirect refused) ends the loop: asking the remaining
-        results would only hammer a host that has just said it cannot answer.
+        The first outage (host down, breaker open, redirect refused) or refusal (401, 403, 429, 451) ends the
+        loop: asking the remaining results would only hammer a host that has just said it cannot, or will not,
+        answer.
         """
         targets = records[: min(PORTAL_LINK_CAP, REQUEST_BUDGET - search_requests)]
         enriched = list(records)
@@ -677,8 +687,10 @@ class SaosSearchService:
                 failed += 1
                 stopped = True
                 continue
-            except (SejmApiError, ValueError):
+            except (SejmApiError, ValueError) as error:
                 failed += 1
+                if is_refusal(error):
+                    stopped = True
                 continue
             address = to_detail(detail.data)[0].portal_url
             if address is None:
@@ -812,8 +824,12 @@ async def search_saos_judgments(
     )
 
 
-def details_hints(output: SaosJudgmentDetailsOutput) -> list[Hint]:
-    """Next steps for one judgment: its portal link (or why there is none) and its other record."""
+def details_hints(output: SaosJudgmentDetailsOutput, *, pair_hint: bool = True) -> list[Hint]:
+    """Next steps for one judgment: its portal link (or why there is none) and its other record.
+
+    A loaded judgment already says where its reasoning is, so `pair_hint=False` leaves the pointer to the
+    other record out.
+    """
     record = output.judgment
     hints: list[Hint] = []
     if record.portal_url:
@@ -827,7 +843,7 @@ def details_hints(output: SaosJudgmentDetailsOutput) -> list[Hint]:
         )
     else:
         hints.append(Hint(message="SAOS nie podaje dla tego orzeczenia poprawnego odnośnika do portalu sądu."))
-    if record.signature != NO_SIGNATURE:
+    if pair_hint and record.signature != NO_SIGNATURE:
         hints.append(
             Hint(
                 message=(
@@ -840,19 +856,80 @@ def details_hints(output: SaosJudgmentDetailsOutput) -> list[Hint]:
     return hints
 
 
+ANONYMISATION_HINT = (
+    "Fragmenty typu „(...)”, inicjały i oznaczenia w nawiasach (np. „D. P. (1)”) to dane zanonimizowane przez SAOS "
+    "i część tekstu orzeczenia. Tekst może zawierać dane osobowe, które sąd w nim zostawił (np. nazwiska "
+    "pracowników sądu): cytuj z rozwagą."
+)
+
+
+def loaded_hints(loaded: SaosLoadedJudgment, signature: str) -> list[Hint]:
+    """Next steps after a judgment was loaded: read it, search it, what the markers are, where the reasoning is."""
+    key = loaded.document_id
+    hints = [
+        Hint(
+            message=(
+                f"Orzeczenie wczytano jako dokument {key}: spis treści i sekcje czytasz read_act_content(eli='{key}'). "
+                "Parametr eli przyjmuje tu identyfikator dokumentu, nie ELI."
+            ),
+            tool="read_act_content",
+            parameters={"eli": key},
+        ),
+        Hint(
+            message=f"Szukanie w treści: search_in_act(eli='{key}', query=...).",
+            tool="search_in_act",
+            parameters={"eli": key},
+        ),
+        Hint(message=ANONYMISATION_HINT),
+        Hint(message=loaded.reasoning_note),
+    ]
+    if loaded.reasoning is ReasoningStatus.AMBIGUOUS:
+        hints.extend(
+            Hint(
+                message=f"Wczytaj rekord uzasadnienia {candidate} osobno.",
+                tool=TOOL_DETAILS,
+                parameters={"source_id": candidate, "load_content": True},
+            )
+            for candidate in loaded.candidate_source_ids
+        )
+    if loaded.reasoning is ReasoningStatus.REASONING_RECORD and signature != NO_SIGNATURE:
+        hints.append(
+            Hint(
+                message="Wyrok tej sprawy znajdziesz wyszukując po sygnaturze.",
+                tool=TOOL_SEARCH,
+                parameters={"signature": signature},
+            )
+        )
+    return hints
+
+
 async def get_saos_judgment_details(
-    app_context: AppContext, *, source_id: str | int
+    app_context: AppContext, *, source_id: str | int, load_content: bool | str | None = False
 ) -> EnrichedResponse[SaosJudgmentDetailsOutput]:
-    """Entry point of the details tool: one request to SAOS, metadata and the court portal address only.
+    """Entry point of the details tool.
+
+    Without `load_content`: one request to SAOS, metadata and the court portal address only. With it: the
+    judgment is also loaded into the document store (see `SaosReadingService`), with at most three calls to
+    SAOS in all, and the answer says what was loaded.
 
     Raises:
-        ValueError: `source_id` is not a number, or SAOS has no such judgment.
+        ValueError: `source_id` is not a number, `load_content` is not a flag, SAOS has no such judgment, or
+            (with `load_content`) it has no text.
     """
     identifier = _source_id(source_id)
-    detail = await saos_state(app_context).client.judgment(identifier)
-    record, division_type = to_detail(detail.data)
-    output = SaosJudgmentDetailsOutput(source=SOURCE, judgment=record, division_type=division_type)
-    return EnrichedResponse[SaosJudgmentDetailsOutput](data=output, hints=details_hints(output))
+    loading = _flag(load_content, name="load_content")
+    if not loading:
+        detail = await saos_state(app_context).client.judgment(identifier)
+        record, division_type = to_detail(detail.data)
+        output = SaosJudgmentDetailsOutput(source=SOURCE, judgment=record, division_type=division_type)
+        return EnrichedResponse[SaosJudgmentDetailsOutput](data=output, hints=details_hints(output))
+
+    reading = SaosReadingService(saos_state(app_context).client, app_context.document_store)
+    loaded, data = await reading.load_with_data(identifier)
+    record, division_type = to_detail(data)
+    output = SaosJudgmentDetailsOutput(source=SOURCE, judgment=record, division_type=division_type, loaded=loaded)
+    hints = [*loaded_hints(loaded, record.signature), *details_hints(output, pair_hint=False)]
+    return EnrichedResponse[SaosJudgmentDetailsOutput](data=output, hints=hints)
 
 
 # Loading a judgment sends at most this many calls to SAOS: the detail, a search by case number for the
@@ -922,8 +999,18 @@ class SaosReadingService:
     async def load(self, source_id: str | int) -> SaosLoadedJudgment:
         """Fetch the judgment, settle where its reasoning is, and store the text as one document.
 
+        Same as `load_with_data`, without the detail the answer was built from.
+        """
+        loaded, _data = await self.load_with_data(source_id)
+        return loaded
+
+    async def load_with_data(self, source_id: str | int) -> tuple[SaosLoadedJudgment, SaosTextData]:
+        """Like `load`, and also hand back the detail, so the caller needs no second request for its metadata.
+
         The first call must succeed; the later ones (a search, the reasons record) may fail without
-        losing the judgment, which is then stored alone with a status that makes no claim.
+        losing the judgment, which is then stored alone with a status that makes no claim. After a refusal
+        (`is_refusal`) no further call is made: the search and the reasons record are each the last call
+        of their branch.
 
         Raises:
             ValueError: `source_id` is not a number, SAOS has no such judgment, or it has no text.
@@ -940,7 +1027,7 @@ class SaosReadingService:
         key = document_id(identifier)
         sections = index_sections(reasoning.markdown)
         await self._document_store.load(key, reasoning.markdown, sections, kind=DocumentKind.JUDGMENT)
-        return SaosLoadedJudgment(
+        loaded = SaosLoadedJudgment(
             document_id=key,
             size_bytes=len(reasoning.markdown.encode("utf-8")),
             section_count=len(sections),
@@ -950,6 +1037,7 @@ class SaosReadingService:
             sibling_source_id=reasoning.sibling_source_id,
             candidate_source_ids=list(reasoning.candidates),
         )
+        return loaded, data
 
     async def _settle(self, data: SaosTextData, markdown: str, *, requests: int) -> _Reasoning:
         """Decide where the reasoning is; only a common-court sentence without its own heading needs more calls."""

@@ -97,7 +97,7 @@ class TestSchemas:
             assert schema is not None
             output = _definitions(schema)["SaosJudgmentDetailsOutput"]
 
-            assert set(output["properties"]) == {"source", "judgment", "division_type"}
+            assert set(output["properties"]) == {"source", "judgment", "division_type", "loaded"}
             assert set(output["required"]) == {"source", "judgment"}
 
     async def test_both_tools_are_remote_read_only_and_have_a_title(self, saos_router: respx.MockRouter) -> None:
@@ -186,7 +186,8 @@ class TestPayloads:
 
             data = await session.call(DETAILS, {"source_id": source_id})
 
-            assert set(data) == {"source", "judgment", "division_type"}
+            assert set(data) == {"source", "judgment", "division_type", "loaded"}
+            assert data["loaded"] is None  # nothing is loaded unless load_content is asked for
             assert set(data["judgment"]) == RECORD_FIELDS
             assert data["judgment"]["source_id"] == source_id
             assert data["judgment"]["excerpt"] is None

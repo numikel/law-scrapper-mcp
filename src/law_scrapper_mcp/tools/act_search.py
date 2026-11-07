@@ -34,7 +34,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
                     'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
                     "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
                     'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
-                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True)."
+                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True). "
+                    "Orzeczenie załadowane przez get_saos_judgment_details(source_id=..., load_content=true) "
+                    'przeszukasz pod jego identyfikatorem dokumentu, np. "SAOS/554697".'
                 ),
             ),
         ],
@@ -68,12 +70,21 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ] = 0,
     ) -> EnrichedResponse[SearchInActOutput]:
         """
-        Wyszukaj termin w treści załadowanego aktu prawnego.
+        Wyszukaj termin w treści załadowanego aktu prawnego lub orzeczenia.
 
         WYMAGANIE: Akt musi być wcześniej załadowany za pomocą
-        get_act_details(eli=..., load_content=True).
+        get_act_details(eli=..., load_content=True), a orzeczenie za pomocą
+        get_saos_judgment_details(source_id=..., load_content=true) (moduł SAOS).
 
         Zwraca jedną stronę trafień z kontekstem, metadanymi paginacji i informacją o sekcji.
+        Odpowiedź ma pola document_id i document_kind ('act' albo 'judgment'). Dla orzeczenia
+        eli powtarza identyfikator dokumentu (np. SAOS/554697) i nie jest identyfikatorem ELI.
+
+        Kiedy użyć: Szukasz terminu lub przepisu w treści załadowanego aktu albo orzeczenia.
+        Kiedy użyć: Chcesz znaleźć cytat w uzasadnieniu wczytanego orzeczenia.
+        Kiedy NIE używać: Szukasz aktu lub orzeczenia, które nie jest załadowane → użyj search_legal_acts
+        albo search_saos_judgments, a potem załaduj dokument.
+        Kiedy NIE używać: Chcesz przeczytać całą sekcję → użyj read_act_content.
 
         Przykłady:
         - search_in_act(eli="DU/2024/1692", query="straż") - Znajdź "straż" w akcie
@@ -81,6 +92,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - search_in_act(eli="DU/2024/1692", query="art. 5", limit=10, offset=0) - Pierwsza strona trafień
         - search_in_act(eli="DU/2024/1692", query="kara", limit=5, offset=5) - Kolejna strona trafień
         - search_in_act(eli="DU/2024/1692", query="termin") - Domyślna strona (do 20 trafień)
+        - search_in_act(eli="SAOS/554697", query="odszkodowanie") - Szukaj w wczytanym orzeczeniu z SAOS
         """
         content_service = get_app_context(ctx).content_service
 

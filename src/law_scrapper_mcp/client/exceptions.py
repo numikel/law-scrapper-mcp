@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from law_scrapper_mcp.models.tool_inputs import is_eli_shaped
+
 # Name under which errors raised for api.sejm.gov.pl identify their source. Error texts for this
 # source predate source naming and must stay byte-identical, so the tool layer treats it (and a
 # missing source) as "legacy" and leaves them alone.
@@ -152,7 +154,16 @@ class DocumentNotLoadedError(LawScrapperError):
     """Document must be loaded before accessing content."""
 
     def __init__(self, eli: str):
-        super().__init__(f"Dokument {eli} nie jest załadowany. Użyj get_act_details(eli='{eli}', load_content=true)")
+        # An ELI keeps the text it always had. Any other identifier is a document of another kind (a
+        # judgment, `SAOS/554697`), which get_act_details cannot load.
+        if is_eli_shaped(eli):
+            message = f"Dokument {eli} nie jest załadowany. Użyj get_act_details(eli='{eli}', load_content=true)"
+        else:
+            message = (
+                f"Dokument {eli} nie jest załadowany. Wczytaj go narzędziem źródła "
+                "(orzeczenie z SAOS: get_saos_judgment_details z load_content=true)."
+            )
+        super().__init__(message)
         self.eli = eli
 
 

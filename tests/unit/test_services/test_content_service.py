@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from law_scrapper_mcp.models.pagination import MAX_CONTEXT_CHARS, MAX_ITEM_LIMIT, MAX_SECTION_CHAR_LIMIT
+from law_scrapper_mcp.models.tool_outputs import DocumentKind
 from law_scrapper_mcp.services.content_processor import ContentProcessor, Section
 from law_scrapper_mcp.services.content_service import ContentService
 from law_scrapper_mcp.services.document_store import DocumentStore, SearchHit
@@ -19,6 +20,7 @@ def _store(**overrides: object) -> AsyncMock:
     store.get_section.return_value = None
     store.scan_page.return_value = ([], 0)
     store.hydrate.return_value = []
+    store.document_kind.return_value = DocumentKind.ACT
     for name, value in overrides.items():
         getattr(store, name).return_value = value
     return store

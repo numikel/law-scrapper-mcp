@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from law_scrapper_mcp.client.sejm_client import SejmApiClient
+from law_scrapper_mcp.models.tool_inputs import is_eli_shaped
 from law_scrapper_mcp.models.tool_outputs import (
     ContentStatus,
     FilterOutput,
@@ -357,9 +358,11 @@ def content_hints(eli: str, has_sections: bool) -> list[Hint]:
     """Generate hints for content reading."""
     hints = []
     if has_sections:
+        # An act keeps its text; a judgment (`SAOS/554697`) is a "dokument".
+        subject = "aktu" if is_eli_shaped(eli) else "dokumentu"
         hints.append(
             Hint(
-                message="Wyszukaj konkretne terminy w treści tego aktu.",
+                message=f"Wyszukaj konkretne terminy w treści tego {subject}.",
                 tool="search_in_act",
                 parameters={"eli": eli},
             )

@@ -8,6 +8,7 @@ from law_scrapper_mcp.models.pagination import (
     MAX_ITEM_LIMIT,
     MAX_SECTION_CHAR_LIMIT,
 )
+from law_scrapper_mcp.models.tool_inputs import is_eli_shaped
 from law_scrapper_mcp.models.tool_outputs import ContentOutput, SearchInActOutput
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.pagination import (
@@ -44,10 +45,13 @@ class ContentService:
     async def _read_toc(self, eli: str, *, limit: str | int | None, offset: int) -> ContentOutput:
         page_limit = effective_limit(limit, default=DEFAULT_ITEM_LIMIT, maximum=MAX_ITEM_LIMIT)
         sections = await self._document_store.get_toc(eli)
+        kind = await self._document_store.document_kind(eli)
         entries = [{"id": item.id, "title": item.title, "level": item.level} for item in sections]
         toc, page_info = paginate_items(entries, limit=page_limit, offset=offset)
         return ContentOutput(
             eli=eli,
+            document_id=eli,
+            document_kind=kind,
             section_id=None,
             section_title=TOC_SECTION_TITLE,
             content=f"Znaleziono {page_info.total_count} sekcji",
@@ -70,13 +74,18 @@ class ContentService:
         )
         full_content = await self._document_store.get_section(eli, section)
         if full_content is None:
+            # An act keeps the text it always had; any other document is not an "akt".
+            subject = "akcie" if is_eli_shaped(eli) else "dokumencie"
             raise ValueError(
-                f"Sekcja '{section}' nie znaleziona w akcie {eli}. "
+                f"Sekcja '{section}' nie znaleziona w {subject} {eli}. "
                 f"Użyj read_act_content(eli='{eli}') aby zobaczyć dostępne sekcje."
             )
+        kind = await self._document_store.document_kind(eli)
         content, page_info = paginate_text(full_content, limit=page_limit, offset=offset)
         return ContentOutput(
             eli=eli,
+            document_id=eli,
+            document_kind=kind,
             section_id=section,
             section_title=section,
             content=content,
@@ -107,6 +116,7 @@ class ContentService:
         page_spans, total = await self._document_store.scan_page(eli, query, limit=page_limit, offset=page_offset)
         page_info = item_page_info(limit=page_limit, offset=page_offset, returned=len(page_spans), total=total)
         hits = await self._document_store.hydrate(eli, page_spans, context_chars=context_size)
+        kind = await self._document_store.document_kind(eli)
 
         matches = [
             {
@@ -119,6 +129,8 @@ class ContentService:
         ]
         return SearchInActOutput(
             eli=eli,
+            document_id=eli,
+            document_kind=kind,
             query=query,
             matches=matches,
             total_matches=page_info.total_count,

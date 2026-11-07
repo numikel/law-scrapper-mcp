@@ -305,8 +305,14 @@ def act_details_hints(
     return hints
 
 
-def metadata_hints(category: str, failed_categories: Sequence[str] = ()) -> list[Hint]:
-    """Generate hints for metadata results."""
+def metadata_hints(
+    category: str, failed_categories: Sequence[str] = (), *, publisher_sources: bool = False
+) -> list[Hint]:
+    """Generate hints for metadata results.
+
+    `publisher_sources` is set when registered sources describe their publishers: the listing then
+    holds more than DU and MP, and the agent is told how to address them.
+    """
     hints = []
     if category in ("all", "keywords"):
         hints.append(
@@ -319,6 +325,16 @@ def metadata_hints(category: str, failed_categories: Sequence[str] = ()) -> list
         hints.append(
             Hint(
                 message="Filtruj wyniki wyszukiwania po typie dokumentu (np. 'Ustawa', 'Rozporządzenie').",
+                tool="search_legal_acts",
+            )
+        )
+    if publisher_sources and category in ("all", "publishers"):
+        hints.append(
+            Hint(
+                message=(
+                    "Wydawców spoza DU i MP wskazuj w parametrze publisher (search_legal_acts, browse_acts, "
+                    "track_legal_changes) kodem albo nazwą z listy; w ELI zawsze używaj kodu."
+                ),
                 tool="search_legal_acts",
             )
         )

@@ -9,9 +9,15 @@ from law_scrapper_mcp.client.egress import EgressClient
 from law_scrapper_mcp.client.exceptions import ActNotFoundError, ApiUnavailableError, SejmApiError
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput
-from law_scrapper_mcp.services.act_sources import SourceSearchPage, SourceSearchQuery
+from law_scrapper_mcp.services.act_sources import (
+    SourceSearchPage,
+    SourceSearchQuery,
+    UnknownPublisherError,
+    fold_publisher_name,
+    unknown_publisher_message,
+)
 from law_scrapper_mcp_voivodeship_journals import normalise
-from law_scrapper_mcp_voivodeship_journals.catalog import Journal
+from law_scrapper_mcp_voivodeship_journals.catalog import Journal, names_index
 
 
 class JournalActSource:
@@ -26,23 +32,43 @@ class JournalActSource:
     def __init__(self, clients: Mapping[str, EgressClient], catalog: Sequence[Journal], settings: Settings) -> None:
         self._clients = dict(clients)
         self._catalog = {journal.code: journal for journal in catalog}
+        self._names = {name: journal.code for name, journal in names_index(catalog).items()}
+        self._infos = tuple(journal.publisher_info() for journal in catalog)
         self._search_ttl = settings.cache_search_ttl
         self._details_ttl = settings.cache_details_ttl
 
-    def _client(self, publisher: str) -> EgressClient:
-        """The client of a served journal, or the named refusal for a withheld or unknown code."""
-        client = self._clients.get(publisher)
+    def _resolve(self, publisher: str, *, by_name: bool) -> str:
+        """The journal code `publisher` stands for, or the refusal for a value that stands for none.
+
+        A code is taken as it is. A voivodeship name is accepted only where `by_name` is set, i.e. in
+        the `publisher` parameter of the search tools. An ELI must carry the code: the core keys a
+        loaded document by the ELI as typed, while every answer carries the canonical one, so an ELI
+        with a name would load a document the next call (with the canonical ELI) cannot find.
+        """
+        if publisher in self._catalog:
+            return publisher
+        code = self._names.get(fold_publisher_name(publisher))
+        if code is None:
+            raise UnknownPublisherError(unknown_publisher_message(publisher, self._infos))
+        if by_name:
+            return code
+        raise ValueError(
+            f"W ELI podaj kod dziennika, a nie nazwę województwa: {self._catalog[code].voivodeship} = {code}, "
+            f"np. {code}/2025/1."
+        )
+
+    def _client(self, publisher: str, *, by_name: bool = False) -> tuple[str, EgressClient]:
+        """The journal code and the client of a served journal, or the named refusal for any other value."""
+        code = self._resolve(publisher, by_name=by_name)
+        client = self._clients.get(code)
         if client is not None:
-            return client
-        journal = self._catalog.get(publisher)
-        if journal is not None and journal.withheld is not None:
-            raise ApiUnavailableError(
-                f"Dziennik {publisher} ({journal.short_name}) jest wyłączony z obsługi: {journal.withheld}.",
-                status_code=503,
-                source=publisher,
-            )
-        served = ", ".join(sorted(self._clients))
-        raise ValueError(f"Nieznany kod dziennika wojewódzkiego: {publisher}. Obsługiwane kody: {served}.")
+            return code, client
+        journal = self._catalog[code]
+        raise ApiUnavailableError(
+            f"Dziennik {code} ({journal.short_name}) jest wyłączony z obsługi: {journal.withheld}.",
+            status_code=503,
+            source=code,
+        )
 
     @staticmethod
     def _keywords(publisher: str, query: SourceSearchQuery) -> str | None:
@@ -78,9 +104,9 @@ class JournalActSource:
             )
 
     async def search(self, publisher: str, query: SourceSearchQuery) -> SourceSearchPage:
-        client = self._client(publisher)
-        self._refuse_unsupported_filters(publisher, query)
-        keyword = self._keywords(publisher, query)
+        code, client = self._client(publisher, by_name=True)
+        self._refuse_unsupported_filters(code, query)
+        keyword = self._keywords(code, query)
 
         # `publisher` is never sent: the hosts ignore it, and every host answers for its own acts.
         params: dict[str, Any] = {"limit": query.limit}
@@ -102,45 +128,37 @@ class JournalActSource:
         data = normalise.camelise(await client.get_json("search", params=params, cache_ttl=self._search_ttl))
         if not isinstance(data, dict) or not isinstance(data.get("items", []), list):
             raise SejmApiError(
-                f"Dziennik {publisher} zwrócił odpowiedź wyszukiwania w nieoczekiwanym kształcie.",
-                source=publisher,
+                f"Dziennik {code} zwrócił odpowiedź wyszukiwania w nieoczekiwanym kształcie.",
+                source=code,
             )
         items = [normalise.summary(item) for item in data.get("items", []) if isinstance(item, dict)]
         total = data.get("totalCount")
         return SourceSearchPage(items=items, total_count=total if isinstance(total, int) else len(items))
 
     async def get_details(self, publisher: str, year: int, pos: int) -> ActDetailOutput:
-        client = self._client(publisher)
+        code, client = self._client(publisher)
         # A missing act is HTTP 204 with an empty body, not a 404.
-        raw = await client.get_json(
-            f"acts/{publisher}/{year}/{pos}", cache_ttl=self._details_ttl, none_on_no_content=True
-        )
+        raw = await client.get_json(f"acts/{code}/{year}/{pos}", cache_ttl=self._details_ttl, none_on_no_content=True)
         if raw is None:
-            raise ActNotFoundError(normalise.canonical_eli(publisher, year, pos), source=publisher)
+            raise ActNotFoundError(normalise.canonical_eli(code, year, pos), source=code)
         if not isinstance(raw, dict):
-            raise SejmApiError(
-                f"Dziennik {publisher} zwrócił szczegóły aktu w nieoczekiwanym kształcie.", source=publisher
-            )
-        return normalise.details(normalise.camelise(raw), publisher, year, pos)
+            raise SejmApiError(f"Dziennik {code} zwrócił szczegóły aktu w nieoczekiwanym kształcie.", source=code)
+        return normalise.details(normalise.camelise(raw), code, year, pos)
 
     async def get_relationships(self, publisher: str, year: int, pos: int) -> dict[str, list[Any]]:
-        client = self._client(publisher)
-        raw = await client.get_json(f"acts/{publisher}/{year}/{pos}/references", none_on_no_content=True)
+        code, client = self._client(publisher)
+        raw = await client.get_json(f"acts/{code}/{year}/{pos}/references", none_on_no_content=True)
         if raw is None:
             return {}
         if not isinstance(raw, dict):
             # A changed contract must be loud: an empty answer here would read as "no relations".
-            raise SejmApiError(
-                f"Dziennik {publisher} zwrócił powiązania aktu w nieoczekiwanym kształcie.", source=publisher
-            )
+            raise SejmApiError(f"Dziennik {code} zwrócił powiązania aktu w nieoczekiwanym kształcie.", source=code)
         return normalise.relations(raw)
 
     async def get_pdf(self, publisher: str, year: int, pos: int, *, max_bytes: int) -> bytes:
-        client = self._client(publisher)
-        return await client.get_bytes(f"acts/{publisher}/{year}/{pos}/text.pdf", max_bytes=max_bytes)
+        code, client = self._client(publisher)
+        return await client.get_bytes(f"acts/{code}/{year}/{pos}/text.pdf", max_bytes=max_bytes)
 
     def pdf_url(self, publisher: str, year: int, pos: int) -> str:
-        journal = self._catalog.get(publisher)
-        if journal is None:
-            raise ValueError(f"Nieznany kod dziennika wojewódzkiego: {publisher}.")
-        return journal.pdf_url(publisher, year, pos)
+        code = self._resolve(publisher, by_name=False)
+        return self._catalog[code].pdf_url(code, year, pos)

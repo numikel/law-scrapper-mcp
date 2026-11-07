@@ -317,7 +317,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     # One registry shared by the four services that route by publisher code; source modules
     # fill it from their start hooks. Empty, every service takes its original Sejm path.
     act_sources = ActSourceRegistry()
-    metadata_service = MetadataService(client)
+    metadata_service = MetadataService(client, sources=act_sources)
     search_service = SearchService(client, result_store, sources=act_sources)
     act_service = ActService(client, document_store, content_processor, sources=act_sources)
     content_service = ContentService(document_store)

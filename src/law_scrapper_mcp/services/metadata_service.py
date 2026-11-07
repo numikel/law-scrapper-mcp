@@ -11,13 +11,19 @@ from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import MetadataOutput
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
 logger = logging.getLogger(__name__)
 
 
 class MetadataService:
-    """Service for retrieving system metadata (keywords, publishers, statuses, types, institutions)."""
+    """Service for retrieving system metadata (keywords, publishers, statuses, types, institutions).
+
+    With a registry of act sources, the `publishers` category also lists the publishers those
+    sources describe, after the Sejm's own. The registry is read at call time, because source
+    modules fill it after this service is built.
+    """
 
     METADATA_ORDER = (
         MetadataCategory.KEYWORDS,
@@ -27,8 +33,21 @@ class MetadataService:
         MetadataCategory.INSTITUTIONS,
     )
 
-    def __init__(self, client: SejmApiClient):
+    def __init__(self, client: SejmApiClient, *, sources: ActSourceRegistry | None = None):
         self._client = client
+        self._sources = sources
+
+    @property
+    def has_sources(self) -> bool:
+        """Whether any registered source describes its publishers (and so can be addressed by name)."""
+        return self._sources is not None and bool(self._sources.describe())
+
+    def _with_source_publishers(self, sejm_publishers: Any) -> Any:
+        """The Sejm's publishers followed by the described ones; unchanged when no source describes any."""
+        if self._sources is None or not self.has_sources:
+            return sejm_publishers
+        listed = list(sejm_publishers) if isinstance(sejm_publishers, list) else []
+        return [*listed, *(dict(info.item) for info in self._sources.describe())]
 
     async def _fetch(self, category: MetadataCategory) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Fetch metadata, returning (results, failed_categories_tuple).
@@ -38,6 +57,15 @@ class MetadataService:
         ttl = settings.cache_metadata_ttl
         if category == MetadataCategory.ALL:
             return await self._fetch_all(ttl)
+        if category == MetadataCategory.PUBLISHERS and self.has_sources:
+            # One source being down must not hide the others (FR-005): the described publishers are
+            # in memory, so they are still listed when the Sejm's list could not be fetched.
+            try:
+                sejm_publishers = await self._fetch_category(category, ttl)
+            except Exception as exc:
+                logger.warning("Failed to fetch metadata for %s: %s", category.value, exc)
+                return {category.value: self._with_source_publishers([])}, (category.value,)
+            return {category.value: self._with_source_publishers(sejm_publishers)}, ()
         return {category.value: await self._fetch_category(category, ttl)}, ()
 
     async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
@@ -65,6 +93,9 @@ class MetadataService:
             else:
                 results[category.value] = outcome
 
+        results[MetadataCategory.PUBLISHERS.value] = self._with_source_publishers(
+            results[MetadataCategory.PUBLISHERS.value]
+        )
         return results, tuple(failed)
 
     async def get_metadata_page(

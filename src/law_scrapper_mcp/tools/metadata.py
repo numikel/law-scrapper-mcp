@@ -33,7 +33,8 @@ def register(mcp: MCPServer[AppContext]) -> None:
             Field(
                 description=(
                     "Kategoria metadanych: 'keywords' (słowa kluczowe do wyszukiwania), "
-                    "'publishers' (wydawcy: DU, MP), 'statuses' (statusy aktów), "
+                    "'publishers' (wydawcy: DU, MP oraz kody i nazwy dodane przez aktywne moduły źródeł), "
+                    "'statuses' (statusy aktów), "
                     "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
                     "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
                     "Domyślnie 'all'."
@@ -60,7 +61,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         Przykłady:
         - get_system_metadata(category="keywords") - Dostępne słowa kluczowe do wyszukiwania
         - get_system_metadata(category="types") - Typy dokumentów (Ustawa, Rozporządzenie itp.)
-        - get_system_metadata(category="publishers") - Wydawcy (DU, MP)
+        - get_system_metadata(category="publishers") - Wydawcy (DU, MP i dzienniki z aktywnych modułów źródeł)
         - get_system_metadata(category="statuses") - Statusy aktów (obowiązujący, uchylony itp.)
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
@@ -79,5 +80,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
 
         return EnrichedResponse[MetadataOutput](
             data=output,
-            hints=metadata_hints(category_enum.value, output.failed_categories),
+            hints=metadata_hints(
+                category_enum.value,
+                output.failed_categories,
+                publisher_sources=metadata_service.has_sources,
+            ),
         )

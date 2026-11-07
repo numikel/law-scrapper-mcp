@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from fake_act_source import FakeActSource
-from law_scrapper_mcp.services.act_sources import ActSourceConflictError, ActSourceRegistry
+from law_scrapper_mcp.services.act_sources import ActSourceConflictError, ActSourceRegistry, UnknownPublisherError
 
 
 def test_an_empty_registry_serves_nothing() -> None:
@@ -84,8 +84,11 @@ def test_unregister_releases_codes_and_prefixes_of_that_source_only() -> None:
 
     registry.unregister(first)
 
-    assert registry.for_publisher("AA_1") is None
-    assert registry.for_publisher("AA_2") is None
+    # `second` is still registered, so the registry now refuses what nobody claims (not `None`).
+    with pytest.raises(UnknownPublisherError):
+        registry.for_publisher("AA_1")
+    with pytest.raises(UnknownPublisherError):
+        registry.for_publisher("AA_2")
     assert registry.for_publisher("BB_1") is second
     registry.register(FakeActSource(), publishers=["AA_1"], prefixes=["AA_"])
 

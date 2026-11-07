@@ -51,8 +51,23 @@ reason below and no request is sent to their hosts.
 | `POL_WOJ_ZP` | zachodniopomorskie | e-dziennik.szczecin.uw.gov.pl | served |
 
 The three TLS cases would need a bundled certificate decision; flipping `withheld` in `catalog.py`
-is the whole change on the catalogue side once that is decided. A code under the prefix that is in
-no row (`POL_WOJ_XX`) is refused with the list of served codes.
+is the whole change on the catalogue side once that is decided.
+
+## Names, listing and unknown codes
+
+- The `publisher` parameter of `search_legal_acts`, `browse_acts` and `track_legal_changes` also
+  accepts the voivodeship name from the table, for example `publisher="pomorskie"`. Case, Polish
+  diacritics and the separator (space, underscore or hyphen) do not matter: `Łódzkie`, `lodzkie` and
+  `KUJAWSKO_POMORSKIE` work. The match is exact, so `pomorskie` never means `kujawsko-pomorskie`. A
+  name is not accepted inside an ELI (`get_act_details`, `read_act_content` and the other ELI tools):
+  the core stores a loaded document under the ELI as typed, so an ELI always carries the code.
+- `get_system_metadata(category="publishers")` lists all 16 journals after DU and MP. Each entry has
+  `code`, `voivodeship`, `shortName` and `available`, and the four withheld journals also carry
+  `withheldReason`. The list comes from `catalog.py`; it holds no act counts or years, because the
+  hosts return only their own entry and fetching them would cost a request per journal.
+- A publisher that is neither DU/MP nor a code or name of a registered source (`xyz`, or `POL_WOJ_XX`
+  under the prefix) is refused with the served codes and their names. The refusal applies only while
+  a source is registered; without one, the value goes to the Sejm as before.
 
 ## What a journal does not support
 

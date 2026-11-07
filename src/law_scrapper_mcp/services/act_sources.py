@@ -94,7 +94,7 @@ def unknown_publisher_message(value: str, infos: Iterable[PublisherInfo], *, und
         shown = f"{shown[:UNKNOWN_PUBLISHER_VALUE_LIMIT]}…"
     parts = [f"Nieznany wydawca: {shown}."]
     if available:
-        parts.append(f"Zamiast kodu można podać nazwę, np. {available[0].label}.")
+        parts.append(f"Zamiast kodu można podać nazwę w parametrze publisher (nie w ELI), np. {available[0].label}.")
     valid = [
         *sorted(RESERVED_PUBLISHERS),
         *(f"{info.code} ({info.label})" for info in available),

@@ -11,7 +11,7 @@ from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import MetadataOutput
-from law_scrapper_mcp.services.act_sources import ActSourceRegistry
+from law_scrapper_mcp.services.act_sources import ActSourceRegistry, PublisherInfo
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
 logger = logging.getLogger(__name__)
@@ -37,17 +37,22 @@ class MetadataService:
         self._client = client
         self._sources = sources
 
+    def _described(self) -> tuple[PublisherInfo, ...]:
+        """The publishers registered sources describe, read from the registry now."""
+        return self._sources.describe() if self._sources is not None else ()
+
     @property
     def has_sources(self) -> bool:
         """Whether any registered source describes its publishers (and so can be addressed by name)."""
-        return self._sources is not None and bool(self._sources.describe())
+        return bool(self._described())
 
-    def _with_source_publishers(self, sejm_publishers: Any) -> Any:
+    @staticmethod
+    def _with_source_publishers(sejm_publishers: Any, described: tuple[PublisherInfo, ...]) -> Any:
         """The Sejm's publishers followed by the described ones; unchanged when no source describes any."""
-        if self._sources is None or not self.has_sources:
+        if not described:
             return sejm_publishers
         listed = list(sejm_publishers) if isinstance(sejm_publishers, list) else []
-        return [*listed, *(dict(info.item) for info in self._sources.describe())]
+        return [*listed, *(dict(info.item) for info in described)]
 
     async def _fetch(self, category: MetadataCategory) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Fetch metadata, returning (results, failed_categories_tuple).
@@ -55,26 +60,31 @@ class MetadataService:
         Used by both get_metadata and get_metadata_page to ensure consistency.
         """
         ttl = settings.cache_metadata_ttl
+        described = self._described()
         if category == MetadataCategory.ALL:
-            return await self._fetch_all(ttl)
-        if category == MetadataCategory.PUBLISHERS and self.has_sources:
+            return await self._fetch_all(ttl, described)
+        if category == MetadataCategory.PUBLISHERS and described:
             # One source being down must not hide the others (FR-005): the described publishers are
             # in memory, so they are still listed when the Sejm's list could not be fetched.
             try:
                 sejm_publishers = await self._fetch_category(category, ttl)
             except Exception as exc:
                 logger.warning("Failed to fetch metadata for %s: %s", category.value, exc)
-                return {category.value: self._with_source_publishers([])}, (category.value,)
-            return {category.value: self._with_source_publishers(sejm_publishers)}, ()
+                return {category.value: self._with_source_publishers([], described)}, (category.value,)
+            return {category.value: self._with_source_publishers(sejm_publishers, described)}, ()
         return {category.value: await self._fetch_category(category, ttl)}, ()
 
-    async def _fetch_all(self, ttl: int) -> tuple[dict[str, Any], tuple[str, ...]]:
+    async def _fetch_all(
+        self, ttl: int, described: tuple[PublisherInfo, ...] | None = None
+    ) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Fetch every category concurrently, preserving METADATA_ORDER.
 
         Concurrency is bounded by the client's semaphore, so this shortens the
         cold path without raising the ceiling of simultaneous requests against
         the public Sejm API.
         """
+        if described is None:
+            described = self._described()
         outcomes = await asyncio.gather(
             *(self._fetch_category(category, ttl) for category in self.METADATA_ORDER),
             return_exceptions=True,
@@ -94,7 +104,7 @@ class MetadataService:
                 results[category.value] = outcome
 
         results[MetadataCategory.PUBLISHERS.value] = self._with_source_publishers(
-            results[MetadataCategory.PUBLISHERS.value]
+            results[MetadataCategory.PUBLISHERS.value], described
         )
         return results, tuple(failed)
 

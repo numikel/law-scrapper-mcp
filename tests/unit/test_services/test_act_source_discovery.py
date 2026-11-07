@@ -275,7 +275,8 @@ def test_the_message_offers_only_available_publishers_with_a_name_hint_first() -
     )
 
     assert message.startswith("Nieznany wydawca: pomorskei.")
-    assert message.index("Zamiast kodu można podać nazwę, np. alfa") < message.index("Poprawne:")
+    hint = "Zamiast kodu można podać nazwę w parametrze publisher (nie w ELI), np. alfa"
+    assert message.index(hint) < message.index("Poprawne:")
     assert "ZZ_A (alfa), ZZ_B (beta)" in message
     assert "ZZ_X" not in message
     assert "off" not in message

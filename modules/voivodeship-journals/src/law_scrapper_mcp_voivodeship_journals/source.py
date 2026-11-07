@@ -10,6 +10,7 @@ from law_scrapper_mcp.client.exceptions import ActNotFoundError, ApiUnavailableE
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.models.tool_outputs import ActDetailOutput
 from law_scrapper_mcp.services.act_sources import (
+    MAX_PUBLISHER_NAME_LENGTH,
     SourceSearchPage,
     SourceSearchQuery,
     UnknownPublisherError,
@@ -47,7 +48,9 @@ class JournalActSource:
         """
         if publisher in self._catalog:
             return publisher
-        code = self._names.get(fold_publisher_name(publisher))
+        # A value longer than any name is not normalised: it can only reach this point through the
+        # claimed prefix, and the fold would otherwise run over whatever the caller sent.
+        code = self._names.get(fold_publisher_name(publisher)) if len(publisher) <= MAX_PUBLISHER_NAME_LENGTH else None
         if code is None:
             raise UnknownPublisherError(unknown_publisher_message(publisher, self._infos))
         if by_name:

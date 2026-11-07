@@ -426,6 +426,9 @@ class TestActDetailsTools:
         _assert_enriched(payload)
         assert payload["data"]["count"] == 1
         assert payload["data"]["documents"][0]["eli"] == "DU/2024/1"
+        # The generic identifier and kind sit next to `eli`; for an act the identifier is the ELI.
+        assert payload["data"]["documents"][0]["document_id"] == "DU/2024/1"
+        assert payload["data"]["documents"][0]["document_kind"] == "act"
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +452,8 @@ class TestActContentTools:
 
         _assert_enriched(payload)
         assert payload["data"]["eli"] == "DU/2024/1"
+        assert payload["data"]["document_id"] == "DU/2024/1"
+        assert payload["data"]["document_kind"] == "act"
         assert "toc" in payload["data"]
         assert isinstance(payload["data"]["toc"], list)
         # The mock HTML produces at least one section (h1 heading)

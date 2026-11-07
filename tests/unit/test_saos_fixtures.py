@@ -598,3 +598,153 @@ def test_the_stored_judgment_detail_is_the_record_pinned_in_the_private_table() 
     assert body["data"]["source"]["judgmentUrl"].split(":", 1)[0] == facts["judgmentUrlScheme"]
     assert [link["rel"] for link in body["links"]] == ["self"]
     assert body["links"][0]["href"] == row[1]
+
+
+SKELETON_PRIVATE = {
+    "judgment_skeleton_sentence_split.json": "detail_labour_sentence_split",
+    "judgment_skeleton_reasons.json": "detail_labour_reasons",
+    "judgment_skeleton_sentence_nested.json": "detail_sentence_with_reasoning",
+    "judgment_skeleton_supreme.json": "detail_supreme",
+}
+SKELETON_KEYS = {"id", "courtType", "courtCases", "judgmentType", "judgmentDate", "division", "source", "textContent"}
+COURT_FORMULAE = {
+    "WYROK",
+    "UZASADNIENIE",
+    "POSTANOWIENIE",
+    "UCHWAŁA",
+    "ZARZĄDZENIE",
+    "W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ",
+}
+HEADING = re.compile(r"<(h[1-6])>(.*?)</\1>", re.DOTALL)
+TAG = re.compile(r"<[^>]*>")
+ALLOWED_TAG = re.compile(r'</?[a-z][a-z0-9]*>|<span class="anon-block">')
+ENTITY = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]*|#\d+|#[xX][0-9A-Fa-f]+);")
+ANON_BLOCK = '<span class="anon-block">'
+LONE_SENTENCE = "search_case_number_lone_sentence.json"
+
+
+def skeleton_text(name: str) -> str:
+    return str(load_json(name)["data"]["textContent"])
+
+
+def heading_titles(html: str) -> list[str]:
+    return [" ".join(TAG.sub("", match.group(2)).split()) for match in HEADING.finditer(html)]
+
+
+def skeleton_violations(html: str) -> list[str]:
+    """What a skeleton text must not hold: an attribute, a letter other than `x`, a long digit run.
+
+    Court formulae in headings are the only words allowed to stay.
+    """
+
+    def drop_formula(match: re.Match[str]) -> str:
+        title = " ".join(TAG.sub("", match.group(2)).split())
+        return "" if title in COURT_FORMULAE else match.group(0)
+
+    problems = [tag for tag in TAG.findall(html) if not ALLOWED_TAG.fullmatch(tag)]
+    text = ENTITY.sub("", TAG.sub("", HEADING.sub(drop_formula, html)))
+    problems += re.findall(r"[^\W\d_]", text.replace("x", ""))
+    problems += [run for run in re.findall(r"\d{4,}", text) if set(run) != {"0"}]
+    return problems
+
+
+def skeleton_facts() -> dict[str, dict[str, str]]:
+    """Facts of the skeleton files from the Skeleton details table, keyed by file name."""
+    out: dict[str, dict[str, str]] = {}
+    for line in provenance_text().splitlines():
+        if not line.startswith("| `judgment_skeleton_"):
+            continue
+        cells = table_cells(line)
+        if len(cells) == 4:
+            out[cells[0]] = dict(pair.split("=", 1) for pair in cells[2].split("; "))
+    return out
+
+
+def test_the_skeleton_scan_catches_a_letter_an_attribute_and_a_long_number() -> None:
+    """Positive control: the scan used below fails on a dirty sample and passes a clean one."""
+    clean = f"<h2>WYROK</h2><p>xxx 0000 12 {ANON_BLOCK}(...)</span> &nbsp;</p>"
+    dirty = '<p class="a">Jan Kowalski 12345678901</p><h2>Jan Kowalski</h2>'
+
+    assert skeleton_violations(clean) == []
+    found = skeleton_violations(dirty)
+    assert '<p class="a">' in found
+    assert "J" in found and "K" in found
+    assert "12345678901" in found
+
+
+def test_a_skeleton_holds_the_structure_of_a_judgment_text_and_none_of_its_words() -> None:
+    for name in SKELETON_PRIVATE:
+        body = load_json(name)
+        data = body["data"]
+
+        assert set(body) == {"data"}, name
+        assert set(data) == SKELETON_KEYS, name
+        assert skeleton_violations(data["textContent"]) == [], name
+        assert set(data["source"]) == {"code", "judgmentUrl"}, name
+        assert all(set(case) == {"caseNumber"} for case in data["courtCases"]), name
+    assert skeleton_text("judgment_skeleton_supreme.json").count("\n") == int(
+        skeleton_facts()["judgment_skeleton_supreme.json"]["newlines"]
+    )
+
+
+def test_the_facts_of_a_skeleton_are_the_ones_on_record() -> None:
+    facts = skeleton_facts()
+
+    assert set(facts) == set(SKELETON_PRIVATE)
+    for name, recording in SKELETON_PRIVATE.items():
+        html = skeleton_text(name)
+        recorded = facts[name]
+        private = private_facts()[recording]
+        has_markup = "<" in html
+
+        assert len(html) == int(recorded["skeletonTextChars"]), name
+        assert recorded["rawTextChars"] == private["textChars"], name
+        assert recorded["textFormat"] == ("html" if has_markup else "plain"), name
+        assert html.count("<h2>") == int(recorded["h2"]) == int(private["h2"]), name
+        assert html.count(ANON_BLOCK) == int(recorded["anonBlocks"]) == int(private["anonBlocks"]), name
+        assert (",".join(heading_titles(html)) or "none") == recorded["headings"], name
+        assert load_json(name)["data"]["judgmentType"] == private["judgmentType"], name
+        assert load_json(name)["data"]["courtCases"][0]["caseNumber"] == private["caseNumber"], name
+
+
+def test_a_skeleton_is_the_detail_recorded_before_and_the_service_has_not_changed_it() -> None:
+    """Same request, same original size and SHA-256 as the private recording of the same id."""
+    for name, recording in SKELETON_PRIVATE.items():
+        row = provenance_rows()[name]
+        private = private_rows()[recording]
+
+        assert row[1] == private[1], name
+        assert (row[6], row[7]) == (private[4], private[5]), name
+        assert row[1].endswith(f"/{load_json(name)['data']['id']}"), name
+
+
+def test_the_sentence_skeleton_has_no_reasoning_heading_and_the_reasons_skeleton_starts_with_one() -> None:
+    sentence = load_json("judgment_skeleton_sentence_split.json")["data"]
+    reasons = load_json("judgment_skeleton_reasons.json")["data"]
+    nested = load_json("judgment_skeleton_sentence_nested.json")["data"]
+
+    assert (sentence["judgmentType"], reasons["judgmentType"], nested["judgmentType"]) == (
+        "SENTENCE",
+        "REASONS",
+        "SENTENCE",
+    )
+    assert sentence["courtCases"] == reasons["courtCases"]
+    assert request_params(CASE_NUMBER)["caseNumber"] == sentence["courtCases"][0]["caseNumber"]
+    assert sentence["division"]["court"]["id"] == reasons["division"]["court"]["id"]
+    assert sentence["division"]["id"] == reasons["division"]["id"]
+    assert "UZASADNIENIE" not in heading_titles(sentence["textContent"])
+    assert heading_titles(reasons["textContent"]) == ["UZASADNIENIE"]
+    assert heading_titles(nested["textContent"])[-1] == "UZASADNIENIE"
+    assert sentence["division"]["code"].endswith("21")
+
+
+def test_a_case_number_can_find_a_sentence_with_no_reasons_record() -> None:
+    page = load_json(LONE_SENTENCE)
+    item = page["items"][0]
+
+    assert page["info"]["totalResults"] == len(page["items"]) == 1
+    assert item["judgmentType"] == "SENTENCE"
+    assert item["courtCases"][0]["caseNumber"] == request_params(LONE_SENTENCE)["caseNumber"]
+    assert request_params(LONE_SENTENCE)["pageSize"] == request_params(CASE_NUMBER)["pageSize"] == "10"
+    assert set(request_params(LONE_SENTENCE)) == set(request_params(CASE_NUMBER))
+    assert item["id"] == load_json("search_viii_sentence_2016.json")["items"][0]["id"]

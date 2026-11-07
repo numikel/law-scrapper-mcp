@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from law_scrapper_mcp.models.tool_inputs import is_eli_shaped
+
 # Name under which errors raised for api.sejm.gov.pl identify their source. Error texts for this
 # source predate source naming and must stay byte-identical, so the tool layer treats it (and a
 # missing source) as "legacy" and leaves them alone.
@@ -102,7 +104,9 @@ class ContentTooLargeError(LawScrapperError):
 
     def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None, *, exact: bool = True):
         measured = self._measured(size_bytes, exact=exact)
-        message = f"Treść aktu {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
+        # An ELI keeps the wording it always had; a judgment (`SAOS/554697`) is not an act.
+        noun = "aktu" if is_eli_shaped(eli) else "dokumentu"
+        message = f"Treść {noun} {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
         if pdf_url is not None:
             message += f" Pobierz plik źródłowy: {pdf_url}"
         super().__init__(message)
@@ -152,7 +156,19 @@ class DocumentNotLoadedError(LawScrapperError):
     """Document must be loaded before accessing content."""
 
     def __init__(self, eli: str):
-        super().__init__(f"Dokument {eli} nie jest załadowany. Użyj get_act_details(eli='{eli}', load_content=true)")
+        # An ELI keeps the text it always had. Any other identifier is a document of another kind (a
+        # judgment, `SAOS/554697`), which get_act_details cannot load. The wording is keyed on the shape of
+        # the identifier because a document that is not loaded has no stored kind to ask: a mistyped ELI
+        # (`DU/2024`) gets the second text too, which names the source tool, so the hint is wrong for the
+        # typo but harmless. `tests/unit/test_document_kind.py` pins this on purpose.
+        if is_eli_shaped(eli):
+            message = f"Dokument {eli} nie jest załadowany. Użyj get_act_details(eli='{eli}', load_content=true)"
+        else:
+            message = (
+                f"Dokument {eli} nie jest załadowany. Wczytaj go narzędziem źródła "
+                "(orzeczenie z SAOS: get_saos_judgment_details z load_content=true)."
+            )
+        super().__init__(message)
         self.eli = eli
 
 

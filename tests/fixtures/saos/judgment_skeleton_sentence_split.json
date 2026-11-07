@@ -1,0 +1,30 @@
+{
+  "data": {
+    "id": 554697,
+    "courtType": "COMMON",
+    "courtCases": [
+      {
+        "caseNumber": "VIII U 2924/25"
+      }
+    ],
+    "judgmentType": "SENTENCE",
+    "judgmentDate": "2026-10-13",
+    "division": {
+      "code": "0004021",
+      "id": 1023,
+      "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+      "type": "Pracy i Ubezpieczeń Społecznych",
+      "court": {
+        "code": "15251000",
+        "id": 159,
+        "name": "Sąd Okręgowy w Łodzi",
+        "type": "REGIONAL"
+      }
+    },
+    "source": {
+      "code": "COMMON_COURT",
+      "judgmentUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/details?id=152510000004021_VIII_U_002924_2025_Uz_2026-10-13_001"
+    },
+    "textContent": "<p>xxxx. xxx xxxx x 0000/25</p>\n    <div>\n      <h2>WYROK</h2>\n      <h5>W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ</h5>\n      <p>xxxx 13 xxxxxxxxxxxx 0000 xxxx</p>\n      <p>xxx xxxxxxxx x xxxxx, xxxx xxxxxxx xxxxx x xxxxxxxxxxx xxxxxxxxxxx</p>\n      <p>x xxxxxxxx:</p>\n      <p>xxxxxxxxxxxxxx: xxxxxx xx xxxxxx xxxxxxxxx-xxxxxxxxxxxx</p>\n      <p>xxxxxxxxxxx : xx.xxxx.xxx. xxxxxxxxx xxxxxxxxxx</p>\n      <p>xx xxxxxxxxxxx x xxxx 22 xxxxxxxx 0000 xxxx x xxxxx</p>\n      <p>xx xxxxxxxxx</p>\n      <p>xxxxxx x xxxxxxx</p>\n      <p>\n        <strong>\n\n<span class=\"anon-block\">x. x.</span>\n</strong>\n</p>\n      <p>xxxxxxxxx</p>\n      <p>\n        <strong>\nxxxxxxxxx xxxxxxxxxxx xxxxxxxxxxx <span class=\"anon-block\">(...)</span> xxxxxxxxxx x <span class=\"anon-block\">x.</span>\n</strong>\n</p>\n      <p>x xxxxxxxx xxxxxxxxx</p>\n      <p>xx xxxxxx xxxxxxxxx <span class=\"anon-block\">x. x.</span>\n</p>\n      <p>xx xxxxxxx xxxxxxx xxxxxxxxxxx xxxxxxxxxxx <span class=\"anon-block\">(...)</span> xxxxxxxx x <span class=\"anon-block\">x.</span>\n</p>\n      <p>x xxxx 29 xxxxxxxx 0000 xxxx xxxx <span class=\"anon-block\">(...)</span>\n</p>\n      <p>\n<strong>\nxxxxxxx xxxxxxxxxx xxxxxxx x xxx xxxxxx, xx xxxxxxxxx xxxxxxxxx <span class=\"anon-block\">x. x.</span> xx xxxx 7 xxxxxxxx 0000 xxxx xxxx xxxxxxxxxxxxx xxxxx xxxxxxxxxxxxxxx xxxxxxxx xxxxxxxxxxxx x xxxxxxxxx 135.089,24 (xxx xxxxxxxxxxx xxxx xxxxxxx xxxxxxxxxxxxx xxxxxxxx xxxxxxx x xxxxxxxxxxx xxxxxx xxxxxx) xxxxxxx, xxxxx xx xxxxxxxxxx xxxxxxxx xxxxxxx xxxxxxxx xxxxxxxxxxxx xxxxxxxxx xxxxxxxx xxxxxxx xxxxxxx x 10 (xxxxxxxxxx) xxxxxxxxx xxx xxxxxxxxxxxxxx, xx xxxx xx xxxx 1 xxxxxxxx 0000 xxxx xx xxxx 31 xxxxxxx 0000 xxxx, x xxxxxxxxxxxxx xxxxxxxxx xxxxxxxxx xxxxxxxx xxxxxxx xxxxxxxx xxxxxxxxxxxx xxxxxxxxxxx 127,62% (xxx xxxxxxxxxxx xxxxxx x xxxxxxxxxxxxx xxx) xxxx xxxxxxxxx xxxxxxxx xxxxxxx xxxxx x xxxxxx 220,80 (xxxxxxxx xxxxxxxxxxx x xxxxxxxxxxxxx) xxxxxxxx.</strong>\n</p>\n      <p>xxx xxxxxx xxxxxxxxx-xxxxxxxxxxxx</p>\n    </div>"
+  }
+}

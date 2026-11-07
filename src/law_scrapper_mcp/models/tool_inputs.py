@@ -150,3 +150,12 @@ def parse_eli(eli: str) -> tuple[str, int, int]:
         raise ValueError(f"Nieprawidłowy rok lub pozycja w ELI: {eli}") from e
 
     return publisher, year, pos
+
+
+def is_eli_shaped(value: str) -> bool:
+    """Tell an ELI (`DU/2024/1`, also as a URL) from another document identifier such as `SAOS/554697`."""
+    try:
+        parse_eli(value)
+    except ValueError:
+        return False
+    return True

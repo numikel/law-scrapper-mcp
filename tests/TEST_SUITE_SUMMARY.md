@@ -63,6 +63,12 @@ a module active in the `modules` job (same pinned command as the core-only one i
 | `modules/saos/tests/test_saos_output_contract.py` | The advertised `outputSchema` of both tools (which fields may be null, the scan and portal-link blocks described, no judges and no text) and that every mode of a call validates against it; refusals carry no structured content |
 | `modules/saos/tests/test_saos_install_and_disable.py` | The entry point of the installed distribution, discovery over it, and on a real STDIO server the two tools and the module block present for `unset`, `-*,saos`, a bare name, `-reference` and the last-token case, absent for `-saos`, `-*`, `saos,-*`; counts relative to the same configuration with the module off; the package is never imported when off |
 | `modules/saos/tests/test_saos_readme.py` | The module README agrees with the code: coverage figures, pace, request budgets, labour rules, named settings and parameters, no licence claim, no private names |
+| `modules/saos/tests/saos_reading_testing.py` | Not a test: the fake SAOS of the reading path (`FakeReading`, details by id and searches by case number, failures and refusals by status), the recorded skeletons and the shapes derived from recordings (a second reasons record, a reasons record of another court, a page cut short), the loader harness and the in-memory `reading_session` |
+| `modules/saos/tests/test_saos_judgment_sections.py` | Text to Markdown and sections: anonymisation markers keep their text and lose the tag, plain Supreme Court text keeps its paragraphs, a section per level-2 heading and `Treść` otherwise, an `Art.` line never starts a section, the server note for a missing reasoning, and a third-party text that cannot hold the event loop (thousands of identical headings, a heading followed by a long run of spaces, a ceiling on sections) |
+| `modules/saos/tests/test_saos_judgment_pairing.py` | Where the reasoning is: joined from the reasons record (same court, exactly one), absent with a server note, ambiguous, not assessed (cut-short page, failing search or record, no signature, other kind, a court that cannot be compared), the call count of each and the ceiling of three |
+| `modules/saos/tests/test_saos_judgment_reading.py` | Loading as a whole: the `SAOS/<id>` key and the judgment kind in the store, read back through the core content service, markers, judges and reporters reaching neither the answer nor the stored text, refusals before any call (a text of tags alone included), a detail over the byte budget, an act loaded beside a judgment, the answer model |
+| `modules/saos/tests/test_saos_judgment_loading.py` | `load_content` of `get_saos_judgment_details`: off by default and unchanged, spellings of the flag, metadata from the same request as the text, the hints after loading; a refusal (401, 403, 451) ends the portal-link loop and the pairing path with no further request and no retry, a 429 is retried once by the egress client and then ends them, a 404 does not; a case number from SAOS is cleaned and cut before it reaches a note or a hint |
+| `modules/saos/tests/test_saos_judgment_reading_e2e.py` | The chain through the MCP layer with only this module active: load, table of contents, a section in pages, search, listing, the server note when read, the errors for a judgment that is not loaded and for an ELI, the advertised schema of the flag |
 
 **Full integration suite:**
 
@@ -101,7 +107,7 @@ tests/
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
 │   ├── edziennik/              # 14 recorded e-Dziennik ELI files (JSON, HTML, PDF), three of them the keyword-list probe; one PROVENANCE.md for all sessions
-│   ├── saos/                   # 28 recorded SAOS API files (search pages, counts, an error body, the court dictionary, a page past the end, a judgment detail reduced to metadata, a Supreme Court page reduced to chamber names) with personal names redacted; one PROVENANCE.md; no full judgment texts
+│   ├── saos/                   # 33 recorded SAOS API files (search pages, counts, an error body, the court dictionary, a page past the end, a judgment detail reduced to metadata, a Supreme Court page reduced to chamber names, four skeletons of judgment details with every letter of the text masked, a case-number page with no reasons record) with personal names redacted; one PROVENANCE.md; no judgment text
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
 │   ├── test_act_service_offload.py     # Size limit on act loading, refusal while streaming, conversion off the event loop
@@ -114,6 +120,8 @@ tests/
 │   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure; compose shows `LAW_MCP_CONTACT` only as a comment and the README documents it
+│   ├── test_document_kind.py           # A loaded document knows its kind (act by default); the content tools report `document_id` and `document_kind` for acts and judgments; the not-loaded error, the too-large error, the missing-section error and the content hint keep their exact text for an ELI and use neutral wording for another id (a mistyped ELI included, pinned on purpose); `is_eli_shaped`
+│   ├── test_document_kind_additivity.py# `ContentOutput`, `SearchInActOutput` and `LoadedDocumentInfo` keep their required lists and gain only the two optional fields; the old shape still builds
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
 │   ├── test_edziennik_fixtures.py      # Facts about the e-Dziennik journals pinned to `fixtures/edziennik/`: casing, dates swapped by search only, sentinels, ignored publisher code, scan vs text PDF, catalogue vs PROVENANCE.md
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
@@ -131,7 +139,7 @@ tests/
 │   ├── test_readme_tool_table.py       # README tool-properties table matches the live `tools/list` (title, readOnlyHint, openWorldHint)
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
-│   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, zero-based pages, an empty page past the end, the division-code filter, the judgment detail reduced to metadata, the Supreme Court chambers (the labour chamber under its long name, the spelling that matched nothing), judge names and names after role cues redacted, catalogue and stored-file hashes vs PROVENANCE.md
+│   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, zero-based pages, an empty page past the end, the division-code filter, the judgment detail reduced to metadata, the Supreme Court chambers (the labour chamber under its long name, the spelling that matched nothing), judge names and names after role cues redacted, the skeletons of judgment details (only tags, court headings and `x` in the text; their facts and original hashes on record, a scan with a positive control), catalogue and stored-file hashes vs PROVENANCE.md
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window; `main()` calls the default-contact warning right after the bind warning
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
@@ -147,7 +155,7 @@ tests/
 │   ├── test_client/
 │   │   ├── conftest.py                 # FakeClock + `clock` and `waits` fixtures shared by the egress suites
 │   │   ├── test_circuit_breaker.py     # CLOSED → OPEN → HALF_OPEN transitions and probe races
-│   │   ├── test_download_budget.py     # Byte budget enforced while a document body streams (#19)
+│   │   ├── test_download_budget.py     # Byte budget enforced while a document body streams (#19); `get_json` takes the same budget
 │   │   ├── test_egress_construction_guard.py # `httpx.AsyncClient` is built only in `client/egress.py` (one listed exception: OIDC discovery in `auth/jwt_verifier.py`); scans `src/law_scrapper_mcp/` and `modules/`, and fails if a root holds no `.py` file
 │   │   ├── test_egress_hub.py          # EgressHub: caller identity tokens, wire User-Agent, one owner per origin and name, rate ceiling a module can only lower, no pin opt-out, source states, close error collection
 │   │   ├── test_egress_isolation.py    # Per-host controls: cache namespace, origin pin and redirect cap (Sejm characterised as unpinned), host label on errors and logs, two-host isolation of 429 pause, breaker, bucket, headers and cookies

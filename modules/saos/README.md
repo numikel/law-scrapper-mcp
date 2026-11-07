@@ -8,7 +8,7 @@ named after the source and without a `source` parameter:
 | Tool | What it does |
 |------|--------------|
 | `search_saos_judgments` | Searches judgments newest first, with any `limit` (default 20, at most 100) and any `offset`. Stores the page as a result set that the core `filter_results` narrows. |
-| `get_saos_judgment_details` | One request about one judgment: its record, the court portal address and the division type. No judgment text. |
+| `get_saos_judgment_details` | One request about one judgment: its record, the court portal address and the division type. With `load_content=true` it also loads the judgment's text into the document store (up to 3 requests), where `read_act_content` and `search_in_act` read it as `SAOS/<source_id>`. |
 
 The 13 core tools keep their names, parameters and output schemas. Tool descriptions and parameter
 text are in Polish, like the rest of the agent-facing surface.
@@ -92,6 +92,54 @@ judgments until it holds `limit` of them or the list ends:
   Chamber and administrative courts, because SAOS gives their records no division type or chamber to
   classify by; and the combination with `include_portal_links`.
 
+## Reading a judgment
+
+`get_saos_judgment_details(source_id, load_content=true)` loads the whole text of a judgment into the
+server's document store under the identifier `SAOS/<source_id>` (the response says it in
+`loaded.document_id`). From then on the core tools read it: `read_act_content(eli="SAOS/554697")` gives a
+table of contents and, with `section`, pages of one section (`limit`, `offset` as for an act),
+`search_in_act` searches it and `list_loaded_documents` lists it. Their responses carry `document_id` and
+`document_kind` (`judgment`) next to `eli`; for a judgment `eli` repeats the identifier and is not an ELI.
+A loaded judgment lives as long as a loaded act: `LAW_MCP_DOC_STORE_TTL` seconds without use, and the oldest
+unused document goes first once `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` are loaded.
+
+- **Text.** A common-court text is HTML and is converted like the text of an act. The Supreme Court text is
+  plain text and is kept as written. The anonymisation markers SAOS leaves (`(...)`, initials, `D. P. (1)`)
+  stay in the text as they are; only their tag is gone.
+- **Sections.** One section per level-2 heading (`WYROK`, `UZASADNIENIE`), and `Treść` for the text before
+  the first heading or for a text without headings. A line that starts with `Art.` does not start a section.
+- **Reasoning.** For a newer common-court judgment the operative part (`SENTENCE`) and the reasoning
+  (`REASONS`) are two SAOS records with one case number. When the loaded sentence has no `UZASADNIENIE`
+  heading, the module searches SAOS by the case number and joins the reasons record if there is exactly one
+  of the same court. `loaded.reasoning` says what happened:
+
+  | `reasoning` | Meaning |
+  |---|---|
+  | `in_record` | The text has its own `UZASADNIENIE` section; no further request. |
+  | `merged` | The separate reasons record was found and joined as the section `UZASADNIENIE`. |
+  | `absent` | No reasoning in the source: the record has none and SAOS has no reasons record of that court. The text ends with a section `[Uwaga serwera] Uzasadnienie` that says so; it is a note of the server, not text of the judgment. |
+  | `ambiguous` | Several reasons records of that court; none joined, their `source_id` values are listed. |
+  | `reasoning_record` | The loaded record is itself a reasons record. |
+  | `not_assessed` | Nothing is claimed: another kind of judgment or court, no case number, a search page too short to be sure, a reasons record whose court cannot be compared with the sentence's (one of them gives no court), a sentence with no reasons record whose text names `UZASADNIENIE` outside the level-2 heading the module recognises (the reasoning may be in the record in another marking), or the extra request failed. |
+
+  A cut-short search page that holds no reasons record of that court is `not_assessed`, never `absent`. So is a
+  page that holds a reasons record of the same case number but whose court cannot be compared with the
+  sentence's: `absent` is a claim that the source has no reasoning, and a record that cannot be placed is not
+  evidence of that.
+
+  Only `loaded.reasoning` says where the reasoning is. The text of a judgment is data from SAOS: a section in it
+  that reads `[Uwaga serwera] Uzasadnienie` or `UZASADNIENIE` proves nothing, because the court's text can hold
+  such a heading too.
+- **Personal data.** The module never reads the judges or the court reporters, but the text can hold personal
+  data the court left in it, for example the names of court staff. Quote with care.
+- **Cost.** The detail is one request; the search by case number and the reasons record make it up to three.
+  After a refusal from SAOS (HTTP 401, 403 or 451) no further request is sent in that call, and the
+  judgment is stored alone. A 429 (too many requests) is sent a second time by the egress client, after the
+  pause SAOS asks for; if that is refused too, the call ends the same way and nothing more is asked.
+- **Size.** A judgment detail is read within `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` (the limit of the document
+  store), and a larger answer is refused while it streams in. A reasons record that is too large leaves the
+  sentence loaded alone. A text with more than 500 sections is refused.
+
 ## Court portal links
 
 The search result carries the SAOS address of each judgment. The address of the judgment in the court's
@@ -112,6 +160,7 @@ recorded one is an API address of the court's system, not a page meant for a per
 | search with `include_portal_links` | the search plus up to 5 details, never more than 6 in all (4 details after a two-request search) |
 | `labour_only` | at most 5 |
 | `get_saos_judgment_details` | 1 |
+| `get_saos_judgment_details` with `load_content` | 1 to 3, never more than 3 (the detail, a search by case number, the reasons record) |
 
 Search pages are cached for `LAW_MCP_CACHE_SEARCH_TTL` seconds under their own parameters, so aligned
 calls and a scan that resumes at a cursor reuse pages. If a detail fails, that result has no link and the
@@ -148,14 +197,16 @@ SAOS publishes no licence and no terms of use that this project found: the API d
 2026-11-02 contains none, and the terms pages of the service itself were not checked. No permission was
 requested or obtained. Do not read this module as a statement that quoting judgments verbatim, or
 reusing them for a particular purpose, is permitted; that is for the user to establish. The module
-identifies itself honestly (name, version, project address) and keeps to the pace above.
+identifies itself honestly (name, version and the operator's contact, `LAW_MCP_CONTACT`, which defaults to the project repository) and keeps to the pace above.
 
 If you intend commercial and/or mass use, verify again that using the service is permitted. The
 excerpts are cut from judgments that courts already published with the parties abbreviated, but they
-still describe real court cases; the module does not map the names of judges.
+still describe real court cases; the module does not map the names of judges or of court reporters. The
+text of a loaded judgment can still hold personal data the court left in it.
 
 ## Tests
 
 `uv run pytest modules/saos/tests` runs against recordings of the service, redacted for personal names
-(`tests/fixtures/saos/`), and against derived lists cut from them. An autouse guard makes any name
+(`tests/fixtures/saos/`), against skeletons of real judgment details (the structure of the text with every
+letter masked) and against derived lists cut from them. An autouse guard makes any name
 lookup of a non-local host fail, so a test that forgot its mock cannot send traffic to SAOS.

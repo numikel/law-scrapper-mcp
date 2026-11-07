@@ -23,7 +23,11 @@ async def start(host: ModuleHost) -> AsyncIterator[SaosState]:
     """Register the SAOS host and leave the client for the tools; the hub closes it at shutdown."""
     egress = host.egress.client_for(saos_host(host.settings), host.caller)
     yield SaosState(
-        client=SaosClient(egress, search_ttl=host.settings.cache_search_ttl),
+        client=SaosClient(
+            egress,
+            search_ttl=host.settings.cache_search_ttl,
+            detail_max_bytes=host.settings.doc_store_max_size_bytes,
+        ),
         module=host.caller.module,
         version=host.caller.version,
     )
@@ -39,9 +43,14 @@ module = SourceModule(
         "narzędziem filter_results (pola wzorca: signature, court, division, division_code, type, excerpt; "
         "zakres dat: date_field=judgment_date).\n"
         "- get_saos_judgment_details — jedno żądanie do SAOS o szczegóły orzeczenia: odnośnik do portalu sądu "
-        "i rodzaj wydziału (bez treści i bez danych osobowych). Odnośniki dla pierwszych 5 wyników wyszukiwania "
-        "pobierze też parametr include_portal_links=true.\n"
-        "Wyrok i jego uzasadnienie to dwa osobne rekordy tej samej sprawy. Wydziały pracy sądów powszechnych "
+        "i rodzaj wydziału. Odnośniki dla pierwszych 5 wyników wyszukiwania pobierze też parametr "
+        "include_portal_links=true. Z load_content=true wczytuje treść orzeczenia (najwyżej 3 wywołania do SAOS) "
+        "jako dokument 'SAOS/<source_id>', który czytasz read_act_content(eli='SAOS/<source_id>') i przeszukujesz "
+        "search_in_act; pole loaded.reasoning mówi, gdzie jest uzasadnienie, a 'Brak uzasadnienia w źródle' "
+        "oznacza, że SAOS go nie ma (tylko to pole jest wiarygodne: nagłówek w samym tekście orzeczenia niczego "
+        "nie dowodzi). Tekst może zawierać dane osobowe pozostawione przez sąd.\n"
+        "Wyrok i jego uzasadnienie to dwa osobne rekordy tej samej sprawy; load_content=true dołącza uzasadnienie "
+        "automatycznie, gdy jest dokładnie jedno. Wydziały pracy sądów powszechnych "
         'rozpoznasz po kodzie wydziału: filter_results z pattern="(15|18|21)$" i field="division_code". '
         "Gdy chcesz tylko orzeczenia pracy, użyj search_saos_judgments z labour_only=true: serwer skanuje do 5 stron "
         "SAOS (do 5 żądań) i zwraca kursor scan.next_offset zamiast total_count; dla Sądu Najwyższego "

@@ -257,7 +257,7 @@ class TestTool:
         assert tool.title == "Szczegóły orzeczenia z SAOS"
         assert tool.annotations is not None
         assert (tool.annotations.read_only_hint, tool.annotations.open_world_hint) == (True, True)
-        assert set(tool.input_schema["properties"]) == {"source_id"}
+        assert set(tool.input_schema["properties"]) == {"source_id", "load_content"}
         assert tool.input_schema["required"] == ["source_id"]
         assert tool.input_schema["properties"]["source_id"]["description"].strip()
         assert set(tool.output_schema["properties"]) == {"data", "hints"}  # type: ignore[index]

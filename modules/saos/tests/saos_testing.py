@@ -249,11 +249,11 @@ class FakeClock:
 CLOCK = FakeClock()
 
 
-def make_saos_client(*, search_ttl: int = 600) -> tuple[SaosClient, EgressHub]:
+def make_saos_client(*, search_ttl: int = 600, detail_max_bytes: int | None = None) -> tuple[SaosClient, EgressHub]:
     """A `SaosClient` on a real egress client, registered with the module's own host and pace."""
     hub = EgressHub(TTLCache(max_entries=200), EgressDefaults(), clock=CLOCK)
     egress: EgressClient = hub.client_for(saos_host(settings), IDENTITY)
-    return SaosClient(egress, search_ttl=search_ttl), hub
+    return SaosClient(egress, search_ttl=search_ttl, detail_max_bytes=detail_max_bytes), hub
 
 
 def make_service(

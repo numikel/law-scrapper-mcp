@@ -230,3 +230,53 @@ async def test_a_compressed_wire_length_over_the_budget_does_not_refuse_a_body_t
     )
 
     assert await client.get_bytes(PDF_PATH, max_bytes=LIMIT) == payload
+
+
+JSON_URL = "https://api.sejm.gov.pl/eli/acts/DU/2024/1"
+JSON_PATH = "acts/DU/2024/1"
+JSON_HEADERS = {"Content-Type": "application/json"}
+
+
+@respx.mock
+async def test_a_json_body_past_the_budget_is_refused_before_it_is_materialised(client: SejmApiClient) -> None:
+    """`get_json` takes the same budget as the downloads: the third 512 B chunk crosses 1024 B, the fourth is never pulled."""
+    stream = RecordingStream([b'{"t":"' + b"x" * 506, b"x" * 512, b"x" * 512, b'"}'])
+    respx.get(JSON_URL).mock(return_value=httpx.Response(200, stream=stream, headers=JSON_HEADERS))
+
+    with pytest.raises(ContentTooLargeError) as refused:
+        await client.get_json(JSON_PATH, max_bytes=LIMIT)
+
+    assert stream.pulled == 3
+    assert refused.value.limit_bytes == LIMIT
+
+
+@respx.mock
+async def test_a_json_body_exactly_at_the_budget_is_parsed(client: SejmApiClient) -> None:
+    body = b'{"t":"' + b"x" * (LIMIT - 8) + b'"}'
+    assert len(body) == LIMIT
+    respx.get(JSON_URL).mock(
+        return_value=httpx.Response(200, stream=RecordingStream([body[:512], body[512:]]), headers=JSON_HEADERS)
+    )
+
+    assert await client.get_json(JSON_PATH, max_bytes=LIMIT) == {"t": "x" * (LIMIT - 8)}
+
+
+@respx.mock
+async def test_a_json_call_without_a_budget_reads_the_body_whole(client: SejmApiClient) -> None:
+    """Control: `max_bytes=None` is the contract every existing caller of `get_json` relies on."""
+    body = b'{"t":"' + b"x" * (4 * LIMIT) + b'"}'
+    respx.get(JSON_URL).mock(return_value=httpx.Response(200, content=body, headers=JSON_HEADERS))
+
+    assert await client.get_json(JSON_PATH) == {"t": "x" * (4 * LIMIT)}
+
+
+@respx.mock
+async def test_a_cached_json_answer_is_returned_without_a_new_read_whatever_the_budget(client: SejmApiClient) -> None:
+    """The budget bounds a read; an answer that is already cached needs none."""
+    route = respx.get(JSON_URL).mock(return_value=httpx.Response(200, json={"t": "x" * 10}, headers=JSON_HEADERS))
+    first = await client.get_json(JSON_PATH, cache_ttl=60)
+
+    second = await client.get_json(JSON_PATH, cache_ttl=60, max_bytes=1)
+
+    assert first == second == {"t": "x" * 10}
+    assert route.call_count == 1

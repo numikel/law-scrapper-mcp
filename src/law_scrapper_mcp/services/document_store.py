@@ -11,7 +11,7 @@ from itertools import pairwise
 
 from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
-from law_scrapper_mcp.models.tool_outputs import LoadedDocumentInfo, LoadedDocumentListOutput
+from law_scrapper_mcp.models.tool_outputs import DocumentKind, LoadedDocumentInfo, LoadedDocumentListOutput
 from law_scrapper_mcp.services.content_processor import Section
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
@@ -23,7 +23,11 @@ MatchSpan = tuple[int, int]
 
 @dataclass
 class LoadedDocument:
-    """Represents a loaded legal document with indexed sections."""
+    """Represents a loaded document (an act, or a judgment a source module loaded) with indexed sections.
+
+    `eli` is the key the document is read under. For an act it is its ELI; for a judgment it is the
+    identifier the source module chose (`SAOS/554697`), which is why `kind` travels with the document.
+    """
 
     eli: str
     markdown: str
@@ -32,6 +36,7 @@ class LoadedDocument:
     last_accessed: float = field(default_factory=time.time)
     size_bytes: int = 0
     section_starts: tuple[int, ...] = ()
+    kind: DocumentKind = DocumentKind.ACT
 
     def __post_init__(self) -> None:
         self.size_bytes = len(self.markdown.encode("utf-8"))
@@ -41,7 +46,7 @@ class LoadedDocument:
         for current, following in pairwise(self.sections):
             if current.end_pos is not None and current.end_pos > following.start_pos:
                 raise ValueError(
-                    f"Sekcje aktu {self.eli} nakładają się: '{current.title}' kończy się na pozycji "
+                    f"Sekcje dokumentu {self.eli} nakładają się: '{current.title}' kończy się na pozycji "
                     f"{current.end_pos}, a '{following.title}' zaczyna się na pozycji {following.start_pos}."
                 )
         self.section_starts = tuple(section.start_pos for section in self.sections)
@@ -117,13 +122,20 @@ class DocumentStore:
         self._ttl = ttl
         self._lock = asyncio.Lock()
 
-    async def load(self, eli: str, markdown: str, sections: list[Section]) -> None:
-        """Load a document into the store."""
+    async def load(
+        self,
+        eli: str,
+        markdown: str,
+        sections: list[Section],
+        *,
+        kind: DocumentKind = DocumentKind.ACT,
+    ) -> None:
+        """Load a document into the store; `kind` says whether it is an act (the default) or a judgment."""
         # Built before the lock and measured through the document itself: the size is
         # `__post_init__`'s own product, so measuring it here as well would encode a
         # 5 MiB act to UTF-8 twice per load. Construction touches nothing shared, so
         # the critical section below stays as short as it was.
-        document = LoadedDocument(eli=eli, markdown=markdown, sections=sections)
+        document = LoadedDocument(eli=eli, markdown=markdown, sections=sections, kind=kind)
         # `ActService` refuses an oversized act against this same limit before
         # it ever gets here, so this guards callers that skip that check. It
         # refuses rather than truncates: a legal act cut mid-clause is a loss
@@ -246,6 +258,11 @@ class DocumentStore:
             # the two with no signal.
             return list(doc.sections)
 
+    async def document_kind(self, eli: str) -> DocumentKind:
+        """Kind of a loaded document. Does not count as a use: reading it back does not extend the TTL."""
+        async with self._lock:
+            return self._get_doc(eli).kind
+
     async def is_loaded(self, eli: str) -> bool:
         """Check if a document is loaded."""
         async with self._lock:
@@ -264,6 +281,8 @@ class DocumentStore:
             return [
                 {
                     "eli": doc.eli,
+                    "document_id": doc.eli,
+                    "document_kind": doc.kind,
                     "size_bytes": doc.size_bytes,
                     "section_count": len(doc.sections),
                     "loaded_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(doc.loaded_at)),

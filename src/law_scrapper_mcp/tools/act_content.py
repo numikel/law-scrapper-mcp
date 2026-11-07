@@ -37,7 +37,9 @@ def register(mcp: MCPServer[AppContext]) -> None:
                     'Identyfikator ELI aktu. Format: "{wydawca}/{rok}/{pozycja}". '
                     "Wydawcy: DU (Dziennik Ustaw), MP (Monitor Polski). "
                     'Przykłady: "DU/2024/1716", "MP/2023/500", "DU/2024/1". '
-                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True)."
+                    "Akt MUSI być wcześniej załadowany przez get_act_details(eli=..., load_content=True). "
+                    "Orzeczenie załadowane przez get_saos_judgment_details(source_id=..., load_content=true) "
+                    'czytasz pod jego identyfikatorem dokumentu, np. "SAOS/554697".'
                 ),
             ),
         ],
@@ -63,16 +65,21 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ] = 0,
     ) -> EnrichedResponse[ContentOutput]:
         """
-        Czytaj treść załadowanego aktu prawnego po sekcjach.
+        Czytaj treść załadowanego aktu prawnego lub orzeczenia po sekcjach.
 
         WYMAGANIE: Akt musi być wcześniej załadowany za pomocą
-        get_act_details(eli=..., load_content=True).
+        get_act_details(eli=..., load_content=True), a orzeczenie za pomocą
+        get_saos_judgment_details(source_id=..., load_content=true) (moduł SAOS).
 
         Bez parametru section zwraca spis treści (listę sekcji).
         Z parametrem section zwraca treść wybranej sekcji.
+        Odpowiedź ma pola document_id i document_kind ('act' albo 'judgment'). Dla orzeczenia
+        eli powtarza identyfikator dokumentu (np. SAOS/554697) i nie jest identyfikatorem ELI.
 
-        Kiedy użyć: Aby czytać treść konkretnej sekcji załadowanego aktu.
-        Kiedy NIE używać: Aby zobaczyć metadane → użyj get_act_details.
+        Kiedy użyć: Aby czytać treść konkretnej sekcji załadowanego aktu lub orzeczenia.
+        Kiedy użyć: Aby przeczytać uzasadnienie wczytanego orzeczenia (sekcja z uzasadnieniem w spisie treści).
+        Kiedy NIE używać: Aby zobaczyć metadane aktu → użyj get_act_details.
+        Kiedy NIE używać: Aby zobaczyć metadane orzeczenia → użyj get_saos_judgment_details.
 
         Przykłady:
         - read_act_content(eli="DU/2024/1692") - Spis treści (lista sekcji)
@@ -80,6 +87,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - read_act_content(eli="DU/2024/1692", section="Rozdział 1") - Treść rozdziału 1
         - read_act_content(eli="DU/2024/1692", section="Dział II") - Treść działu II
         - read_act_content(eli="MP/2024/100") - Spis treści aktu z MP
+        - read_act_content(eli="SAOS/554697") - Spis treści wczytanego orzeczenia z SAOS
         """
         content_service = get_app_context(ctx).content_service
 
@@ -110,13 +118,16 @@ def register(mcp: MCPServer[AppContext]) -> None:
         """
         Wyświetl dokumenty załadowane do pamięci (Document Store).
 
-        Dokumenty ładowane są przez get_act_details(eli=..., load_content=True).
+        Dokumenty ładowane są przez get_act_details(eli=..., load_content=True), a orzeczenia przez
+        get_saos_judgment_details(source_id=..., load_content=true) (moduł SAOS).
         Każdy dokument ma TTL 2h — po tym czasie wymaga ponownego załadowania.
 
-        Zwraca jedną stronę listy wraz z metadanymi paginacji (page_info).
+        Zwraca jedną stronę listy wraz z metadanymi paginacji (page_info). Każdy wpis ma pola
+        document_id i document_kind ('act' albo 'judgment').
 
-        Kiedy użyć: Aby sprawdzić jakie akty są załadowane i dostępne do czytania/wyszukiwania.
+        Kiedy użyć: Aby sprawdzić jakie akty i orzeczenia są załadowane i dostępne do czytania/wyszukiwania.
         Kiedy NIE używać: Do wyszukiwania aktów → użyj search_legal_acts.
+        Kiedy NIE używać: Do wyszukiwania orzeczeń → użyj search_saos_judgments.
 
         Przykłady:
         - list_loaded_documents() - Wyświetl pierwszą stronę załadowanych dokumentów

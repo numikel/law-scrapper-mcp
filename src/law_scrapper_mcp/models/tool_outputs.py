@@ -49,6 +49,14 @@ class DocumentKind(StrEnum):
     JUDGMENT = "judgment"
 
 
+DOCUMENT_ID_DESCRIPTION = (
+    "Identyfikator dokumentu w pamięci serwera, którego użyjesz w parametrze eli kolejnych wywołań. "
+    "Dla aktu równy eli (np. 'DU/2024/1716'), dla orzeczenia identyfikator nadany przez moduł źródła "
+    "(np. 'SAOS/554697'); wtedy eli powtarza tę wartość i nie jest identyfikatorem ELI."
+)
+DOCUMENT_KIND_DESCRIPTION = "Rodzaj dokumentu: 'act' (akt prawny) albo 'judgment' (orzeczenie)."
+
+
 class JudgmentSummaryOutput(BaseModel):
     """Source-neutral summary of one court judgment.
 
@@ -171,9 +179,11 @@ class ActDetailOutput(BaseModel):
 
 
 class ContentOutput(BaseModel):
-    """Output for act content."""
+    """Output for the content of a loaded document (an act, or a judgment loaded by a source module)."""
 
     eli: str
+    document_id: str | None = Field(default=None, description=DOCUMENT_ID_DESCRIPTION)
+    document_kind: DocumentKind | None = Field(default=None, description=DOCUMENT_KIND_DESCRIPTION)
     section_id: str | None = None
     section_title: str
     content: str
@@ -182,9 +192,11 @@ class ContentOutput(BaseModel):
 
 
 class SearchInActOutput(BaseModel):
-    """Output for search within act."""
+    """Output for search within a loaded document (an act, or a judgment loaded by a source module)."""
 
     eli: str
+    document_id: str | None = Field(default=None, description=DOCUMENT_ID_DESCRIPTION)
+    document_kind: DocumentKind | None = Field(default=None, description=DOCUMENT_KIND_DESCRIPTION)
     query: str
     matches: list[dict[str, Any]]
     total_matches: int
@@ -310,6 +322,8 @@ class LoadedDocumentInfo(BaseModel):
     """Info about a single loaded document."""
 
     eli: str
+    document_id: str | None = Field(default=None, description=DOCUMENT_ID_DESCRIPTION)
+    document_kind: DocumentKind | None = Field(default=None, description=DOCUMENT_KIND_DESCRIPTION)
     size_bytes: int
     section_count: int
     loaded_at: str

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from law_scrapper_mcp.client.exceptions import DocumentNotLoadedError
+from law_scrapper_mcp.client.exceptions import ContentTooLargeError, DocumentNotLoadedError
 from law_scrapper_mcp.models.tool_inputs import is_eli_shaped
 from law_scrapper_mcp.models.tool_outputs import DocumentKind
 from law_scrapper_mcp.services.content_processor import ContentProcessor, Section
@@ -154,6 +154,49 @@ class TestTextsAreTheOnesActsAlwaysHad:
             "(orzeczenie z SAOS: get_saos_judgment_details z load_content=true)."
         )
         assert "get_act_details" not in message
+
+    @pytest.mark.parametrize("typo", ["DU/2024", "DU/2024/abc", "du-2024-1", "abc"])
+    def test_not_loaded_message_for_a_mistyped_eli_is_the_one_that_names_the_source_tool(self, typo: str) -> None:
+        """Pinned on purpose: a document that is not loaded has no stored kind, so the wording follows the shape.
+
+        A mistyped ELI is not ELI-shaped, so it gets the second text; the hint is wrong for the typo and harmless,
+        and the text still tells the agent to load the document with the tool of its source.
+        """
+        message = str(DocumentNotLoadedError(typo))
+
+        assert message == (
+            f"Dokument {typo} nie jest załadowany. Wczytaj go narzędziem źródła "
+            "(orzeczenie z SAOS: get_saos_judgment_details z load_content=true)."
+        )
+
+    def test_too_large_message_for_an_act_is_byte_identical(self) -> None:
+        assert str(ContentTooLargeError(ACT_ID, 6_000_000, 5_242_880)) == (
+            "Treść aktu DU/2024/1 ma 6000000 B i przekracza limit 5242880 B, więc nie została przetworzona."
+        )
+
+    def test_too_large_message_for_an_act_with_a_source_file_is_byte_identical(self) -> None:
+        message = str(ContentTooLargeError(ACT_ID, 10, 5, "https://example.test/a.pdf", exact=False))
+
+        assert message == (
+            "Treść aktu DU/2024/1 ma co najmniej 10 B i przekracza limit 5 B, więc nie została przetworzona. "
+            "Pobierz plik źródłowy: https://example.test/a.pdf"
+        )
+
+    def test_too_large_message_for_a_judgment_does_not_say_act(self) -> None:
+        message = str(ContentTooLargeError(JUDGMENT_ID, 6_000_000, 5_242_880))
+
+        assert message == (
+            "Treść dokumentu SAOS/554697 ma 6000000 B i przekracza limit 5242880 B, więc nie została przetworzona."
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_store_refuses_an_oversized_judgment_in_those_words(self) -> None:
+        store = DocumentStore(max_size_bytes=10)
+
+        with pytest.raises(ContentTooLargeError, match="Treść dokumentu SAOS/554697"):
+            await store.load(JUDGMENT_ID, "x" * 11, [], kind=DocumentKind.JUDGMENT)
+
+        assert not await store.is_loaded(JUDGMENT_ID)
 
     @pytest.mark.asyncio
     async def test_missing_section_message_for_an_act_is_byte_identical(self) -> None:

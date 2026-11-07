@@ -642,6 +642,7 @@ class EgressClient:
         cache_ttl: int | None = None,
         *,
         none_on_no_content: bool = False,
+        max_bytes: int | None = None,
     ) -> Any:
         """Get JSON response from API with optional caching.
 
@@ -653,9 +654,15 @@ class EgressClient:
                 failing to parse an empty body. The answer is not cached. Some hosts use 204
                 for "no such resource", so a caller that knows this opts in; the default keeps
                 the behaviour every existing caller relies on.
+            max_bytes: Byte budget for the body, enforced while it streams in; `None` reads it
+                whole, as every existing caller does. A cached answer is returned without a
+                new read, so the budget only matters on a miss.
 
         Returns:
             Parsed JSON response, or `None` for a 204 when `none_on_no_content` is set
+
+        Raises:
+            ResponseTooLargeError: The body exceeds `max_bytes`.
         """
         # Build cache key
         cache_key = None
@@ -666,7 +673,7 @@ class EgressClient:
             if cached is not None:
                 return cached
 
-        response = await self._request("GET", path, params=params)
+        response = await self._request("GET", path, max_bytes=max_bytes, params=params)
         if none_on_no_content and response.status_code == 204:
             return None
         data = response.json()

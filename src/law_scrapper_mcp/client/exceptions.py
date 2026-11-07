@@ -104,7 +104,9 @@ class ContentTooLargeError(LawScrapperError):
 
     def __init__(self, eli: str, size_bytes: int, limit_bytes: int, pdf_url: str | None = None, *, exact: bool = True):
         measured = self._measured(size_bytes, exact=exact)
-        message = f"Treść aktu {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
+        # An ELI keeps the wording it always had; a judgment (`SAOS/554697`) is not an act.
+        noun = "aktu" if is_eli_shaped(eli) else "dokumentu"
+        message = f"Treść {noun} {eli} ma {measured} i przekracza limit {limit_bytes} B, więc nie została przetworzona."
         if pdf_url is not None:
             message += f" Pobierz plik źródłowy: {pdf_url}"
         super().__init__(message)
@@ -155,7 +157,10 @@ class DocumentNotLoadedError(LawScrapperError):
 
     def __init__(self, eli: str):
         # An ELI keeps the text it always had. Any other identifier is a document of another kind (a
-        # judgment, `SAOS/554697`), which get_act_details cannot load.
+        # judgment, `SAOS/554697`), which get_act_details cannot load. The wording is keyed on the shape of
+        # the identifier because a document that is not loaded has no stored kind to ask: a mistyped ELI
+        # (`DU/2024`) gets the second text too, which names the source tool, so the hint is wrong for the
+        # typo but harmless. `tests/unit/test_document_kind.py` pins this on purpose.
         if is_eli_shaped(eli):
             message = f"Dokument {eli} nie jest załadowany. Użyj get_act_details(eli='{eli}', load_content=true)"
         else:

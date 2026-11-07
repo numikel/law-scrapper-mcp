@@ -63,7 +63,7 @@ class TestWhatIsStored:
         assert first.document_id == second.document_id
 
     async def test_a_second_load_asks_again_and_replaces_the_document(self, make_reading: MakeReading) -> None:
-        """The detail is not cached (S-03), and the loaded document is the reuse."""
+        """The detail is never cached (see `SaosClient.judgment`); the loaded document is the reuse."""
         harness = make_reading()
 
         await harness.service.load(REASONS_ID)

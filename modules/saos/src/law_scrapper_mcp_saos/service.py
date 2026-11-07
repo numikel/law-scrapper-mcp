@@ -74,6 +74,10 @@ PORTAL_LINK_CAP = 5
 # SAOS saying "no" (not authorised, forbidden, too many requests, unavailable for legal reasons). The egress
 # client keeps these as a plain `SejmApiError` that carries the status; only 5xx become `ApiUnavailableError`.
 # After one of them no further request goes out in the same call.
+#
+# Not the core's `_is_refusal` (`tools/error_handling.py`), on purpose: that one is private, picks the wording
+# of the message an agent reads, knows 401, 403 and 451 only and ignores an error without a named source. This
+# one decides whether to keep asking, so it also stops on 429 (too many requests).
 REFUSAL_STATUSES = frozenset({401, 403, 429, 451})
 _SOURCE_ID = re.compile(r"[0-9]{1,12}")
 PHRASE_MAX_LENGTH = 500

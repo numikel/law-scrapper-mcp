@@ -57,8 +57,19 @@ def test_the_settings_it_names_exist() -> None:
         "API_RATE_BURST",
         "DOC_STORE_TTL",
         "DOC_STORE_MAX_DOCUMENTS",
+        "CONTACT",
     }
     assert named <= fields
+
+
+def test_the_identity_sentence_names_the_operators_contact_and_its_default() -> None:
+    from law_scrapper_mcp.config import USER_AGENT_CONTACT
+
+    lowered = " ".join(README.split())
+
+    assert "the operator's contact, `LAW_MCP_CONTACT`, which defaults to the project repository" in lowered
+    assert "project address" not in lowered
+    assert USER_AGENT_CONTACT.startswith("https://github.com/")
 
 
 def test_the_reading_section_states_what_the_code_does() -> None:

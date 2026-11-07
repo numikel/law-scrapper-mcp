@@ -186,7 +186,7 @@ SAOS publishes no licence and no terms of use that this project found: the API d
 2026-11-02 contains none, and the terms pages of the service itself were not checked. No permission was
 requested or obtained. Do not read this module as a statement that quoting judgments verbatim, or
 reusing them for a particular purpose, is permitted; that is for the user to establish. The module
-identifies itself honestly (name, version, project address) and keeps to the pace above.
+identifies itself honestly (name, version and the operator's contact, `LAW_MCP_CONTACT`, which defaults to the project repository) and keeps to the pace above.
 
 If you intend commercial and/or mass use, verify again that using the service is permitted. The
 excerpts are cut from judgments that courts already published with the parties abbreviated, but they

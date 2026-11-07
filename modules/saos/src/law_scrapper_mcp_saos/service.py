@@ -971,6 +971,13 @@ NOTE_TRUNCATED = (
     "Nie wiadomo, czy uzasadnienie istnieje: SAOS ma więcej rekordów o tej sygnaturze, niż mieści jedna strona "
     "wyszukiwania, a żaden z nich nie jest uzasadnieniem tego sądu. Wczytano sam wyrok."
 )
+# The heading the module recognises is a level-2 `UZASADNIENIE`; the same word elsewhere in the text (a bold
+# line, a deeper heading, inline) may mark reasoning that is in the record. Then `absent` would be false.
+REASONING_WORD = "UZASADNIENIE"
+NOTE_REASONING_WORD = (
+    "Nie wiadomo, czy uzasadnienie istnieje: tekst wyroku zawiera słowo UZASADNIENIE poza nagłówkiem, który serwer "
+    "rozpoznaje, a SAOS nie ma osobnego rekordu uzasadnienia tej sprawy. Przejrzyj tekst. Wczytano sam wyrok."
+)
 NOTE_COURT_UNKNOWN = (
     "Nie wiadomo, czy uzasadnienie istnieje: SAOS ma rekord uzasadnienia o tej sygnaturze, ale nie podaje sądu "
     "wyroku lub tego rekordu, więc nie da się ustalić, czy dotyczy tej sprawy. Wczytano sam wyrok."
@@ -1119,6 +1126,8 @@ class SaosReadingService:
                 return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_TRUNCATED, markdown, requests)
             if any(_same_court(item.division, data.division) is None for item in same_number):
                 return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_COURT_UNKNOWN, markdown, requests)
+            if REASONING_WORD in markdown:
+                return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_REASONING_WORD, markdown, requests)
             return _Reasoning(ReasoningStatus.ABSENT, NOTE_ABSENT, with_no_reasoning_note(markdown), requests)
         return await self._merge(markdown, str(candidates[0].id), requests=requests)
 
@@ -1144,9 +1153,3 @@ class SaosReadingService:
             return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
         merged = with_reasons(markdown, reasons)
         return _Reasoning(ReasoningStatus.MERGED, note, merged, requests, sibling_source_id=sibling_id)
-
-
-async def load_saos_judgment(app_context: AppContext, *, source_id: str | int) -> SaosLoadedJudgment:
-    """Entry point of the reading path: builds the service from the module state and the shared document store."""
-    service = SaosReadingService(saos_state(app_context).client, app_context.document_store)
-    return await service.load(source_id)

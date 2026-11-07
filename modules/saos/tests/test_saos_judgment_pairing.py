@@ -107,6 +107,22 @@ class TestASentenceWithNoReasonsRecord:
             "To uwaga dodana przez serwer, nie tekst orzeczenia."
         )
 
+    @pytest.mark.parametrize("marking", ["<p><b>UZASADNIENIE</b></p>", "<h3>UZASADNIENIE</h3><p>x</p>"])
+    async def test_a_word_for_the_reasoning_in_another_marking_forbids_the_claim(
+        self, make_reading: MakeReading, marking: str
+    ) -> None:
+        """The module only knows a level-2 heading; the same word elsewhere may be reasoning it did not recognise."""
+        fake = pair_fake()
+        fake.details[LONE_ID]["data"]["textContent"] += marking
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(LONE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_REASONING_WORD
+        assert loaded.requests_made == 2
+        assert "Brak uzasadnienia w źródle" not in (await stored_text(harness, loaded.document_id))
+
     async def test_a_reasons_record_of_another_court_is_not_the_reasoning(self, make_reading: MakeReading) -> None:
         """The same case number exists in many courts; only the same court counts."""
         fake = pair_fake()

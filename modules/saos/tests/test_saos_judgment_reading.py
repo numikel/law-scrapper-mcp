@@ -301,6 +301,14 @@ class TestADetailThatIsTooLarge:
         assert loaded.requests_made == 3
         assert [section.title for section in await harness.store.get_toc(loaded.document_id)] == ["Treść", "WYROK"]
 
+    async def test_a_metadata_read_is_not_bounded_by_the_budget(self, make_reading: MakeReading) -> None:
+        """Metadata and portal links never needed the text, and must not start failing on a record they served."""
+        harness = make_reading(detail_max_bytes=1)
+
+        detail = await harness.client.judgment(str(SENTENCE_ID))
+
+        assert detail.data.id == SENTENCE_ID
+
     async def test_without_a_budget_the_body_is_read_whole(self, make_reading: MakeReading) -> None:
         """Control: the default of the client keeps every existing caller as it was."""
         fake = pair_fake()

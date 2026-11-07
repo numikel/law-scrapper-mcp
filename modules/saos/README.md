@@ -120,7 +120,7 @@ unused document goes first once `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` are loaded.
   | `absent` | No reasoning in the source: the record has none and SAOS has no reasons record of that court. The text ends with a section `[Uwaga serwera] Uzasadnienie` that says so; it is a note of the server, not text of the judgment. |
   | `ambiguous` | Several reasons records of that court; none joined, their `source_id` values are listed. |
   | `reasoning_record` | The loaded record is itself a reasons record. |
-  | `not_assessed` | Nothing is claimed: another kind of judgment or court, no case number, a search page too short to be sure, a reasons record whose court cannot be compared with the sentence's (one of them gives no court), or the extra request failed. |
+  | `not_assessed` | Nothing is claimed: another kind of judgment or court, no case number, a search page too short to be sure, a reasons record whose court cannot be compared with the sentence's (one of them gives no court), a sentence with no reasons record whose text names `UZASADNIENIE` outside the level-2 heading the module recognises (the reasoning may be in the record in another marking), or the extra request failed. |
 
   A cut-short search page that holds no reasons record of that court is `not_assessed`, never `absent`. So is a
   page that holds a reasons record of the same case number but whose court cannot be compared with the

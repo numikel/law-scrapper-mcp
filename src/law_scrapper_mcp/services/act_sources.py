@@ -313,6 +313,20 @@ class ActSourceRegistry:
         undescribed = [registered for registered in self._by_code if registered not in self._info]
         raise UnknownPublisherError(unknown_publisher_message(code, self.describe(), undescribed=undescribed))
 
+    def canonical_publisher(self, code: str) -> str:
+        """`DU` or `MP` for those codes typed in another letter case or with surrounding whitespace.
+
+        Only while a source is registered: with an empty registry every value, padded or not, goes to
+        the Sejm exactly as typed, as before the source mechanism. Any other value is returned
+        unchanged. It is for callers that take the publisher as a parameter; a publisher inside an
+        ELI is left as typed, because the core stores a loaded document under the ELI as typed.
+        """
+        if self._by_code or self._by_prefix:
+            reserved = code.strip().upper()
+            if reserved in RESERVED_PUBLISHERS:
+                return reserved
+        return code
+
     def publishers(self) -> tuple[str, ...]:
         """Exact publisher codes currently registered, sorted."""
         return tuple(sorted(self._by_code))

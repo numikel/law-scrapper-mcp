@@ -233,6 +233,28 @@ def test_whitespace_around_the_codes_the_core_serves_is_not_a_reason_to_refuse(p
     assert registry.for_publisher(padded) is None, "left to the Sejm unchanged, as before the module"
 
 
+@pytest.mark.parametrize(
+    ("typed", "canonical"),
+    [(" du", "DU"), ("Mp ", "MP"), ("\tDU\n", "DU"), ("mp", "MP"), ("DU", "DU")],
+)
+def test_the_canonical_publisher_of_du_and_mp_typed_loosely_is_du_and_mp(typed: str, canonical: str) -> None:
+    registry, _ = registry_with(info("ZZ_PM", "pomorskie"))
+
+    assert registry.canonical_publisher(typed) == canonical
+
+
+@pytest.mark.parametrize("value", ["xyz", "pomorskie", " ZZ_PM ", "DUMP", "", "D U"])
+def test_every_other_value_is_left_exactly_as_typed(value: str) -> None:
+    registry, _ = registry_with(info("ZZ_PM", "pomorskie"))
+
+    assert registry.canonical_publisher(value) == value
+
+
+@pytest.mark.parametrize("typed", [" du", "Mp ", "DU", "xyz"])
+def test_with_an_empty_registry_nothing_is_normalised(typed: str) -> None:
+    assert ActSourceRegistry().canonical_publisher(typed) == typed
+
+
 def test_an_empty_registry_returns_before_any_normalisation(monkeypatch: pytest.MonkeyPatch) -> None:
     def forbidden(_text: str) -> str:
         raise AssertionError("the empty-registry path must not normalise the value")

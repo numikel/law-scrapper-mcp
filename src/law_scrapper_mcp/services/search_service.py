@@ -133,6 +133,7 @@ class SearchService:
         detail_level: DetailLevel = DetailLevel.STANDARD,
     ) -> SearchOutput:
         """Search for legal acts and return a stored result page."""
+        publisher = self._sources.canonical_publisher(publisher)
         source = self._sources.for_publisher(publisher)
         if source is not None:
             # A source is asked for a bounded page only: the value is rejected, never silently
@@ -283,6 +284,7 @@ class SearchService:
         """
         page_limit = DEFAULT_ITEM_LIMIT if limit is None else max(limit, 0)
         page_offset = max(offset or 0, 0)
+        publisher = self._sources.canonical_publisher(publisher)
         source = self._sources.for_publisher(publisher)
         if source is not None:
             return await self._search_source(

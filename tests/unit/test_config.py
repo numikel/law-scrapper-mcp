@@ -13,6 +13,7 @@ from law_scrapper_mcp.config import (
     MAX_PATTERN_LENGTH_FLOOR,
     USER_AGENT_CONTACT,
     Settings,
+    log_default_contact_warning,
     log_pattern_limit_clamping,
 )
 
@@ -500,6 +501,55 @@ class TestContact:
 
         with pytest.raises(ValidationError):
             Settings()
+
+
+class TestDefaultContactWarning:
+    """One startup warning for an HTTP deployment beyond loopback that still sends the default contact.
+
+    Beyond loopback the traffic is usually somebody else's, and an upstream administrator who
+    wants to report a problem would otherwise write to the project's authors (FR-016).
+    """
+
+    LOGGER = "test_default_contact"
+
+    def _warnings(self, settings: Settings, caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+        with caplog.at_level(logging.WARNING, logger=self.LOGGER):
+            log_default_contact_warning(settings, logging.getLogger(self.LOGGER))
+        return [record for record in caplog.records if record.name == self.LOGGER]
+
+    def test_warns_once_for_http_beyond_loopback_with_the_default_contact(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        current = Settings(transport="streamable-http", host="0.0.0.0", auth_mode="bearer", auth_token="k" * 32)
+
+        records = self._warnings(current, caplog)
+
+        assert len(records) == 1
+        assert records[0].levelno == logging.WARNING
+        assert records[0].getMessage() == (
+            f"Serwer HTTP wysyła domyślny kontakt w nagłówku User-Agent ({USER_AGENT_CONTACT}). "
+            "Zgłoszenia administratorów zewnętrznych serwisów trafią wtedy do autorów projektu, nie do ciebie. "
+            "Ustaw LAW_MCP_CONTACT na własny adres URL lub e-mail."
+        )
+
+    def test_is_silent_when_the_operator_set_a_contact(self, caplog: pytest.LogCaptureFixture) -> None:
+        current = Settings(
+            transport="streamable-http",
+            host="0.0.0.0",
+            auth_mode="bearer",
+            auth_token="k" * 32,
+            contact="ops@example.org",
+        )
+
+        assert self._warnings(current, caplog) == []
+
+    def test_is_silent_for_http_on_loopback(self, caplog: pytest.LogCaptureFixture) -> None:
+        assert self._warnings(Settings(transport="streamable-http"), caplog) == []
+
+    def test_is_silent_for_stdio_even_with_a_remote_looking_host(self, caplog: pytest.LogCaptureFixture) -> None:
+        current = Settings(transport="stdio", host="0.0.0.0", auth_mode="bearer", auth_token="k" * 32)
+
+        assert self._warnings(current, caplog) == []
 
 
 class TestShutdownGrace:

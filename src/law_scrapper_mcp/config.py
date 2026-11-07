@@ -37,6 +37,7 @@ __all__ = [
     "USER_AGENT_CONTACT",
     "_host_of",
     "is_loopback_entry",
+    "log_default_contact_warning",
     "log_pattern_limit_clamping",
     "log_remote_bind_warning",
     "settings",
@@ -435,6 +436,27 @@ def log_remote_bind_warning(current: Settings, log: logging.Logger) -> None:
         current.host,
         current.port,
         current.auth_mode,
+    )
+
+
+def log_default_contact_warning(current: Settings, log: logging.Logger) -> None:
+    """Warn when an HTTP deployment beyond the loopback still sends the default contact.
+
+    Beyond the loopback the traffic is usually somebody else's, and an upstream
+    administrator who wants to report a problem would write to the project's authors
+    instead of the operator (FR-016). STDIO and loopback HTTP are a person running the
+    server for themselves and stay quiet. An operator who sets the default URL on
+    purpose is indistinguishable from one who never set it, and sees the warning too.
+    """
+    if current.transport != "streamable-http" or is_loopback_entry(current.host):
+        return
+    if current.contact != USER_AGENT_CONTACT:
+        return
+    log.warning(
+        "Serwer HTTP wysyła domyślny kontakt w nagłówku User-Agent (%s). "
+        "Zgłoszenia administratorów zewnętrznych serwisów trafią wtedy do autorów projektu, nie do ciebie. "
+        "Ustaw LAW_MCP_CONTACT na własny adres URL lub e-mail.",
+        USER_AGENT_CONTACT,
     )
 
 

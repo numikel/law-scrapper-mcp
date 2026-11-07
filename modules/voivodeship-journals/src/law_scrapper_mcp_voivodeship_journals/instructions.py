@@ -16,6 +16,10 @@ def build_instructions() -> str:
         "Kod podajesz w parametrze publisher (search_legal_acts, browse_acts, track_legal_changes) "
         "albo w ELI (get_act_details, read_act_content, search_in_act, analyze_act_relationships, compare_acts), "
         "np. POL_WOJ_PM/2025/5051.\n"
+        "- W parametrze publisher zamiast kodu możesz podać nazwę województwa, np. pomorskie (wielkość liter i "
+        "polskie znaki nie mają znaczenia). W ELI zawsze używaj kodu, nie nazwy. Kody z nazwami wszystkich "
+        'dzienników pokazuje get_system_metadata(category="publishers"); nieznany wydawca kończy się błędem '
+        "z listą poprawnych.\n"
         "- Każdy dziennik ma własny serwer i zna tylko swoje akty. Zawsze podawaj year: wyszukiwanie bez roku "
         "trwa kilka do kilkunastu sekund.\n"
         "- Nie są obsługiwane i kończą się błędem: filtr in_force oraz date_from/date_to (data wejścia w życie). "

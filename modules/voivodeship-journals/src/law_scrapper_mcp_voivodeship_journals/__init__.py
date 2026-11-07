@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from law_scrapper_mcp.client.egress import EgressHost
 from law_scrapper_mcp.source_modules.contract import ModuleHost, SourceModule
-from law_scrapper_mcp_voivodeship_journals.catalog import CODE_PREFIX, JOURNALS, SERVED
+from law_scrapper_mcp_voivodeship_journals.catalog import CODE_PREFIX, JOURNALS, PUBLISHER_INFO, SERVED
 from law_scrapper_mcp_voivodeship_journals.instructions import build_instructions
 from law_scrapper_mcp_voivodeship_journals.source import JournalActSource
 from law_scrapper_mcp_voivodeship_journals.state import MODULE_NAME, JournalsState
@@ -37,7 +37,12 @@ async def start(host: ModuleHost) -> AsyncIterator[JournalsState]:
         for journal in SERVED
     }
     source = JournalActSource(clients, JOURNALS, host.settings)
-    host.act_sources.register(source, publishers=[journal.code for journal in JOURNALS], prefixes=(CODE_PREFIX,))
+    host.act_sources.register(
+        source,
+        publishers=[journal.code for journal in JOURNALS],
+        prefixes=(CODE_PREFIX,),
+        info=PUBLISHER_INFO,
+    )
     try:
         yield JournalsState(codes=tuple(clients))
     finally:

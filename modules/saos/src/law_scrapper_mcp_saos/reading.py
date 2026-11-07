@@ -27,7 +27,10 @@ NO_REASONING_TEXT = (
 )
 
 _TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9]*(?:\s[^<>]*)?/?>")
-_HEADING = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+# The rest of the line is taken whole and stripped by the callers: a lazy `(.+?)[ \t]*$` backtracks
+# quadratically on a heading followed by a long run of spaces and then a character.
+_HEADING = re.compile(r"^##[ \t]+([^\n]*)$", re.MULTILINE)
+MAX_SECTIONS = 500
 _BLANK_RUNS = re.compile(r"\n{3,}")
 _SLUG_DROP = re.compile(r"[^\w\s.-]")
 _SLUG_MAX = 50
@@ -56,34 +59,51 @@ def _slug(title: str) -> str:
     return slug or "sekcja"
 
 
-def _unique(slug: str, used: set[str]) -> str:
-    candidate, number = slug, 1
+def _unique(slug: str, used: set[str], last_number: dict[str, int]) -> str:
+    """`slug`, or `slug_N` when it is taken; `last_number` remembers where each slug stopped counting.
+
+    Starting again from 2 for every repeat would cost O(k²) for k identical headings, and the text is
+    third-party: a few thousand `## A` lines would hold the event loop for seconds.
+    """
+    candidate = slug
+    number = last_number.get(slug, 1)
     while candidate in used:
         number += 1
         candidate = f"{slug}_{number}"
+    last_number[slug] = number
     used.add(candidate)
     return candidate
 
 
-def index_sections(markdown: str) -> list[Section]:
+def index_sections(markdown: str, *, max_sections: int = MAX_SECTIONS) -> list[Section]:
     """Sections of a judgment: one per level-2 heading, plus `Treść` for the text before the first one.
 
     The ranges are disjoint and cover the whole text, which is what the document store requires. Section
     ids are unique even when two headings read alike (a sentence and its reasons both carry a caption).
+
+    Raises:
+        ValueError: The text has more than `max_sections` sections (Polish message). A real judgment has a
+            handful; a table of contents of thousands is not one an agent can use. The parameter exists so
+            that a test can index a text of any size.
     """
     headings = [(match.start(), match.group(1).strip()) for match in _HEADING.finditer(markdown)]
     starts: list[tuple[int, str, int]] = []
     if not headings or markdown[: headings[0][0]].strip():
         starts.append((0, FALLBACK_TITLE, 1))
     starts.extend((position, title, 2) for position, title in headings)
+    if len(starts) > max_sections:
+        raise ValueError(
+            f"Tekst orzeczenia ma {len(starts)} sekcji, więcej niż dopuszczalne {max_sections}, więc nie został wczytany."
+        )
 
     used: set[str] = set()
+    last_number: dict[str, int] = {}
     sections: list[Section] = []
     for index, (start, title, level) in enumerate(starts):
         end = starts[index + 1][0] if index + 1 < len(starts) else len(markdown)
         sections.append(
             Section(
-                id=_unique(_slug(title), used),
+                id=_unique(_slug(title), used, last_number),
                 title=title,
                 level=level,
                 start_pos=start,

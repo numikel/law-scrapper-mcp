@@ -6,6 +6,8 @@ small text with placeholder words, because a skeleton has none.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from saos_reading_testing import NESTED_ID, REASONS_ID, SENTENCE_ID, SUPREME_ID, skeleton
 
@@ -126,6 +128,58 @@ class TestSections:
     )
     def test_the_recorded_skeletons_give_the_court_headings(self, source_id: int, expected: list[str]) -> None:
         assert titles(reading.to_markdown(text_of(source_id))) == expected
+
+
+class TestAThirdPartyTextCannotHoldTheEventLoop:
+    """The text is SAOS's, so its shape is not ours to trust: indexing it must stay linear.
+
+    The bounds are generous (a fixed run takes milliseconds) and the sizes are those at which the quadratic
+    versions took seconds, so a regression is a failure and not a flake.
+    """
+
+    def test_thousands_of_identical_headings_get_distinct_ids_quickly(self) -> None:
+        count = 10_000
+        markdown = "\n\n".join("## A" for _ in range(count))
+
+        started = time.perf_counter()
+        ids = [section.id for section in reading.index_sections(markdown, max_sections=count)]
+        elapsed = time.perf_counter() - started
+
+        assert len(set(ids)) == count == len(ids)
+        assert ids[:3] == ["A", "A_2", "A_3"]
+        assert elapsed < 3.0
+
+    def test_a_heading_taken_by_a_literal_suffix_is_skipped(self) -> None:
+        """`## A_2` already exists, so the second `## A` must not claim that id."""
+        sections = reading.index_sections("## A\n\nx\n\n## A_2\n\ny\n\n## A\n\nz")
+
+        assert [section.id for section in sections] == ["A", "A_2", "A_3"]
+
+    def test_a_heading_followed_by_a_long_run_of_spaces_is_read_quickly(self) -> None:
+        markdown = "## a" + " " * 40_000 + "x\n\ntext"
+
+        started = time.perf_counter()
+        sections = reading.index_sections(markdown)
+        found = reading.has_reasoning_heading(markdown)
+        elapsed = time.perf_counter() - started
+
+        assert [section.title for section in sections] == ["a" + " " * 40_000 + "x"]
+        assert found is False
+        assert elapsed < 1.0
+
+    def test_trailing_spaces_and_tabs_are_not_part_of_a_title(self) -> None:
+        assert titles("##  WYROK \t \n\ntreść") == ["WYROK"]
+
+    def test_a_text_with_more_sections_than_the_ceiling_is_refused(self) -> None:
+        markdown = "\n\n".join(f"## Punkt {number}" for number in range(reading.MAX_SECTIONS + 1))
+
+        with pytest.raises(ValueError, match="sekcji"):
+            reading.index_sections(markdown)
+
+    def test_a_text_at_the_ceiling_is_indexed(self) -> None:
+        markdown = "\n\n".join(f"## Punkt {number}" for number in range(reading.MAX_SECTIONS))
+
+        assert len(reading.index_sections(markdown)) == reading.MAX_SECTIONS
 
 
 class TestReasoningHeading:

@@ -22,9 +22,15 @@ DETAIL_PATH = "judgments"
 class SaosClient:
     """Parses SAOS answers into the module's API models."""
 
-    def __init__(self, egress: EgressClient, *, search_ttl: int) -> None:
+    def __init__(self, egress: EgressClient, *, search_ttl: int, detail_max_bytes: int | None = None) -> None:
+        """`detail_max_bytes` bounds the body of a judgment detail while it streams in (`None` = unbounded).
+
+        A detail carries the whole text of the judgment, and the document store's size gate only sees it
+        after the body has been parsed and converted; the host sets this to that gate's limit.
+        """
         self._egress = egress
         self._search_ttl = search_ttl
+        self._detail_max_bytes = detail_max_bytes
 
     @property
     def host(self) -> EgressHost:
@@ -50,7 +56,9 @@ class SaosClient:
     async def _detail(self, source_id: str) -> Any:
         """The body of `judgments/{id}`, not cached; a missing judgment is a Polish `ValueError`."""
         try:
-            return await self._egress.get_json(f"{DETAIL_PATH}/{source_id}", cache_ttl=None)
+            return await self._egress.get_json(
+                f"{DETAIL_PATH}/{source_id}", cache_ttl=None, max_bytes=self._detail_max_bytes
+            )
         except ActNotFoundError as error:
             raise ValueError(f"Nie znaleziono orzeczenia o identyfikatorze {source_id} w SAOS.") from error
 

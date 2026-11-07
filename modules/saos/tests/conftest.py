@@ -100,8 +100,8 @@ async def make_reading(saos_router: respx.MockRouter) -> AsyncIterator[Callable[
     """Factory of reading harnesses (a fake SAOS with the recorded skeletons, the loader, a document store)."""
     harnesses: list[ReadingHarness] = []
 
-    def build(fake: FakeReading | None = None) -> ReadingHarness:
-        harness = make_reading_harness(saos_router, fake or pair_fake())
+    def build(fake: FakeReading | None = None, *, detail_max_bytes: int | None = None) -> ReadingHarness:
+        harness = make_reading_harness(saos_router, fake or pair_fake(), detail_max_bytes=detail_max_bytes)
         harnesses.append(harness)
         return harness
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+import httpx
 import pytest
 from saos_reading_testing import (
     REASONS_ID,
@@ -17,11 +18,14 @@ from saos_reading_testing import (
     skeleton,
 )
 
-from law_scrapper_mcp.client.exceptions import ApiUnavailableError, SejmApiError
+from law_scrapper_mcp.client.exceptions import ApiUnavailableError, ContentTooLargeError, SejmApiError
 from law_scrapper_mcp.models.tool_outputs import DocumentKind
+from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.content_service import ContentService
+from law_scrapper_mcp_saos import service
 from law_scrapper_mcp_saos.models import ReasoningStatus, SaosDetail, SaosDetailData, SaosLoadedJudgment, SaosTextData
 
+ACT_ELI = "DU/2024/1"
 JUDGE = "Zofia Wzorcowa-Testowa"
 REPORTER = "Jan Przykładowy-Testowy"
 # A reasons text in the recorded shape, with placeholder words and the anonymisation markers SAOS leaves.
@@ -93,6 +97,26 @@ class TestReadingItBack:
         assert page.content.startswith("## UZASADNIENIE")
         assert page.page_info.was_truncated is True
         assert page.page_info.next_offset == 40
+
+    async def test_an_act_loaded_beside_the_judgment_is_read_as_it_always_was(self, make_reading: MakeReading) -> None:
+        """The e2e server has no act source, so the same-session check is made on the shared store here."""
+        harness = make_reading()
+        loaded = await harness.service.load(SENTENCE_ID)
+        act_text = "Art. 1. Przepis pierwszy.\n\nArt. 2. Przepis drugi."
+        await harness.store.load(ACT_ELI, act_text, ContentProcessor().index_sections(act_text))
+        content = ContentService(harness.store)
+
+        act_toc = await content.read(ACT_ELI)
+        act_hits = await content.search(ACT_ELI, "drugi")
+        judgment_toc = await content.read(loaded.document_id)
+        listing = {doc["document_id"]: doc["document_kind"] for doc in await harness.store.list_documents()}
+
+        assert act_toc.document_kind is DocumentKind.ACT
+        assert act_toc.eli == act_toc.document_id == ACT_ELI
+        assert [entry["title"] for entry in act_toc.toc] == ["Art. 1. Przepis pierwszy.", "Art. 2. Przepis drugi."]
+        assert act_hits.total_matches == 1 and act_hits.document_kind is DocumentKind.ACT
+        assert judgment_toc.document_kind is DocumentKind.JUDGMENT
+        assert listing == {ACT_ELI: DocumentKind.ACT, loaded.document_id: DocumentKind.JUDGMENT}
 
     async def test_a_search_names_the_section_of_each_hit(self, make_reading: MakeReading) -> None:
         harness = make_reading()
@@ -188,6 +212,30 @@ class TestRefusals:
 
         assert await harness.store.list_documents() == []
 
+    @pytest.mark.parametrize("text", ["<br>", "<p> </p>", "<div><p>&nbsp;</p></div>"])
+    async def test_a_text_that_is_only_tags_is_refused_as_no_text(self, make_reading: MakeReading, text: str) -> None:
+        """Not blank until it is converted: loading it would store an empty document as a success."""
+        fake = pair_fake()
+        fake.details[REASONS_ID]["data"]["textContent"] = text
+        harness = make_reading(fake)
+
+        with pytest.raises(ValueError, match="nie ma w SAOS tekstu"):
+            await harness.service.load(REASONS_ID)
+
+        assert await harness.store.list_documents() == []
+
+    async def test_a_reasons_record_that_is_only_tags_is_not_joined(self, make_reading: MakeReading) -> None:
+        fake = pair_fake()
+        fake.details[REASONS_ID]["data"]["textContent"] = "<br>"
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_SIBLING_FAILED
+        assert loaded.requests_made == 3
+        assert "## UZASADNIENIE" not in str(harness.store._store[loaded.document_id].markdown)  # noqa: SLF001
+
     async def test_an_answer_that_is_not_a_detail_is_refused(self, make_reading: MakeReading) -> None:
         fake = pair_fake()
         fake.details[REASONS_ID] = {"unexpected": True}
@@ -205,6 +253,62 @@ class TestRefusals:
             await harness.service.load(REASONS_ID)
 
         assert await harness.store.list_documents() == []
+
+
+def body_size(detail: dict[str, object]) -> int:
+    """The bytes a fake SAOS sends for a detail (the same encoding `httpx` uses for `json=`)."""
+    return len(httpx.Response(200, json=detail).content)
+
+
+@pytest.mark.asyncio
+class TestADetailThatIsTooLarge:
+    """The body is read within a byte budget, so a huge answer is refused while it streams in, not after it is parsed."""
+
+    async def test_the_judgment_itself_is_refused_with_a_message_that_names_the_response(
+        self, make_reading: MakeReading
+    ) -> None:
+        fake = pair_fake()
+        budget = body_size(fake.details[SENTENCE_ID]) - 1
+        harness = make_reading(fake, detail_max_bytes=budget)
+
+        with pytest.raises(ContentTooLargeError, match=f"przekracza limit {budget} B"):
+            await harness.service.load(SENTENCE_ID)
+
+        assert harness.fake.requests == 1  # no search and no second detail after it
+        assert await harness.store.list_documents() == []
+
+    async def test_a_judgment_at_the_budget_is_loaded(self, make_reading: MakeReading) -> None:
+        """Control: the budget is a ceiling on the body, so a body exactly its size passes."""
+        fake = pair_fake()
+        harness = make_reading(fake, detail_max_bytes=body_size(fake.details[REASONS_ID]))
+
+        loaded = await harness.service.load(REASONS_ID)
+
+        assert loaded.reasoning is ReasoningStatus.REASONING_RECORD
+
+    async def test_a_reasons_record_that_is_too_large_leaves_the_sentence_loaded_alone(
+        self, make_reading: MakeReading
+    ) -> None:
+        fake = pair_fake()
+        budget = body_size(fake.details[SENTENCE_ID]) + 100
+        fake.details[REASONS_ID]["data"]["textContent"] += " x" * budget
+        harness = make_reading(fake, detail_max_bytes=budget)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_SIBLING_FAILED
+        assert loaded.requests_made == 3
+        assert [section.title for section in await harness.store.get_toc(loaded.document_id)] == ["Treść", "WYROK"]
+
+    async def test_without_a_budget_the_body_is_read_whole(self, make_reading: MakeReading) -> None:
+        """Control: the default of the client keeps every existing caller as it was."""
+        fake = pair_fake()
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.MERGED
 
 
 class TestTheAnswerModel:

@@ -57,6 +57,7 @@ def test_the_settings_it_names_exist() -> None:
         "API_RATE_BURST",
         "DOC_STORE_TTL",
         "DOC_STORE_MAX_DOCUMENTS",
+        "DOC_STORE_MAX_SIZE_BYTES",
         "CONTACT",
     }
     assert named <= fields

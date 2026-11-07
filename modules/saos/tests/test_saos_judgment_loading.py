@@ -148,6 +148,39 @@ class TestHintsAfterLoading:
         pointer = next(hint for hint in response.hints if hint.tool == TOOL_SEARCH)
         assert pointer.parameters == {"signature": PAIR_NUMBER}
 
+    async def test_a_case_number_that_search_would_refuse_is_not_offered_as_a_search(
+        self, make_reading: MakeReading
+    ) -> None:
+        """The number comes from SAOS; a hint must not propose a call the search tool rejects (over 100 characters)."""
+        long_number = PAIR_NUMBER + " " + "x" * 200
+        fake = pair_fake()
+        fake.details[REASONS_ID]["data"]["courtCases"][0]["caseNumber"] = long_number
+        harness = make_reading(fake)
+
+        response = await service.get_saos_judgment_details(_context(harness), source_id=REASONS_ID, load_content=True)
+
+        assert all(hint.tool != TOOL_SEARCH for hint in response.hints)
+
+    async def test_the_number_in_the_ambiguity_note_has_no_control_characters_and_a_bounded_length(
+        self, make_reading: MakeReading
+    ) -> None:
+        weird = PAIR_NUMBER + "\n\t\x07" + "y" * 200
+        fake = pair_fake()
+        fake.details[SENTENCE_ID]["data"]["courtCases"][0]["caseNumber"] = weird
+        page = with_second_reasons(pair_page())
+        for item in page["items"]:
+            for case in item["courtCases"]:
+                case["caseNumber"] = weird
+        fake.searches = {weird: page}
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.AMBIGUOUS
+        assert not any(character in loaded.reasoning_note for character in "\n\t\x07")
+        assert "y" * 101 not in loaded.reasoning_note
+        assert loaded.reasoning_note.startswith(f"SAOS ma kilka rekordów uzasadnienia o sygnaturze {PAIR_NUMBER}")
+
     async def test_two_reasons_records_get_a_load_hint_each(self, make_reading: MakeReading) -> None:
         fake = pair_fake()
         fake.searches[PAIR_NUMBER] = with_second_reasons(pair_page())
@@ -164,7 +197,10 @@ class TestHintsAfterLoading:
 
 @pytest.mark.asyncio
 class TestARefusalEndsTheCallsThatFollow:
-    """After SAOS says no (401, 403, 451) nothing more is asked in the same call, and the refusal is not retried."""
+    """After SAOS says no (401, 403, 451) nothing more is asked in the same call, and the refusal is not retried.
+
+    A 429 differs in one respect only: the egress client sends it a second time after the pause the host asks for.
+    """
 
     @pytest.mark.parametrize("status", [401, 403, 451])
     async def test_a_refused_search_stops_the_load_after_two_calls(
@@ -189,6 +225,37 @@ class TestARefusalEndsTheCallsThatFollow:
         assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
         assert loaded.requests_made == 3
         assert harness.fake.detail_ids == [SENTENCE_ID, REASONS_ID]  # asked once, not retried
+        assert len(harness.fake.search_params) == 1
+
+    async def test_a_429_on_the_search_is_retried_once_by_the_egress_client_and_then_ends_the_load(
+        self, make_reading: MakeReading
+    ) -> None:
+        """Unlike 401, 403 and 451, a 429 is sent a second time: the egress client retries it after the pause.
+
+        What the module guarantees is that it asks for nothing more afterwards: the reasons record is not
+        requested and the search is not repeated by the module itself.
+        """
+        harness = make_reading(pair_fake(refused_search=True, refusal_status=429))
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_SEARCH_FAILED
+        assert loaded.requests_made == 2  # the module's calls; the retry is the egress client's
+        assert harness.fake.detail_ids == [SENTENCE_ID]
+        assert len(harness.fake.search_params) == 2  # the one retry, no more
+        assert await harness.store.is_loaded(loaded.document_id)
+
+    async def test_a_429_on_the_reasons_record_is_retried_once_and_is_the_last_call(
+        self, make_reading: MakeReading
+    ) -> None:
+        harness = make_reading(pair_fake(refused_details=[REASONS_ID], refusal_status=429))
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.requests_made == 3
+        assert harness.fake.detail_ids == [SENTENCE_ID, REASONS_ID, REASONS_ID]  # asked, retried once, stopped
         assert len(harness.fake.search_params) == 1
 
     async def test_the_refusal_helper_knows_the_statuses_and_only_them(self) -> None:

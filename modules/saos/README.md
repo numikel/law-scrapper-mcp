@@ -120,14 +120,25 @@ unused document goes first once `LAW_MCP_DOC_STORE_MAX_DOCUMENTS` are loaded.
   | `absent` | No reasoning in the source: the record has none and SAOS has no reasons record of that court. The text ends with a section `[Uwaga serwera] Uzasadnienie` that says so; it is a note of the server, not text of the judgment. |
   | `ambiguous` | Several reasons records of that court; none joined, their `source_id` values are listed. |
   | `reasoning_record` | The loaded record is itself a reasons record. |
-  | `not_assessed` | Nothing is claimed: another kind of judgment or court, no case number, a search page too short to be sure, or the extra request failed. |
+  | `not_assessed` | Nothing is claimed: another kind of judgment or court, no case number, a search page too short to be sure, a reasons record whose court cannot be compared with the sentence's (one of them gives no court), or the extra request failed. |
 
-  A cut-short search page that holds no reasons record of that court is `not_assessed`, never `absent`.
+  A cut-short search page that holds no reasons record of that court is `not_assessed`, never `absent`. So is a
+  page that holds a reasons record of the same case number but whose court cannot be compared with the
+  sentence's: `absent` is a claim that the source has no reasoning, and a record that cannot be placed is not
+  evidence of that.
+
+  Only `loaded.reasoning` says where the reasoning is. The text of a judgment is data from SAOS: a section in it
+  that reads `[Uwaga serwera] Uzasadnienie` or `UZASADNIENIE` proves nothing, because the court's text can hold
+  such a heading too.
 - **Personal data.** The module never reads the judges or the court reporters, but the text can hold personal
   data the court left in it, for example the names of court staff. Quote with care.
 - **Cost.** The detail is one request; the search by case number and the reasons record make it up to three.
-  After a refusal from SAOS (HTTP 401, 403, 429 or 451) no further request is sent in that call, and the
-  judgment is stored alone.
+  After a refusal from SAOS (HTTP 401, 403 or 451) no further request is sent in that call, and the
+  judgment is stored alone. A 429 (too many requests) is sent a second time by the egress client, after the
+  pause SAOS asks for; if that is refused too, the call ends the same way and nothing more is asked.
+- **Size.** A judgment detail is read within `LAW_MCP_DOC_STORE_MAX_SIZE_BYTES` (the limit of the document
+  store), and a larger answer is refused while it streams in. A reasons record that is too large leaves the
+  sentence loaded alone. A text with more than 500 sections is refused.
 
 ## Court portal links
 

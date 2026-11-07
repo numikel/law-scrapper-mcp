@@ -196,10 +196,12 @@ async def reading_session(router: respx.MockRouter, fake: FakeReading) -> AsyncI
         yield Session(client=client, tools={tool.name: tool for tool in (await client.list_tools()).tools})
 
 
-def make_reading_harness(router: respx.MockRouter, fake: FakeReading) -> ReadingHarness:
+def make_reading_harness(
+    router: respx.MockRouter, fake: FakeReading, *, detail_max_bytes: int | None = None
+) -> ReadingHarness:
     """The loader on a real egress client with the module's own pace, over a fake SAOS."""
     fake.install(router)
-    client, hub = make_saos_client()
+    client, hub = make_saos_client(detail_max_bytes=detail_max_bytes)
     store = DocumentStore()
     return ReadingHarness(fake=fake, service=SaosReadingService(client, store), store=store, client=client, hub=hub)
 

@@ -26,7 +26,7 @@ from saos_reading_testing import (
 )
 
 from law_scrapper_mcp_saos import reading, service
-from law_scrapper_mcp_saos.models import ReasoningStatus
+from law_scrapper_mcp_saos.models import ReasoningStatus, SaosDivision
 
 
 async def toc_titles(harness, key: str) -> list[str]:  # type: ignore[no-untyped-def]
@@ -133,6 +133,88 @@ class TestASentenceWithNoReasonsRecord:
         loaded = await harness.service.load(SENTENCE_ID)
 
         assert loaded.reasoning is ReasoningStatus.ABSENT
+
+
+@pytest.mark.asyncio
+class TestWhenTheCourtCannotBeTold:
+    """A court that cannot be compared is not a different court: `absent` is a claim, and this is not evidence."""
+
+    async def test_a_sentence_without_a_court_does_not_claim_the_reasoning_is_absent(
+        self, make_reading: MakeReading
+    ) -> None:
+        fake = pair_fake()
+        fake.details[SENTENCE_ID]["data"]["division"] = {"name": "Wydział"}  # a division with no court
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_COURT_UNKNOWN
+        assert loaded.sibling_source_id is None
+        assert loaded.requests_made == 2
+        assert harness.fake.detail_ids == [SENTENCE_ID]
+        assert "Brak uzasadnienia w źródle" not in (await stored_text(harness, loaded.document_id))
+
+    async def test_a_reasons_record_without_a_court_does_not_claim_it_either(self, make_reading: MakeReading) -> None:
+        fake = pair_fake()
+        page = pair_page()
+        for item in page["items"]:
+            if item["judgmentType"] == "REASONS":
+                item.pop("division")
+        fake.searches[PAIR_NUMBER] = page
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.NOT_ASSESSED
+        assert loaded.reasoning_note == service.NOTE_COURT_UNKNOWN
+        assert harness.fake.detail_ids == [SENTENCE_ID]
+
+    async def test_with_no_reasons_record_at_all_the_court_does_not_matter(self, make_reading: MakeReading) -> None:
+        """Control: nothing on the page is a reasons record, so there is nothing to be unsure about."""
+        fake = pair_fake()
+        fake.details[LONE_ID]["data"]["division"] = {"name": "Wydział"}
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(LONE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.ABSENT
+
+    async def test_a_court_that_is_known_and_different_is_still_a_different_court(
+        self, make_reading: MakeReading
+    ) -> None:
+        """Control: the fix must not turn the recorded other-court case into `not_assessed`."""
+        fake = pair_fake()
+        fake.searches[PAIR_NUMBER] = with_reasons_of_another_court(pair_page())
+        harness = make_reading(fake)
+
+        loaded = await harness.service.load(SENTENCE_ID)
+
+        assert loaded.reasoning is ReasoningStatus.ABSENT
+
+
+class TestTheCourtComparison:
+    @pytest.mark.parametrize(
+        ("first", "second", "expected"),
+        [
+            ({"court": {"id": 1, "name": "A"}}, {"court": {"id": 1, "name": "B"}}, True),
+            ({"court": {"id": 1}}, {"court": {"id": 2}}, False),
+            ({"court": {"name": "A"}}, {"court": {"name": "A"}}, True),
+            ({"court": {"name": "A"}}, {"court": {"name": "B"}}, False),
+            ({"court": {"id": 1}}, {"court": {"name": "A"}}, None),
+            ({"court": {}}, {"court": {"id": 1}}, None),
+            ({"court": None}, {"court": {"id": 1}}, None),
+            (None, {"court": {"id": 1}}, None),
+            (None, None, None),
+        ],
+    )
+    def test_the_comparison_has_three_answers(
+        self, first: dict[str, object] | None, second: dict[str, object] | None, expected: bool | None
+    ) -> None:
+        def division(raw: dict[str, object] | None) -> SaosDivision | None:
+            return None if raw is None else SaosDivision.model_validate(raw)
+
+        assert service._same_court(division(first), division(second)) is expected  # noqa: SLF001
 
 
 @pytest.mark.asyncio

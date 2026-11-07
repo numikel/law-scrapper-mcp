@@ -12,7 +12,12 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
-from law_scrapper_mcp.client.exceptions import ApiUnavailableError, EgressRedirectRefusedError, SejmApiError
+from law_scrapper_mcp.client.exceptions import (
+    ApiUnavailableError,
+    EgressRedirectRefusedError,
+    ResponseTooLargeError,
+    SejmApiError,
+)
 from law_scrapper_mcp.config import settings
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
@@ -73,7 +78,8 @@ REQUEST_BUDGET = 6
 PORTAL_LINK_CAP = 5
 # SAOS saying "no" (not authorised, forbidden, too many requests, unavailable for legal reasons). The egress
 # client keeps these as a plain `SejmApiError` that carries the status; only 5xx become `ApiUnavailableError`.
-# After one of them no further request goes out in the same call.
+# After one of them no further request goes out in the same call. (A 429 has already been retried once by
+# the egress client, after the pause the host asked for, by the time it reaches this module.)
 #
 # Not the core's `_is_refusal` (`tools/error_handling.py`), on purpose: that one is private, picks the wording
 # of the message an agent reads, knows 401, 403 and 451 only and ignores an error without a named source. This
@@ -847,14 +853,15 @@ def details_hints(output: SaosJudgmentDetailsOutput, *, pair_hint: bool = True) 
         )
     else:
         hints.append(Hint(message="SAOS nie podaje dla tego orzeczenia poprawnego odnośnika do portalu sądu."))
-    if pair_hint and record.signature != NO_SIGNATURE:
+    searchable = _search_signature(record.signature)
+    if pair_hint and record.signature != NO_SIGNATURE and searchable:
         hints.append(
             Hint(
                 message=(
                     "Wyrok i jego uzasadnienie to dwa osobne rekordy tej samej sprawy; drugi znajdziesz po sygnaturze."
                 ),
                 tool=TOOL_SEARCH,
-                parameters={"signature": record.signature},
+                parameters={"signature": searchable},
             )
         )
     return hints
@@ -896,12 +903,13 @@ def loaded_hints(loaded: SaosLoadedJudgment, signature: str) -> list[Hint]:
             )
             for candidate in loaded.candidate_source_ids
         )
-    if loaded.reasoning is ReasoningStatus.REASONING_RECORD and signature != NO_SIGNATURE:
+    searchable = _search_signature(signature)
+    if loaded.reasoning is ReasoningStatus.REASONING_RECORD and signature != NO_SIGNATURE and searchable:
         hints.append(
             Hint(
                 message="Wyrok tej sprawy znajdziesz wyszukując po sygnaturze.",
                 tool=TOOL_SEARCH,
-                parameters={"signature": signature},
+                parameters={"signature": searchable},
             )
         )
     return hints
@@ -963,6 +971,10 @@ NOTE_TRUNCATED = (
     "Nie wiadomo, czy uzasadnienie istnieje: SAOS ma więcej rekordów o tej sygnaturze, niż mieści jedna strona "
     "wyszukiwania, a żaden z nich nie jest uzasadnieniem tego sądu. Wczytano sam wyrok."
 )
+NOTE_COURT_UNKNOWN = (
+    "Nie wiadomo, czy uzasadnienie istnieje: SAOS ma rekord uzasadnienia o tej sygnaturze, ale nie podaje sądu "
+    "wyroku lub tego rekordu, więc nie da się ustalić, czy dotyczy tej sprawy. Wczytano sam wyrok."
+)
 
 
 def document_id(source_id: str) -> str:
@@ -970,15 +982,35 @@ def document_id(source_id: str) -> str:
     return f"{SOURCE.upper()}/{source_id}"
 
 
-def _same_court(first: SaosDivision | None, second: SaosDivision | None) -> bool:
-    """Whether two divisions belong to one court: by court id, or by name when an id is missing."""
+def _same_court(first: SaosDivision | None, second: SaosDivision | None) -> bool | None:
+    """Whether two divisions belong to one court: by court id, or by name when an id is missing.
+
+    `None` when the two cannot be compared (a division without a court, or no id and no name on both
+    sides). That is not "a different court": a reasons record that cannot be placed must not be read as
+    evidence that the sentence has none.
+    """
     court_a = first.court if first else None
     court_b = second.court if second else None
     if court_a is None or court_b is None:
-        return False
+        return None
     if court_a.id is not None and court_b.id is not None:
         return court_a.id == court_b.id
-    return court_a.name is not None and court_a.name == court_b.name
+    if court_a.name is not None and court_b.name is not None:
+        return court_a.name == court_b.name
+    return None
+
+
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
+
+
+def _echoed(value: str) -> str:
+    """Upstream text as it may appear in a note or a hint: control characters out, no longer than a search takes."""
+    return _CONTROL_CHARACTERS.sub(" ", value).strip()[:SIGNATURE_MAX_LENGTH]
+
+
+def _search_signature(value: str) -> str | None:
+    """The signature when `search_saos_judgments` would accept it as it is, otherwise `None` (no hint then)."""
+    return value if value and value == _echoed(value) else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1023,9 +1055,13 @@ class SaosReadingService:
         identifier = _source_id(source_id)
         detail = await self._client.judgment_with_text(identifier)
         data = detail.data
+        no_text = ValueError(f"Orzeczenie {identifier} nie ma w SAOS tekstu, więc nie ma czego wczytać.")
         if not data.text_content or not data.text_content.strip():
-            raise ValueError(f"Orzeczenie {identifier} nie ma w SAOS tekstu, więc nie ma czego wczytać.")
+            raise no_text
         markdown = await to_markdown_async(data.text_content)
+        # A text of tags alone (`<br>`) is not blank until it is converted.
+        if not markdown.strip():
+            raise no_text
         reasoning = await self._settle(data, markdown, requests=1)
 
         key = document_id(identifier)
@@ -1065,36 +1101,36 @@ class SaosReadingService:
             return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SEARCH_FAILED, markdown, requests)
 
         # By id: SAOS may list a record twice when a record is inserted between the pages of one search.
-        candidates = list(
-            {
-                item.id: item
-                for item in page.items
-                if item.judgment_type == REASONS
-                and _same_court(item.division, data.division)
-                and any(case.case_number == number for case in item.court_cases)
-            }.values()
-        )
+        same_number = {
+            item.id: item
+            for item in page.items
+            if item.judgment_type == REASONS and any(case.case_number == number for case in item.court_cases)
+        }.values()
+        candidates = [item for item in same_number if _same_court(item.division, data.division) is True]
         if len(candidates) > 1:
             ids = tuple(str(item.id) for item in candidates)
             note = (
-                f"SAOS ma kilka rekordów uzasadnienia o sygnaturze {number} w tym sądzie ({', '.join(ids)}); "
+                f"SAOS ma kilka rekordów uzasadnienia o sygnaturze {_echoed(number)} w tym sądzie ({', '.join(ids)}); "
                 "żadnego nie dołączono. Wczytaj wybrany po jego source_id."
             )
             return _Reasoning(ReasoningStatus.AMBIGUOUS, note, markdown, requests, candidates=ids)
         if not candidates:
             if page.info.total_results > len(page.items):
                 return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_TRUNCATED, markdown, requests)
+            if any(_same_court(item.division, data.division) is None for item in same_number):
+                return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_COURT_UNKNOWN, markdown, requests)
             return _Reasoning(ReasoningStatus.ABSENT, NOTE_ABSENT, with_no_reasoning_note(markdown), requests)
         return await self._merge(markdown, str(candidates[0].id), requests=requests)
 
     async def _merge(self, markdown: str, sibling_id: str, *, requests: int) -> _Reasoning:
-        """Fetch the reasons record found for a sentence and put its text after the sentence."""
-        if requests >= MAX_READ_REQUESTS:
-            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
+        """Fetch the reasons record found for a sentence and put its text after the sentence.
+
+        The last of the `MAX_READ_REQUESTS` calls: the detail and the search come before it.
+        """
         requests += 1
         try:
             sibling = await self._client.judgment_with_text(sibling_id)
-        except (ApiUnavailableError, EgressRedirectRefusedError, SejmApiError, ValueError):
+        except (ApiUnavailableError, EgressRedirectRefusedError, ResponseTooLargeError, SejmApiError, ValueError):
             return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
         text = sibling.data.text_content
         if sibling.data.judgment_type != REASONS or not text or not text.strip():
@@ -1103,7 +1139,10 @@ class SaosReadingService:
             f"Dołączono uzasadnienie z osobnego rekordu SAOS {sibling_id} (ta sama sygnatura i sąd); "
             "to sekcja UZASADNIENIE."
         )
-        merged = with_reasons(markdown, await to_markdown_async(text))
+        reasons = await to_markdown_async(text)
+        if not reasons.strip():
+            return _Reasoning(ReasoningStatus.NOT_ASSESSED, NOTE_SIBLING_FAILED, markdown, requests)
+        merged = with_reasons(markdown, reasons)
         return _Reasoning(ReasoningStatus.MERGED, note, merged, requests, sibling_source_id=sibling_id)
 
 

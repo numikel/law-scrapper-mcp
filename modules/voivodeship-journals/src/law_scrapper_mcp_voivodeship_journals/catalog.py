@@ -8,6 +8,7 @@ and a request for it fails with a named reason instead of reaching any host.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from law_scrapper_mcp.services.act_sources import PublisherInfo, fold_publisher_name
@@ -81,8 +82,12 @@ JOURNALS: tuple[Journal, ...] = (
 SERVED: tuple[Journal, ...] = tuple(journal for journal in JOURNALS if journal.withheld is None)
 WITHHELD: tuple[Journal, ...] = tuple(journal for journal in JOURNALS if journal.withheld is not None)
 BY_CODE: dict[str, Journal] = {journal.code: journal for journal in JOURNALS}
-BY_NAME: dict[str, Journal] = {fold_publisher_name(journal.voivodeship): journal for journal in JOURNALS}
 PUBLISHER_INFO: tuple[PublisherInfo, ...] = tuple(journal.publisher_info() for journal in JOURNALS)
+
+
+def names_index(journals: Iterable[Journal]) -> dict[str, Journal]:
+    """The journals by folded voivodeship name: how a name typed by the agent finds its journal."""
+    return {fold_publisher_name(journal.voivodeship): journal for journal in journals}
 
 
 def _check_invariants() -> None:

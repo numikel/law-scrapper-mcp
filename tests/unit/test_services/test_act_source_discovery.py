@@ -7,7 +7,9 @@ from typing import Any
 import pytest
 
 from fake_act_source import FakeActSource
+from law_scrapper_mcp.services import act_sources
 from law_scrapper_mcp.services.act_sources import (
+    MAX_PUBLISHER_NAME_LENGTH,
     UNKNOWN_PUBLISHER_VALUE_LIMIT,
     ActSourceConflictError,
     ActSourceRegistry,
@@ -193,8 +195,73 @@ def test_a_source_without_descriptions_still_makes_the_registry_refuse_unknown_v
     with pytest.raises(UnknownPublisherError) as excinfo:
         registry.for_publisher("xyz")
 
-    assert "Poprawne: DU, MP." in str(excinfo.value)
+    assert "Poprawne: DU, MP, AA_1." in str(excinfo.value), "a served but undescribed code is valid too"
     assert "Zamiast kodu" not in str(excinfo.value), "no name to suggest, so no hint"
+
+
+def test_undescribed_codes_follow_the_described_ones_and_unavailable_ones_stay_out() -> None:
+    registry = ActSourceRegistry()
+    registry.register(
+        FakeActSource(),
+        publishers=["ZZ_B", "ZZ_A", "ZZ_X", "ZZ_OFF"],
+        info=[info("ZZ_B", "beta"), info("ZZ_A", "alfa"), info("ZZ_OFF", "off", available=False)],
+    )
+
+    with pytest.raises(UnknownPublisherError) as excinfo:
+        registry.for_publisher("xyz")
+
+    assert "Poprawne: DU, MP, ZZ_A (alfa), ZZ_B (beta), ZZ_X." in str(excinfo.value)
+    assert "ZZ_OFF" not in str(excinfo.value)
+
+
+def test_a_later_registration_cannot_shadow_an_earlier_name_with_a_code() -> None:
+    registry = ActSourceRegistry()
+    first = FakeActSource()
+    registry.register(first, publishers=["AA_1"], info=[info("AA_1", "pomorskie")])
+
+    with pytest.raises(ActSourceConflictError, match="POMORSKIE"):
+        registry.register(FakeActSource(), publishers=["BB_1", "POMORSKIE"])
+
+    assert registry.publishers() == ("AA_1",), "nothing of the refused registration was kept"
+    assert registry.for_publisher("pomorskie") is first
+
+
+@pytest.mark.parametrize("padded", [" DU", "mp ", " Du\t", "\nMP\n"])
+def test_whitespace_around_the_codes_the_core_serves_is_not_a_reason_to_refuse(padded: str) -> None:
+    registry, _ = registry_with(info("ZZ_PM", "pomorskie"))
+
+    assert registry.for_publisher(padded) is None, "left to the Sejm unchanged, as before the module"
+
+
+def test_an_empty_registry_returns_before_any_normalisation(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(_text: str) -> str:
+        raise AssertionError("the empty-registry path must not normalise the value")
+
+    monkeypatch.setattr(act_sources, "fold_publisher_name", forbidden)
+
+    assert ActSourceRegistry().for_publisher("anything") is None
+
+
+def test_a_value_too_long_to_be_a_name_is_not_normalised(monkeypatch: pytest.MonkeyPatch) -> None:
+    registry, _ = registry_with(info("ZZ_PM", "pomorskie"))
+    monkeypatch.setattr(act_sources, "fold_publisher_name", lambda _text: pytest.fail("a long value was folded"))
+
+    with pytest.raises(UnknownPublisherError):
+        registry.for_publisher("x" * (MAX_PUBLISHER_NAME_LENGTH + 1))
+
+
+def test_a_name_longer_than_the_limit_cannot_be_registered() -> None:
+    with pytest.raises(ActSourceConflictError, match="znaków"):
+        ActSourceRegistry().register(
+            FakeActSource(), publishers=["ZZ_1"], info=[info("ZZ_1", "n" * (MAX_PUBLISHER_NAME_LENGTH + 1))]
+        )
+
+
+def test_control_and_zero_width_characters_are_not_echoed() -> None:
+    message = unknown_publisher_message("a\x1b[31m​b‮c\x00", [info("ZZ_1", "alfa")])
+
+    assert message.startswith("Nieznany wydawca: a[31mbc.")
+    assert not any(not char.isprintable() for char in message)
 
 
 def test_the_refusal_is_a_validation_error_for_the_tool_layer() -> None:

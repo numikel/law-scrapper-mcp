@@ -29,6 +29,10 @@ RESERVED_PUBLISHERS: frozenset[str] = frozenset({"DU", "MP"})
 # budget (`error_message_max_chars`, 500 by default) next to a full list of valid publishers.
 UNKNOWN_PUBLISHER_VALUE_LIMIT = 40
 
+# A publisher name longer than this is neither registered nor looked up: a longer value cannot be a
+# name, so it is not even normalised (the fold would otherwise run over an unbounded caller value).
+MAX_PUBLISHER_NAME_LENGTH = 100
+
 _NAME_SEPARATORS = re.compile(r"[\s_\-]+")
 
 
@@ -75,21 +79,27 @@ class PublisherInfo:
     item: Mapping[str, Any]
 
 
-def unknown_publisher_message(value: str, infos: Iterable[PublisherInfo]) -> str:
+def unknown_publisher_message(value: str, infos: Iterable[PublisherInfo], *, undescribed: Iterable[str] = ()) -> str:
     """The Polish refusal for an unknown publisher, listing what would have been valid.
 
-    Only available publishers are offered. The echoed `value` is whitespace-collapsed and capped
-    at `UNKNOWN_PUBLISHER_VALUE_LIMIT` characters, and the hint comes before the list, so a cut
-    by the tool layer loses the tail of the list and never the hint.
+    Only available publishers are offered. `undescribed` are codes a source serves without having
+    described them; they are valid too, and are listed as bare codes after the described ones. The
+    echoed `value` is whitespace-collapsed, stripped of non-printable characters (control and
+    zero-width marks) and capped at `UNKNOWN_PUBLISHER_VALUE_LIMIT` characters, and the hint comes
+    before the list, so a cut by the tool layer loses the tail of the list and never the hint.
     """
     available = sorted((info for info in infos if info.available), key=lambda info: info.code)
-    shown = " ".join(value.split())
+    shown = "".join(char for char in " ".join(value.split()) if char.isprintable())
     if len(shown) > UNKNOWN_PUBLISHER_VALUE_LIMIT:
         shown = f"{shown[:UNKNOWN_PUBLISHER_VALUE_LIMIT]}…"
     parts = [f"Nieznany wydawca: {shown}."]
     if available:
         parts.append(f"Zamiast kodu można podać nazwę, np. {available[0].label}.")
-    valid = [*sorted(RESERVED_PUBLISHERS), *(f"{info.code} ({info.label})" for info in available)]
+    valid = [
+        *sorted(RESERVED_PUBLISHERS),
+        *(f"{info.code} ({info.label})" for info in available),
+        *sorted(undescribed),
+    ]
     parts.append(f"Poprawne: {', '.join(valid)}.")
     return " ".join(parts)
 
@@ -218,6 +228,10 @@ class ActSourceRegistry:
                 raise ActSourceConflictError(
                     f"Kod wydawcy {code} jest już zajęty przez źródło {self._by_code[code].name}."
                 )
+            if fold_publisher_name(code) in self._aliases:
+                raise ActSourceConflictError(
+                    f"Kod wydawcy {code} pokrywa się z nazwą innego wydawcy i nie może jej zasłonić."
+                )
         for prefix in prefix_list:
             if not prefix:
                 raise ActSourceConflictError("Prefiks kodu wydawcy nie może być pusty.")
@@ -250,6 +264,10 @@ class ActSourceRegistry:
                 )
             if entry.code in aliases.values():
                 raise ActSourceConflictError(f"Kod wydawcy {entry.code} ma w rejestracji więcej niż jeden opis.")
+            if len(entry.label) > MAX_PUBLISHER_NAME_LENGTH:
+                raise ActSourceConflictError(
+                    f"Nazwa wydawcy {entry.code} jest dłuższa niż {MAX_PUBLISHER_NAME_LENGTH} znaków."
+                )
             folded = fold_publisher_name(entry.label)
             if not folded:
                 raise ActSourceConflictError(f"Nazwa wydawcy {entry.code} nie może być pusta.")
@@ -275,22 +293,25 @@ class ActSourceRegistry:
 
         Raises:
             UnknownPublisherError: Some source is registered, and `code` is neither `DU`/`MP` (in
-                any letter case) nor a code, name or prefix one of them claims.
+                any letter case, ignoring surrounding whitespace) nor a code, name or prefix one of
+                them claims.
         """
+        if not self._by_code and not self._by_prefix:
+            return None
         source = self._by_code.get(code)
         if source is not None:
             return source
-        alias_target = self._aliases.get(fold_publisher_name(code))
-        if alias_target is not None:
-            return self._by_code[alias_target]
+        if len(code) <= MAX_PUBLISHER_NAME_LENGTH:
+            alias_target = self._aliases.get(fold_publisher_name(code))
+            if alias_target is not None:
+                return self._by_code[alias_target]
         for prefix in sorted(self._by_prefix, key=len, reverse=True):
             if code.startswith(prefix):
                 return self._by_prefix[prefix]
-        if not self._by_code and not self._by_prefix:
+        if code.strip().upper() in RESERVED_PUBLISHERS:
             return None
-        if code.upper() in RESERVED_PUBLISHERS:
-            return None
-        raise UnknownPublisherError(unknown_publisher_message(code, self.describe()))
+        undescribed = [registered for registered in self._by_code if registered not in self._info]
+        raise UnknownPublisherError(unknown_publisher_message(code, self.describe(), undescribed=undescribed))
 
     def publishers(self) -> tuple[str, ...]:
         """Exact publisher codes currently registered, sorted."""

@@ -143,15 +143,18 @@ What the core guarantees:
   compared case-folded, without Polish diacritics and with space, underscore and hyphen alike, and an
   exact match only (`pomorskie` is never a match for `kujawsko-pomorskie`). `available=False` lists a code
   without offering it as valid, and `item` is the entry `get_system_metadata(category="publishers")` shows
-  after DU and MP; the core does not read its keys. A label must be unique, non-empty and different from
-  every code, or startup stops. `registry.describe()` returns the descriptions sorted by code.
+  after DU and MP; the core does not read its keys. A label must be unique, non-empty, at most 100
+  characters and different from every code, and a code registered later may not equal an existing name
+  once folded, or startup stops. `registry.describe()` returns the descriptions sorted by code.
 - **An unknown publisher is refused, but only while a source is registered.** `for_publisher` raises
   `UnknownPublisherError` (a `ValueError`, so a validation error for the tool layer) for a value that is
-  neither `DU`/`MP` (in any letter case) nor a code, name or prefix some source claims. The text is built
-  by `unknown_publisher_message`: the echoed value is capped at 40 characters, the hint comes before the
-  list, and only available publishers are listed, so the whole message fits the tool error budget
-  (`error_message_max_chars`, 500) for twelve entries. With nothing registered the value goes to the Sejm as
-  before.
+  neither `DU`/`MP` (in any letter case, ignoring surrounding whitespace) nor a code, name or prefix some
+  source claims. The text is built by `unknown_publisher_message`: the echoed value is stripped of
+  control and zero-width characters and capped at 40 characters, the hint comes before the list, and the
+  available publishers are listed with their names (codes a source serves without describing them are
+  listed bare), so the whole message fits the tool error budget (`error_message_max_chars`, 500) for
+  twelve entries. A value longer than 100 characters cannot be a name and is not normalised. With nothing
+  registered the value goes to the Sejm as before, without any normalisation.
 - **A name is accepted in the `publisher` parameter only, never inside an ELI.** The core stores a loaded
   document under the ELI as the caller typed it, while every answer carries the canonical ELI, so an ELI
   with a name would load a document the next call cannot find. A source that accepts names must refuse a

@@ -17,7 +17,7 @@ from law_scrapper_mcp.services.act_sources import (
     unknown_publisher_message,
 )
 from law_scrapper_mcp_voivodeship_journals import normalise
-from law_scrapper_mcp_voivodeship_journals.catalog import Journal
+from law_scrapper_mcp_voivodeship_journals.catalog import Journal, names_index
 
 
 class JournalActSource:
@@ -32,7 +32,7 @@ class JournalActSource:
     def __init__(self, clients: Mapping[str, EgressClient], catalog: Sequence[Journal], settings: Settings) -> None:
         self._clients = dict(clients)
         self._catalog = {journal.code: journal for journal in catalog}
-        self._names = {fold_publisher_name(journal.voivodeship): journal.code for journal in catalog}
+        self._names = {name: journal.code for name, journal in names_index(catalog).items()}
         self._infos = tuple(journal.publisher_info() for journal in catalog)
         self._search_ttl = settings.cache_search_ttl
         self._details_ttl = settings.cache_details_ttl

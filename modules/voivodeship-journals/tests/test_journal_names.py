@@ -22,15 +22,18 @@ from law_scrapper_mcp.source_modules.contract import ModuleHost
 from law_scrapper_mcp_voivodeship_journals import catalog, start
 from law_scrapper_mcp_voivodeship_journals.catalog import (
     BY_CODE,
-    BY_NAME,
     JOURNALS,
     PUBLISHER_INFO,
     SERVED,
     WITHHELD,
     Journal,
+    names_index,
 )
+from law_scrapper_mcp_voivodeship_journals.source import JournalActSource
 
 pytestmark = pytest.mark.asyncio
+
+BY_NAME = names_index(JOURNALS)
 
 
 def pm_source(started: Started) -> ActSource:
@@ -68,6 +71,19 @@ async def test_pomorskie_does_not_match_as_a_suffix_of_kujawsko_pomorskie() -> N
     assert BY_NAME[fold_publisher_name("pomorskie")].code == "POL_WOJ_PM"
     assert fold_publisher_name("pomorskie") != fold_publisher_name("kujawsko-pomorskie")
     assert "kujawsko" not in BY_NAME
+
+
+async def test_the_source_resolves_names_from_the_catalog_it_was_given() -> None:
+    """The source builds its name index from its own catalog argument, not from a module-level copy."""
+    own = [Journal("POL_WOJ_ZZ", "Zzzlandia", "zzz.example", "Dz. Urz. Woj. Zzzlandii", "wyłączony na próbę")]
+    source = JournalActSource({}, own, Settings())
+
+    with pytest.raises(ApiUnavailableError) as excinfo:
+        await source.search("ZZZLANDIA", SourceSearchQuery(year=2025))
+
+    assert excinfo.value.source == "POL_WOJ_ZZ" and "wyłączony na próbę" in str(excinfo.value)
+    with pytest.raises(UnknownPublisherError):
+        await source.search("pomorskie", SourceSearchQuery(year=2025))
 
 
 async def test_two_names_that_fold_to_the_same_text_fail_at_import_time(monkeypatch: pytest.MonkeyPatch) -> None:

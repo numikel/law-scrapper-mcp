@@ -25,6 +25,27 @@ def test_readme_documents_token_generation() -> None:
     assert "LAW_MCP_AUTH_MODE" in readme
 
 
+def test_compose_shows_the_contact_setting_only_as_a_comment() -> None:
+    """FR-016: the Docker path always binds beyond loopback, so the setting must be discoverable there.
+
+    It stays a comment: an active but empty or invalid `LAW_MCP_CONTACT` stops startup, and a
+    required variable would break every existing deployment on upgrade.
+    """
+    compose = (PROJECT_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    lines = [line.strip() for line in compose.splitlines()]
+
+    assert any(line.startswith("#") and "LAW_MCP_CONTACT" in line for line in lines)
+    assert not any(line.startswith("- LAW_MCP_CONTACT") for line in lines)
+
+
+def test_readme_documents_the_contact_setting() -> None:
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "| `LAW_MCP_CONTACT` |" in readme, "the settings table has a row for it"
+    assert "### Identity towards upstream hosts" in readme
+    assert "mailto:" in readme, "the section shows how an e-mail is written into the header"
+
+
 def test_dockerfile_builder_copies_every_file_the_package_metadata_needs() -> None:
     """`uv sync --no-editable` builds the project wheel inside the builder stage.
 

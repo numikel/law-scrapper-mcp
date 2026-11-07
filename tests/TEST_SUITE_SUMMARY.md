@@ -106,16 +106,16 @@ tests/
 │   ├── test_auth_settings_validation.py# Startup validation binding a remote bind address to an auth mode; bearer scope rejection
 │   ├── test_cache.py                   # TTLCache: get/set, TTL expiry, LRU eviction, concurrent access
 │   ├── test_ci_module_gates.py         # Module code gets core's gates: the `changes` filter covers `modules/**`, `lint` and `modules` jobs in ci.yml, the `test` job stays core-only, every action SHA-pinned, `check_release.py` mirrors the module commands
-│   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits
+│   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits; `LAW_MCP_CONTACT` (URL or e-mail, ASCII, 200 characters, empty refused, input never echoed) and the default-contact startup warning
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
 │   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
 │   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
-│   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure
+│   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure; compose shows `LAW_MCP_CONTACT` only as a comment and the README documents it
 │   ├── test_document_store.py          # DocumentStore: load, TOC, sections, span scan, TTL, LRU, size limit raises
 │   ├── test_edziennik_fixtures.py      # Facts about the e-Dziennik journals pinned to `fixtures/edziennik/`: casing, dates swapped by search only, sentinels, ignored publisher code, scan vs text PDF, catalogue vs PROVENANCE.md
 │   ├── test_env_list_parsing.py        # List settings accept both flat comma-separated and JSON-array spellings
-│   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause
+│   ├── test_error_handling.py          # `classify_error` / `@handle_tool_errors`: categories, guidance, truncation keeping a trailing URL, ERROR/DEBUG split incl. the chained cause; the `source_refused` category (401/403/451 of a named non-Sejm source: unavailable, other sources unaffected, no retry advice, Sejm texts unchanged)
 │   ├── test_health_endpoint.py         # `/health` reports breaker state (unknown, closed, open, half-open) without lying
 │   ├── test_filter_results_judgments_tool.py # `filter_results` through the MCP protocol on a judgment set seeded by a fake module: narrowing, scope, hints, act-only filters refused
 │   ├── test_jwt_verifier.py            # OAuth 2.1 resource-server mode: signature, audience, issuer, scopes, JWKS discovery
@@ -129,13 +129,14 @@ tests/
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
 │   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, zero-based pages, an empty page past the end, the division-code filter, the judgment detail reduced to metadata, the Supreme Court chambers (the labour chamber under its long name, the spelling that matched nothing), judge names and names after role cues redacted, catalogue and stored-file hashes vs PROVENANCE.md
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
-│   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window
+│   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window; `main()` calls the default-contact warning right after the bind warning
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
 │   ├── test_source_module_activation.py # `LAW_MCP_SOURCE_MODULES`: syntax errors, left-to-right evaluation (the grammar table, order, the bare-name risk pin, the `-*` image-default pin), unknown names refused only while still enabled and reported otherwise
 │   ├── test_source_module_discovery.py # `discover()`: only active entry points are imported, descriptor validation, clashes, real distribution metadata via a temporary dist-info, `registered_tool_names` guard
 │   ├── test_source_module_instructions.py # Pre-change server instructions pinned byte for byte; modules raise the header count and append one block each
 │   ├── test_source_module_isolation.py # The root suite is core-only: `os.environ` holds exactly `-*`, the live `settings` were built with it, and no entry point installed in this environment ends up active
 │   ├── test_source_module_server.py    # `build_app` tool-name checks, module start/stop order around the egress hub, `module_state`, startup INFO and WARNING lines
+│   ├── test_source_outage_isolation.py # Needs no module distribution: two fake modules and a mocked Sejm on the real server; a 502 opens only that source's breaker (named by label, host and response text kept out), 401/403/451 give the refusal message after one request, and the other source and a Sejm-backed tool keep answering
 │   ├── test_static_token_verifier.py   # Bearer mode: constant-time compare, empty secret refused, prefix rejected
 │   ├── test_tool_architecture.py       # Tools are thin adapters: typed context accessor, one awaited call, no user-facing formatting; every `@mcp.tool` carries a `title=` and an annotation preset; imports point only down the `models` → `client` → `services` → `tools` layers; the same rules run over every `modules/*/src/law_scrapper_mcp_*/tools/` package, module tools may not import `httpx` or the core `client/`, and the core may not import a `law_scrapper_mcp_*` package
 │   ├── test_tool_descriptions.py       # MCP-visible descriptions: every parameter described, limit semantics documented, typed outputs
@@ -154,7 +155,7 @@ tests/
 │   │   ├── test_rate_limiter.py        # Outbound token bucket on a fake clock: burst, deficit at large clock magnitudes, pauses, cap, mid-wait extension, cancellation
 │   │   ├── test_sejm_client_resilience.py  # Retry loop, breaker integration, slot release, translation to domain errors (transport message names class + endpoint, never httpx text)
 │   │   ├── test_sejm_message_texts.py  # Golden literals of every error text the Sejm client raises, pinned before the transport was extracted
-│   │   └── test_user_agent.py          # Identity sent to api.sejm.gov.pl tracks the configured version
+│   │   └── test_user_agent.py          # Identity sent to every upstream host tracks the configured version and the operator's contact (a URL as written, an e-mail as `mailto:`); the Sejm and a module host both carry it
 │   ├── test_services/
 │   │   ├── test_act_service.py         # ActService: details, structure, keywords, HTML/PDF content loading
 │   │   ├── test_act_sources.py         # ActSourceRegistry: exact code before prefix, reserved DU/MP, conflicts leave nothing half registered, unregister

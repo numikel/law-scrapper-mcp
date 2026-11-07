@@ -14,6 +14,9 @@ services:
       - LAW_MCP_AUTH_TOKEN=${LAW_MCP_AUTH_TOKEN:?ustaw LAW_MCP_AUTH_TOKEN, np. openssl rand -base64 32}
       - LAW_MCP_LOG_LEVEL=INFO
       - LAW_MCP_LOG_FORMAT=json
+      # Contact sent to every upstream host in the User-Agent. Unset, it is the project's repository,
+      # so complaints about your traffic reach the project's authors: set a URL or e-mail of your own.
+      # - LAW_MCP_CONTACT=ops@example.org
     restart: unless-stopped
     # Must stay >= 2 x LAW_MCP_SHUTDOWN_GRACE (default 15s). Nothing in the code
     # enforces the relation. The process needs its full graceful window before

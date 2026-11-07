@@ -8,7 +8,8 @@ invented records; build derived shapes in the test instead. The facts they pin a
 `tests/unit/test_saos_fixtures.py`.
 
 Every file is a search page (an excerpt of at most 800 characters per judgment), a count, an error
-body or the court dictionary. No file holds the whole text of a judgment; the four recordings that
+body, the court dictionary or a skeleton of a judgment detail (the structure of the text with every
+letter masked, see Skeleton details). No file holds the text of a judgment; the four recordings that
 do are described further down and are kept outside the repository. Personal names were removed
 from every file before it was stored, as described under Redaction. The unredacted recordings are
 not in this repository either.
@@ -22,6 +23,8 @@ Round 3:  2026-11-03, 19:27:50 - 20:06:29 UTC, 4 requests, all 200 (page numberi
           one judgment detail)
 Round 4:  2026-11-04, 20:00:53 UTC, 1 request, 200 (the Supreme Court labour chamber, no records returned)
 Round 5:  2026-11-04, 22:01:50 UTC, 1 request, 200 (the Supreme Court chamber names, one page of 100 records)
+Round 6:  2026-11-07, 09:45:52 - 09:46:13 UTC, 5 requests, all 200 (four judgment details and one case-number
+          search; the budget of the change was 6 requests, the sixth was not used)
 Client:   httpx 0.28.1, follow_redirects=True, TLS verification on; no request was redirected
           (rounds 3 to 5: the same client version with follow_redirects=False)
 Pacing:   sequential, at least 1.5 s between request starts (enforced by the recorder), no retries
@@ -78,6 +81,8 @@ Redactions per file (all other files contain none):
 | `search_viii_reasons_2022.json` | 1 | 0 |
 | `search_viii_sentence_2025.json` | 1 | 4 |
 | `search_viii_reasons_2025.json` | 1 | 0 |
+| `search_case_number_lone_sentence.json` | 1 | 4 |
+
 What remains in the excerpts by design: the abbreviations the courts themselves publish for
 parties (`J. K.`, `(...)`), names of institutions and companies, and names of public offices.
 Every excerpt was read in full after redaction, and a scan for name-like words was run over all of
@@ -120,9 +125,15 @@ original is not in the repository, so no test can check them. `.gitattributes` m
 | `search_out_of_range_page.json` | https://www.saos.org.pl/api/search/judgments?pageSize=100&pageNumber=269&courtType=COMMON&ccDivisionName=VIII+Wydzia%C5%82+Pracy+i+Ubezpiecze%C5%84+Spo%C5%82ecznych&judgmentDateTo=2026-11-02&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 4 132 | ae772aa2126c2b033de96aa776d313adcf2ccd254816b585922a6a609bb1be00 | 3 161 | 539a4355a81348197520a803b164c3ef0f51aea17a67e79efb8c7d03c4ba9e4d | 2026-11-03 19:27:59 | yes |
 | `supreme_chambers_metadata_2016.json` | https://www.saos.org.pl/api/search/judgments?courtType=SUPREME&judgmentDateTo=2016-06-22&pageSize=100&pageNumber=0&sortingField=JUDGMENT_DATE&sortingDirection=DESC | 200 | application/json;charset=UTF-8 | 42 475 | a55310b01f25317237d9dee46932694481bda78eb3230db06e374dbca0e351f2 | 156 655 | 694222618aec8475ef07fa3979a99901a60dbefdfb991b6eb966ba9b0f77d271 | 2026-11-04 22:01:50 | yes |
 | `judgment_labour_sentence_metadata.json` | https://www.saos.org.pl/api/judgments/554697 | 200 | application/json;charset=UTF-8 | 395 | 28d09af44270faeb851f721d36ef7cab7af2b3b809360b322c3fc4768ae6ecea | 3 574 | 49a9d3dd2092dd2f8dd4eca56e8cf2ac2ab6c1d9987ebe9ff48e4dd6fd936f50 | 2026-11-03 20:06:29 | yes |
+| `judgment_skeleton_sentence_split.json` | https://www.saos.org.pl/api/judgments/554697 | 200 | application/json;charset=UTF-8 | 2 785 | 3cf74faecf62db3de04497bb6d35c5da8a4aaa4fc9fc2bd8134450dee8314281 | 3 574 | 49a9d3dd2092dd2f8dd4eca56e8cf2ac2ab6c1d9987ebe9ff48e4dd6fd936f50 | 2026-11-07 09:45:52 | yes |
+| `judgment_skeleton_reasons.json` | https://www.saos.org.pl/api/judgments/554698 | 200 | application/json;charset=UTF-8 | 54 437 | 400a8063b97b2548986fc59f3230ef3797316c4e193b6d8a3a1e25f34073dff2 | 61 970 | 2e21faab297d09a5be75eeea622b4f7fe990d100ffec9ee51e8ebd79fb6387ae | 2026-11-07 09:45:54 | yes |
+| `judgment_skeleton_sentence_nested.json` | https://www.saos.org.pl/api/judgments/12510 | 200 | application/json;charset=UTF-8 | 27 381 | 43134ad5b004424cae1879adb7f5057bbad8cc5886a3e7bd203ca6b62e187eeb | 31 798 | c11ca55ead51ee5174523b6940ce3361ab0d6cf934f5fa2b14de259b887d96f5 | 2026-11-07 09:45:56 | yes |
+| `judgment_skeleton_supreme.json` | https://www.saos.org.pl/api/judgments/245360 | 200 | application/json;charset=UTF-8 | 7 338 | af616a56b2d48893642658821697a510cf95feaf91686651ec294089dbcc1269 | 9 244 | f96c4bedd738c80b77f8ca99e5ef703cd5cf495464e2cc57112d3d417bbd28c9 | 2026-11-07 09:45:59 | yes |
+| `search_case_number_lone_sentence.json` | https://www.saos.org.pl/api/search/judgments?pageSize=10&caseNumber=VIII+U+1302%2F15 | 200 | application/json;charset=UTF-8 | 5 418 | e25fbbd3827ca93d30aaa8fab534b0f572746317ddabf14b6a9f9ba5e878f1b2 | 4 154 | 6900c894802c6a342b10b9a590b23802fcf985030ea10c09221f30ddad5c5cd7 | 2026-11-07 09:46:13 | yes |
+
 ## Detail metadata, reduced
 
-`judgment_labour_sentence_metadata.json` is the one stored recording of a judgment detail (`/api/judgments/{id}`). The full body
+`judgment_labour_sentence_metadata.json` is the metadata-only reduction of a judgment detail (`/api/judgments/{id}`); the skeletons below keep the structure of the text as well. The full body
 holds the whole text of the judgment, the judges' names and the names of court staff, so it was not
 stored. A deterministic reduction keeps only the `links` (`rel` and `href`), `data.id`,
 `data.source.judgmentUrl` (the court portal address) and `data.division.type`; every other key was
@@ -138,10 +149,52 @@ the page and `info.totalResults`. The excerpts, case numbers, judges, personnel 
 captured body were dropped, and the raw body was deleted after the reduction. It exists to record the names of
 the chambers; the facts are asserted in `tests/unit/test_saos_fixtures.py`.
 
+## Skeleton details
+
+Round 6 recorded the same four judgments again, plus one case-number search, so that the code that
+reads a judgment is tested against the real shape of a detail. A detail holds the whole text, the
+judges and the names of court staff, so the stored file is a skeleton, not a copy. The recorder, the
+reduction script, the scan and the raw bodies are kept outside this repository, in the private
+planning workspace; the raw bodies are not committed anywhere. The reduction, in full:
+
+1. Kept from `data`: `id`, `courtType`, `courtCases[].caseNumber`, `judgmentType`, `judgmentDate`,
+   `source.code`, `source.judgmentUrl`, the division (`code`, `id`, `name`, `type`, and the court or the
+   chamber with their `id`, `name`, `code`, `type`) and `textContent`. Dropped: `judges`,
+   `courtReporters`, `keywords`, `legalBases`, `referencedRegulations`, `referencedCourtCases`,
+   `lowerCourtJudgments`, `summary`, `decision`, `receiptDate`, `href`, `links` and the publication data.
+2. In `textContent` every tag is kept without attributes, except `class="anon-block"` on a `span`.
+   Every letter of every text node becomes `x`, a run of four or more digits becomes zeros, and
+   entities, shorter digit runs and punctuation stay. The text of an `h1`-`h6` heading stays only when
+   the whole heading is one of six court formulae (`WYROK`, `UZASADNIENIE`, `POSTANOWIENIE`,
+   `UCHWAŁA`, `ZARZĄDZENIE`, `W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ`).
+3. The Supreme Court text is plain text, not HTML: the same rule applies to it, line breaks included.
+
+A skeleton keeps the tags, the headings, the number and place of the `anon-block` markers and the
+length of the text, and nothing that was said in it. Tests that need words build them from the
+skeleton inside the test. The facts below are asserted against the stored files by
+`tests/unit/test_saos_fixtures.py`, which also scans each skeleton for a letter other than `x`.
+`rawTextChars` is the length of `textContent` in the captured body and equals `textChars` of the
+private recording of the same id below.
+
+| File | Record | Facts | Note |
+|---|---|---|---|
+| `judgment_skeleton_sentence_split.json` | 554697, `SENTENCE`, `VIII U 2924/25` | rawTextChars=1995; skeletonTextChars=1971; textFormat=html; h2=1; headings=WYROK,W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ; anonBlocks=8 | The operative part only; no reasoning heading |
+| `judgment_skeleton_reasons.json` | 554698, `REASONS`, `VIII U 2924/25` | rawTextChars=55636; skeletonTextChars=53160; textFormat=html; h2=1; headings=UZASADNIENIE; anonBlocks=107 | The reasoning of the same case |
+| `judgment_skeleton_sentence_nested.json` | 12510, `SENTENCE`, `VIII U 177/13` | rawTextChars=27671; skeletonTextChars=26284; textFormat=html; h2=2; headings=WYROK,W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ,UZASADNIENIE; anonBlocks=62 | A 2013 record with the reasoning inside |
+| `judgment_skeleton_supreme.json` | 245360, `SENTENCE`, `III KK 195/16` | rawTextChars=6689; skeletonTextChars=6689; textFormat=plain; h2=0; headings=none; anonBlocks=0; newlines=111 | The Supreme Court text has no markup at all |
+
+`search_case_number_lone_sentence.json` is the page the module will ask for when it looks for the
+`REASONS` of a `SENTENCE` (`pageSize=10&caseNumber=...`, the same request as `search_case_number_pair.json`).
+For `VIII U 1302/15` (a 2016 record of the Regional Court in Lublin, picked from
+`search_viii_sentence_2016.json`) it holds exactly one record, the `SENTENCE`: no `REASONS` exists for
+that case number. No detail of that record was recorded; a test that needs one combines this page with
+a skeleton text that has no reasoning heading.
+
 ## Recorded, kept private
 
 Four detail recordings hold the whole text of a judgment record (and, for three of them, the names
-of court staff who published it). They are not in this repository, redacted or not. Their facts,
+of court staff who published it). Their text is not in this repository: the skeletons above keep
+only its structure. Their facts,
 taken from the bodies at capture time, are pinned here as `key=value` pairs and asserted by the
 test, so a refreshed recording that changes a fact has to change this table too.
 
@@ -188,6 +241,8 @@ Numbers below are taken from the `info.totalResults` of the stored files.
 | `ccDivisionName=Pracy` and `ccDivisionName=Wydział Pracy i Ubezpieczeń Społecznych` | 0 results each: the filter matches the whole name, numeral included |
 | `lawJournalEntryCode=1964/296` (Code of Civil Procedure), common courts | 317 900 |
 | `caseNumber=VIII U 2924/25` | 2 records: the `SENTENCE` and the `REASONS` of one case |
+| `caseNumber=VIII U 1302/15` | 1 record: a `SENTENCE` of 2016-01-13 with no `REASONS` sibling |
+| Body of a judgment detail on 2026-11-07 against 2026-11-02 | The four original bodies have the same size and SHA-256 as the private recordings of the same ids |
 | `pageSize=101` | HTTP 400, `{"error": {..., "propertyName": "pageSize", "message": "parameter 'pageSize' : may not be greater than 100"}}` |
 | `pageNumber` numbering | Zero-based: page 1 of 100 records shares none of the 20 records of page 0 of the 20-record page, and the `self` link of that response says `pageNumber=1` |
 | Size of a 100-record page of division VIII | 142 130 B (about 1.4 kB per record), 9.1 s for the first request of round 3 |
@@ -210,7 +265,7 @@ Records of division VIII by calendar year of their own `judgmentDate`, `pageSize
 A `REASONS` record has a date of its own, usually later than the `SENTENCE` of the same case, so
 these counts are not the share of judgments that have a reasoning.
 
-Observed only in the private recordings: `source.judgmentUrl` (the court portal address) exists
+Observed in the judgment details (the skeletons and the private recordings): `source.judgmentUrl` (the court portal address) exists
 only in the judgment detail and not in search results; it is an API address of the court portal,
 `http://` in a 2013 record and `https://` in a 2026 one; `division.type` (`Pracy i Ubezpieczeń
 Społecznych`) is in the detail and not in search results, where only `division.code` is.

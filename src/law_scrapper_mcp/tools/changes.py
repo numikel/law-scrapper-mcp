@@ -34,7 +34,13 @@ def register(mcp: MCPServer[AppContext]) -> None:
         ctx: Context[AppContext],
         publisher: Annotated[
             str,
-            Field(description="Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'."),
+            Field(
+                description=(
+                    "Kod wydawcy: 'DU' (Dziennik Ustaw) lub 'MP' (Monitor Polski). Domyślnie 'DU'. "
+                    "Aktywne moduły źródeł dodają własne kody i nazwy (np. dzienniki wojewódzkie: POL_WOJ_PM lub "
+                    "'pomorskie'); pełna lista: get_system_metadata(category='publishers')."
+                )
+            ),
         ] = "DU",
         date_to: Annotated[
             str | None,

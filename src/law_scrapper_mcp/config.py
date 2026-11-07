@@ -9,6 +9,7 @@ import re
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from pydantic import (
     AnyHttpUrl,
@@ -66,6 +67,23 @@ _CONTACT_INVALID = (
     f"(tylko znaki ASCII, bez spacji i nawiasów, do {CONTACT_MAX_LENGTH} znaków). "
     "Aby użyć kontaktu domyślnego, usuń zmienną zamiast ustawiać ją jako pustą."
 )
+
+
+def _is_contact_url(value: str) -> bool:
+    """A contact URL with a host and without credentials.
+
+    The character class alone lets `https://user:pw@host/` through, and the value is sent as
+    written to every upstream host on every request, so a password pasted by mistake would
+    leak; `https:///` has nothing to contact. `urlsplit` can refuse a malformed netloc.
+    """
+    if not _CONTACT_URL.fullmatch(value):
+        return False
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return False
+    return parts.username is None and bool(parts.hostname)
+
 
 LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -392,7 +410,7 @@ class Settings(BaseSettings):
         The input is not echoed (`hide_input_in_errors`), and an empty value is an error
         rather than "unset": silently falling back would send somebody else's contact.
         """
-        if len(value) <= CONTACT_MAX_LENGTH and (_CONTACT_URL.fullmatch(value) or _CONTACT_EMAIL.fullmatch(value)):
+        if len(value) <= CONTACT_MAX_LENGTH and (_is_contact_url(value) or _CONTACT_EMAIL.fullmatch(value)):
             return value
         raise ValueError(_CONTACT_INVALID)
 

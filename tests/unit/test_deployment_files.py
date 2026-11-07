@@ -35,7 +35,8 @@ def test_compose_shows_the_contact_setting_only_as_a_comment() -> None:
     lines = [line.strip() for line in compose.splitlines()]
 
     assert any(line.startswith("#") and "LAW_MCP_CONTACT" in line for line in lines)
-    assert not any(line.startswith("- LAW_MCP_CONTACT") for line in lines)
+    # Any active spelling counts: `- LAW_MCP_CONTACT=x`, `- "LAW_MCP_CONTACT=x"` and `LAW_MCP_CONTACT: x`.
+    assert [line for line in lines if "LAW_MCP_CONTACT" in line and not line.startswith("#")] == []
 
 
 def test_readme_documents_the_contact_setting() -> None:

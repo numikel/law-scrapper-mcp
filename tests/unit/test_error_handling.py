@@ -695,15 +695,30 @@ class TestRefusedSource:
             f"{self.OTHER_SOURCES} {self.GUIDANCE}"
         )
 
-    @pytest.mark.parametrize("status", [400, 404, 408, 418, 422, 429])
+    @pytest.mark.parametrize("status", [400, 408, 418, 422, 429])
     def test_other_client_errors_keep_the_upstream_wording(self, status: int) -> None:
         exc = SejmApiError(f"HTTP {status}: no", status_code=status, source="Alpha")
 
         assert _classify_error(exc) == "upstream"
         assert self.message_of(exc) == "Źródło Alpha nie odpowiedziało poprawnie. Ponów wywołanie za chwilę."
 
-    def test_a_server_side_failure_is_still_an_unavailability(self) -> None:
-        exc = ApiUnavailableError("Źródło Alpha jest chwilowo niedostępne (HTTP 503)", status_code=503, source="Alpha")
+    def test_a_missing_page_is_still_not_found(self) -> None:
+        """The client turns a 404 into `ActNotFoundError`, not into a plain `SejmApiError`."""
+        exc = ActNotFoundError("DU/2024/1", source="Alpha")
+
+        assert _classify_error(exc) == "not_found"
+
+    @pytest.mark.parametrize("status", [500, 502, 503])
+    def test_a_server_side_failure_is_still_an_unavailability(self, status: int) -> None:
+        exc = ApiUnavailableError(
+            f"Źródło Alpha jest chwilowo niedostępne (HTTP {status})", status_code=status, source="Alpha"
+        )
+
+        assert _classify_error(exc) == "unavailable"
+
+    def test_an_unavailability_is_never_a_refusal_whatever_status_it_carries(self) -> None:
+        """`ApiUnavailableError` is a `SejmApiError`; the exclusion in `_is_refusal` keeps it `unavailable`."""
+        exc = ApiUnavailableError("Źródło Alpha jest niedostępne", status_code=403, source="Alpha")
 
         assert _classify_error(exc) == "unavailable"
 

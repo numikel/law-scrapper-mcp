@@ -26,6 +26,12 @@ VERSIONED_LITERAL = re.compile(r"law-scrapper-mcp/\d")
 USER_AGENT_ON_THE_WIRE = re.compile(r"^law-scrapper-mcp/\d+\.\d+\.\d+ \(\+(?:https?://|mailto:)[^\s()\\]+\)$")
 
 
+@pytest.fixture(autouse=True)
+def no_ambient_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An operator who followed the README has `LAW_MCP_CONTACT` exported; the defaults must not see it."""
+    monkeypatch.delenv("LAW_MCP_CONTACT", raising=False)
+
+
 def test_user_agent_reports_the_configured_version() -> None:
     """The advertised version must be the one the server actually reports."""
     settings = Settings()

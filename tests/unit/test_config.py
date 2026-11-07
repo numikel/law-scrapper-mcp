@@ -17,6 +17,18 @@ from law_scrapper_mcp.config import (
     log_pattern_limit_clamping,
 )
 
+CONTACT_REJECTED = (
+    "LAW_MCP_CONTACT musi być adresem http(s):// albo adresem e-mail "
+    "(tylko znaki ASCII, bez spacji i nawiasów, do 200 znaków). "
+    "Aby użyć kontaktu domyślnego, usuń zmienną zamiast ustawiać ją jako pustą."
+)
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An operator who followed the README has `LAW_MCP_CONTACT` exported; the defaults must not see it."""
+    monkeypatch.delenv("LAW_MCP_CONTACT", raising=False)
+
 
 class TestSettingsDefaults:
     """Tests for default configuration values."""
@@ -440,6 +452,7 @@ class TestContact:
             USER_AGENT_CONTACT,
             "https://ops.example.org/contact",
             "https://x.test/a?b=c&d=e#frag",
+            "https://x.test:8080/contact?lang=pl",
             "http://x.test",
             "Ops@Firma.PL",
             "ops+law@mail.example.org",
@@ -478,6 +491,14 @@ class TestContact:
             "https://zażółć.test",
             "ż@firma.pl",
             "https://x.test/" + "a" * 186,
+            # Characters are fine, the shape is not: credentials, no host, a broken bracket.
+            "https://user:pw@x.test/",
+            "https://user@x.test/",
+            "https://:pw@x.test/",
+            "https://@x.test/",
+            "https:///",
+            "https://?a=b",
+            "http://]",
         ],
         ids=lambda value: repr(value)[:40],
     )
@@ -490,8 +511,7 @@ class TestContact:
             Settings()
 
         text = str(exc_info.value)
-        assert "LAW_MCP_CONTACT musi być adresem http(s):// albo adresem e-mail" in text
-        assert "usuń zmienną zamiast ustawiać ją jako pustą" in text
+        assert CONTACT_REJECTED in text
         if value.strip():
             assert value.strip() not in text, "the rejected input must not be echoed"
 

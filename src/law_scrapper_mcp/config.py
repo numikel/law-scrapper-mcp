@@ -46,9 +46,25 @@ MAX_PATTERN_LENGTH_FLOOR = 64
 MAX_PATTERN_LENGTH_CEILING = 4096
 FILTER_MAX_RECORDS_FLOOR = 1
 
-# Contact channel advertised to api.sejm.gov.pl. The API is run by a state
-# institution, so its administrator needs a way to reach us that is not a ban.
+# Default contact advertised to every upstream host; an operator replaces it with
+# `LAW_MCP_CONTACT`. The Sejm API is run by a state institution, so its administrator needs
+# a way to reach us that is not a ban.
 USER_AGENT_CONTACT = "https://github.com/numikel/law-scrapper-mcp"
+
+# What `LAW_MCP_CONTACT` may hold: a plain `http(s)` URL or an e-mail address, in printable
+# ASCII with no whitespace, parentheses or backslash. The contact sits inside an RFC 9110
+# comment of the `User-Agent`, where those characters would end or escape it; CR/LF is
+# rejected by h11 only when the first request is sent, and a non-ASCII character fails while
+# the request is built, so the check belongs at startup.
+CONTACT_MAX_LENGTH = 200
+# 0x21-0x7e without `(` `)` (0x28-0x29) and `\` (0x5c).
+_CONTACT_URL = re.compile(r"https?://[\x21-\x27\x2a-\x5b\x5d-\x7e]+")
+_CONTACT_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_CONTACT_INVALID = (
+    "LAW_MCP_CONTACT musi być adresem http(s):// albo adresem e-mail "
+    f"(tylko znaki ASCII, bez spacji i nawiasów, do {CONTACT_MAX_LENGTH} znaków). "
+    "Aby użyć kontaktu domyślnego, usuń zmienną zamiast ustawiać ją jako pustą."
+)
 
 LOOPBACK_ALLOWED_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOOPBACK_ALLOWED_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -363,16 +379,33 @@ class Settings(BaseSettings):
     # Server info
     server_name: str = "law-scrapper-mcp"
     server_version: str = "4.4.2"
+    # The operator's contact in the identity header (FR-016). The default is the project
+    # repository; `log_default_contact_warning` nudges HTTP deployments to replace it.
+    contact: str = USER_AGENT_CONTACT
+
+    @field_validator("contact")
+    @classmethod
+    def _validate_contact(cls, value: str) -> str:
+        """Refuse a contact that is not a safe URL or e-mail, naming the variable.
+
+        The input is not echoed (`hide_input_in_errors`), and an empty value is an error
+        rather than "unset": silently falling back would send somebody else's contact.
+        """
+        if len(value) <= CONTACT_MAX_LENGTH and (_CONTACT_URL.fullmatch(value) or _CONTACT_EMAIL.fullmatch(value)):
+            return value
+        raise ValueError(_CONTACT_INVALID)
 
     @property
     def user_agent(self) -> str:
-        """Identity sent to api.sejm.gov.pl on every request.
+        """Identity sent to every upstream host on every request.
 
         Derived rather than written out, so the header cannot drift away from
         the version the server actually reports — which is exactly what happened
-        while it was a literal in the client.
+        while it was a literal in the client. The contact is always written as a URI
+        after the plus sign, so an e-mail address appears as `mailto:`.
         """
-        return f"{self.server_name}/{self.server_version} (+{USER_AGENT_CONTACT})"
+        uri = self.contact if self.contact.startswith(("http://", "https://")) else f"mailto:{self.contact}"
+        return f"{self.server_name}/{self.server_version} (+{uri})"
 
 
 def log_pattern_limit_clamping(current: Settings, log: logging.Logger) -> None:

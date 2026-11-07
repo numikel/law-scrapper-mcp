@@ -11,6 +11,7 @@ from law_scrapper_mcp.config import (
     FILTER_MAX_RECORDS_FLOOR,
     MAX_PATTERN_LENGTH_CEILING,
     MAX_PATTERN_LENGTH_FLOOR,
+    USER_AGENT_CONTACT,
     Settings,
     log_pattern_limit_clamping,
 )
@@ -416,6 +417,89 @@ class TestPatternLimitClampingLog:
             log_pattern_limit_clamping(settings, log)
 
         assert caplog.text == ""
+
+
+class TestContact:
+    """`LAW_MCP_CONTACT`: the contact the identity header advertises (FR-016).
+
+    Validated at startup because a bad value would otherwise fail on the first upstream
+    request: CR/LF is rejected by h11 on send and a non-ASCII character fails while the
+    request is built.
+    """
+
+    def test_default_is_the_project_repository(self) -> None:
+        assert Settings().contact == USER_AGENT_CONTACT
+
+    def test_the_default_passes_its_own_validator(self) -> None:
+        assert Settings(contact=USER_AGENT_CONTACT).contact == USER_AGENT_CONTACT
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            USER_AGENT_CONTACT,
+            "https://ops.example.org/contact",
+            "https://x.test/a?b=c&d=e#frag",
+            "http://x.test",
+            "Ops@Firma.PL",
+            "ops+law@mail.example.org",
+            "https://x.test/" + "a" * 185,
+        ],
+    )
+    def test_accepts_a_url_or_an_email(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        assert Settings().contact == value
+
+    def test_accepts_exactly_two_hundred_characters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        value = "https://x.test/" + "a" * 185
+        assert len(value) == 200
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        assert Settings().contact == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            "   ",
+            " https://x.test",
+            "https://x.test ",
+            "https://x.test/a b",
+            "ftp://x.test",
+            "mailto:a@b.co",
+            "plain text",
+            "a@b",
+            "https://x.test/a(b)",
+            "https://x.test/a)b",
+            "https://x.test/\\",
+            "https://x.test/a\r\nX-Evil: 1",
+            "https://x.test/a\nb",
+            "https://zażółć.test",
+            "ż@firma.pl",
+            "https://x.test/" + "a" * 186,
+        ],
+        ids=lambda value: repr(value)[:40],
+    )
+    def test_rejects_anything_that_is_not_a_safe_url_or_email(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("LAW_MCP_CONTACT", value)
+
+        with pytest.raises(ValidationError) as exc_info:
+            Settings()
+
+        text = str(exc_info.value)
+        assert "LAW_MCP_CONTACT musi być adresem http(s):// albo adresem e-mail" in text
+        assert "usuń zmienną zamiast ustawiać ją jako pustą" in text
+        if value.strip():
+            assert value.strip() not in text, "the rejected input must not be echoed"
+
+    def test_an_empty_value_is_an_error_not_the_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`LAW_MCP_CONTACT=` must not silently send somebody else's contact."""
+        monkeypatch.setenv("LAW_MCP_CONTACT", "")
+
+        with pytest.raises(ValidationError):
+            Settings()
 
 
 class TestShutdownGrace:

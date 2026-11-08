@@ -135,6 +135,19 @@ def test_an_unknown_newest_date_is_never_a_freshness_gap() -> None:
     assert _gap(segment(newest=None, newest_ref=None)) is None
 
 
+def test_unknown_newest_with_known_years_still_reports_a_missing_year_and_never_freshness() -> None:
+    """A journal whose act detail answered 204 has years but no newest date; the year gap must survive."""
+    seg = segment(newest=None, newest_ref=None, years=(2024, 2025, 2026))
+
+    missing = _gap(seg, year=2019)
+    assert missing is not None
+    assert "nie ma rocznika 2019" in missing
+    assert "Najnowsze ogłoszenie" not in missing
+    # A year the segment has, even far in the future of an unknown newest date, is no freshness gap.
+    assert _gap(seg, year=2026) is None
+    assert _gap(seg, pub_date_to="2030-01-01") is None
+
+
 def test_the_end_of_the_window_decides_not_today() -> None:
     seg = segment(newest=date(2026, 6, 1))
 

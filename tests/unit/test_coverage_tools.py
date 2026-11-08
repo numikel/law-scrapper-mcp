@@ -31,6 +31,11 @@ STALE_DU = segment("DU", newest=date(2020, 1, 1), newest_ref="2020/1", years=tup
 def covering_module(provider: FakeCoverageProvider) -> SourceModule:
     @asynccontextmanager
     async def hook(host: ModuleHost) -> AsyncIterator[None]:
+        # The server registers the real DU and MP providers before any module starts; these tests stand a
+        # fake in for DU, so they clear the real ones first (the Sejm providers have their own tests).
+        real_keys = host.coverage.keys()
+        for key in real_keys:
+            host.coverage.unregister(key)
         host.coverage.register(provider)
         try:
             yield None

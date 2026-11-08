@@ -70,7 +70,7 @@ def register(mcp: MCPServer[AppContext]) -> None:
         - Chcesz poznać świeżość źródła przed poleganiem na nim (data i odnośnik najnowszego dokumentu).
         Uwaga: pierwsze zapytanie danego dnia o 'coverage' może potrwać dłużej, bo mierzy zasięg
         u źródła (wynik jest pamiętany przez dobę). Pierwsze 'all' danego dnia kontaktuje hosty
-        wszystkich aktywnych źródeł (do ok. 32 żądań), więc gdy chodzi tylko o jedną kategorię,
+        wszystkich aktywnych źródeł (do ok. 44 żądań), więc gdy chodzi tylko o jedną kategorię,
         podaj ją wprost zamiast 'all'.
 
         Kiedy NIE używać:

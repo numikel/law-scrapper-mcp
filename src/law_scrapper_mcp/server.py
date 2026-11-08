@@ -42,6 +42,7 @@ from law_scrapper_mcp.services.metadata_service import MetadataService
 from law_scrapper_mcp.services.relationship_service import RelationshipService
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
+from law_scrapper_mcp.services.sejm_coverage import register_sejm_coverage
 from law_scrapper_mcp.source_modules.contract import LoadedModule, ModuleHost, SourceModule, SourceModuleError
 from law_scrapper_mcp.source_modules.discovery import Discovery, discover, registered_tool_names
 from law_scrapper_mcp.source_modules.instructions import compose_instructions
@@ -326,6 +327,9 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     # One registry of source coverage per process, next to the act sources: modules register a
     # provider from their start hooks, the metadata and search services read it.
     coverage = CoverageRegistry()
+    # The Sejm's own publishers (DU, MP) describe themselves before any module starts, over the
+    # one Sejm client; a module's provider cannot take their keys.
+    register_sejm_coverage(coverage, client)
     metadata_service = MetadataService(client, sources=act_sources, coverage=coverage)
     search_service = SearchService(client, result_store, sources=act_sources, coverage=coverage)
     act_service = ActService(client, document_store, content_processor, sources=act_sources)

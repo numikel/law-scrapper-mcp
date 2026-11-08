@@ -303,8 +303,27 @@ uv run python scripts/check_release.py --version X.Y.Z
 
 ## 9. Release status
 
+Every member of `modules/` is released with the core, except the ones listed in
+`NEVER_RELEASED_MODULES` in `scripts/check_release.py`. Today that list holds one entry, `reference`.
+
+- **One version for every package.** A released module's `[project].version` equals the core's, and its
+  dependency on the core is pinned to exactly that version (`law-scrapper-mcp==X.Y.Z`). A fix in one
+  module is released as a new version of every package. Inside the uv workspace the pin is ignored (the
+  `{ workspace = true }` source wins), so `tests/unit/test_package_versions.py` keeps it right, and
+  `scripts/check_release.py --sync-version X.Y.Z` rewrites the core, every released module's version and
+  pin, and their `uv.lock` lines in one step.
+- **Release assets.** `release.yml` runs `check_release.py --build-packages dist`. That builds one sdist
+  and one wheel per released distribution and refuses a missing or extra file, a module wheel without its
+  exact core pin, and a core sdist that packs anything outside its allowlist. The same build, followed by
+  an install of the wheels into a clean environment, runs on every pull request (CI job `packages`).
+- **Container image.** The image installs the core and every released module, all switched off by
+  `ENV LAW_MCP_SOURCE_MODULES=-*`. An operator enables a source with `-*,<name>`. A bare `<name>`
+  replaces `-*` and turns every other installed module on as well.
+- **A new module** is released and installed in the image automatically. To hold one back, add its
+  directory to `NEVER_RELEASED_MODULES`, to `.dockerignore` after the `!modules/*/README.md` line, and
+  to the `--no-install-package` list in the `Dockerfile`; `tests/unit/test_deployment_files.py` checks
+  that the three agree.
+
 `modules/reference/` (distribution `law-scrapper-mcp-reference`, version `0.0.0`) is a demonstration. It
 declares an unpinned dependency on the core and is never built into release assets, attached to a release
-or installed in the container image. Packaging real modules (versions pinned to the core, release assets,
-image contents, `--sync-version` for members) is a separate piece of work and is not part of this
-mechanism.
+or installed in the container image.

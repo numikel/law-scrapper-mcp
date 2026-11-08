@@ -595,7 +595,7 @@ requires-dist = [{ name = "law-scrapper-mcp", editable = "." }]
 
 [[package]]
 name = "law-scrapper-mcp-saos"
-version = "0.1.0"
+version = "4.4.2"
 source = { editable = "modules/saos" }
 dependencies = [
     { name = "law-scrapper-mcp" },
@@ -606,7 +606,7 @@ requires-dist = [{ name = "law-scrapper-mcp", editable = "." }]
 
 [[package]]
 name = "law-scrapper-mcp-voivodeship-journals"
-version = "0.0.0"
+version = "4.4.2"
 source = { editable = "modules/voivodeship-journals" }
 dependencies = [
     { name = "law-scrapper-mcp" },

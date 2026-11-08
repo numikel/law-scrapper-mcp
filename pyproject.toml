@@ -77,6 +77,12 @@ members = ["modules/*"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/law_scrapper_mcp"]
 
+# An allowlist, not the working tree: without it a local build packs everything hatchling
+# does not ignore, including gitignored private files and every workspace member under modules/.
+# Hatchling adds pyproject.toml itself. Pinned by tests/unit/test_package_versions.py.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "strict"

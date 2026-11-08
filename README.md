@@ -61,6 +61,21 @@ cd law-scrapper-mcp
 pip install -e .
 ```
 
+### From a GitHub Release (core and source modules)
+
+Each [release](https://github.com/numikel/law-scrapper-mcp/releases) attaches the core and every source
+module as separate wheels, plus `checksums.txt`. A module requires the core of exactly its own version, so
+install both from the same release (replace `X.Y.Z` with the release version):
+
+```bash
+RELEASE=https://github.com/numikel/law-scrapper-mcp/releases/download/vX.Y.Z
+pip install "$RELEASE/law_scrapper_mcp-X.Y.Z-py3-none-any.whl" \
+            "$RELEASE/law_scrapper_mcp_voivodeship_journals-X.Y.Z-py3-none-any.whl"
+# or: uv pip install with the same two URLs
+```
+
+An installed module is active; see [Source modules](#source-modules) to switch it off.
+
 ### Using uvx (no installation required)
 
 For quick testing without cloning the repository:
@@ -156,6 +171,19 @@ docker compose -f docker-compose.yml up
 ```
 
 CI builds this image and smoke-tests both transports (`/health` over streamable-http, one `initialize` over STDIO) on every code change, so a Dockerfile that no longer builds fails the pull request rather than a downstream registry.
+
+The image ships every released [source module](#source-modules) installed and **switched off**
+(`LAW_MCP_SOURCE_MODULES=-*`). Enable one with `-*,<name>`. Never use a bare `<name>`: it replaces `-*`
+and turns every other installed module on as well.
+
+```bash
+docker run -it -p 7683:7683 \
+  -e LAW_MCP_HOST=0.0.0.0 \
+  -e LAW_MCP_AUTH_MODE=bearer \
+  -e LAW_MCP_AUTH_TOKEN="$(openssl rand -base64 32)" \
+  -e 'LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals' \
+  law-scrapper-mcp
+```
 
 ## Configuration
 

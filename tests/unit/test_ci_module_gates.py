@@ -15,6 +15,8 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 CI = REPO / ".github" / "workflows" / "ci.yml"
+RELEASE = REPO / ".github" / "workflows" / "release.yml"
+DOCKERFILE = REPO / "Dockerfile"
 
 sys.path.insert(0, str(REPO / "scripts"))
 import check_release  # noqa: E402
@@ -57,6 +59,7 @@ def filter_matches(path: str, patterns: list[str]) -> bool:
 
 
 CI_TEXT = CI.read_text(encoding="utf-8")
+RELEASE_TEXT = RELEASE.read_text(encoding="utf-8")
 
 
 # --- the filter that starts the jobs -----------------------------------------------------------
@@ -161,11 +164,114 @@ def test_the_core_conformance_step_stays_core_only() -> None:
     assert "--all-packages" not in job_block(CI_TEXT, "test")
 
 
-def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
-    uses = re.findall(r"^\s*(?:- )?uses:\s*(\S+)", CI_TEXT, flags=re.MULTILINE)
+@pytest.mark.parametrize(("workflow", "minimum"), [(CI_TEXT, 10), (RELEASE_TEXT, 5)], ids=["ci.yml", "release.yml"])
+def test_every_action_is_pinned_to_a_full_commit_sha(workflow: str, minimum: int) -> None:
+    uses = re.findall(r"^\s*(?:- )?uses:\s*(\S+)", workflow, flags=re.MULTILINE)
 
-    assert len(uses) > 10
+    assert len(uses) >= minimum
     assert [item for item in uses if not FULL_SHA.fullmatch(item)] == []
+
+
+# --- release packages --------------------------------------------------------------------------
+
+BUILD_PACKAGES = "uv run --no-project python scripts/check_release.py --build-packages dist"
+
+
+def setup_uv_versions(workflow: str) -> list[str | None]:
+    """For every setup-uv step, the `version:` it pins (None when the step pins none)."""
+    lines = workflow.splitlines()
+    versions: list[str | None] = []
+    for index, line in enumerate(lines):
+        if "uses: astral-sh/setup-uv@" not in line:
+            continue
+        found: str | None = None
+        for following in lines[index + 1 :]:
+            if following.strip().startswith("- ") or JOB_HEADER.match(following):
+                break
+            if match := re.match(r'\s*version:\s*"([^"]+)"\s*$', following):
+                found = match[1]
+        versions.append(found)
+    return versions
+
+
+def test_every_setup_uv_step_pins_the_uv_of_the_dockerfile() -> None:
+    dockerfile = re.search(r"ghcr\.io/astral-sh/uv:([0-9.]+)", DOCKERFILE.read_text(encoding="utf-8"))
+    assert dockerfile is not None, "the Dockerfile no longer pins uv by tag"
+
+    for name, workflow in (("ci.yml", CI_TEXT), ("release.yml", RELEASE_TEXT)):
+        versions = setup_uv_versions(workflow)
+        assert versions, f"{name} has no setup-uv step"
+        assert versions == [dockerfile[1]] * len(versions), name
+
+
+def test_the_setup_uv_helper_sees_a_missing_pin() -> None:
+    unpinned = (
+        "      - name: Install uv\n        uses: astral-sh/setup-uv@abc\n        with:\n          enable-cache: true\n"
+    )
+
+    assert setup_uv_versions(unpinned) == [None]
+
+
+def test_the_packages_job_builds_installs_and_checks_the_release_on_every_pr() -> None:
+    block = job_block(CI_TEXT, "packages")
+    commands = run_lines(block)
+    install = step_block(block, "Install the wheels into a clean environment")
+
+    assert "needs: changes" in block
+    assert "uv lock --locked" in commands
+    assert BUILD_PACKAGES in commands
+    assert "uv pip install" in install and "dist/*.whl" in install
+    assert "scripts/check_release.py --check-installed" in install
+    assert "--all-packages" not in install, "the clean environment gets the built wheels, not the workspace"
+
+
+def test_the_release_workflow_validates_and_builds_every_released_package() -> None:
+    validate = run_lines(job_block(RELEASE_TEXT, "validate"))
+    build = run_lines(job_block(RELEASE_TEXT, "build"))
+
+    assert 'python3 scripts/check_release.py --version "$VERSION" --skip-tests' in validate
+    assert BUILD_PACKAGES in build
+    assert "uv build" not in build, "a bare uv build releases the core only"
+    assert "files: |" in job_block(RELEASE_TEXT, "release") and "dist/*" in job_block(RELEASE_TEXT, "release")
+
+
+def test_the_docker_job_proves_the_image_ships_every_module_installed_and_off() -> None:
+    block = job_block(CI_TEXT, "docker")
+    installed = step_block(block, "Every released module is installed, and nothing else")
+    activation = step_block(block, "Modules are off by default and one turns on with -*,<name>")
+
+    for step in ("Build the image", "Smoke-test the HTTP transport", "Smoke-test the STDIO transport"):
+        step_block(block, step)  # the earlier smoke tests stay
+    assert "/repo/scripts/check_release.py --check-installed" in installed
+    assert 'if grep -q \'"name":"POL_WOJ_PM"\'' in activation, "the default image must be shown to have it off"
+    assert 'if ! grep -q \'"name":"POL_WOJ_PM"\'' in activation, "-*,<name> must be shown to turn it on"
+    assert "LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals" in activation
+    assert "LAW_MCP_AUTH_MODE=bearer" in activation, "an exposed container is never unauthenticated"
+
+
+def test_the_changelog_check_reacts_to_a_changed_version_line_only() -> None:
+    """The first F-05 run tripped on a pyproject comment naming test_package_versions.py."""
+    block = job_block(CI_TEXT, "release-prep-check")
+    match = re.search(r"grep -qE '([^']+)'", block)
+    assert match is not None, "release-prep-check no longer greps the pyproject diff"
+    pattern = re.compile(match[1].replace("[[:space:]]", r"\s"))
+
+    assert pattern.search('+version = "4.5.0"')
+    assert pattern.search('-version = "4.4.2"')
+    assert not pattern.search("+# Pinned by tests/unit/test_package_versions.py.")
+    assert not pattern.search('+    "law-scrapper-mcp==4.4.2", # same version as the core')
+    assert not pattern.search('+required-version = "==0.12.22"')
+
+
+def test_the_audit_covers_module_dependencies() -> None:
+    assert "uv run --extra dev --all-packages pip-audit" in run_lines(job_block(CI_TEXT, "audit"))
+
+
+def test_a_change_to_the_release_scripts_or_workflow_starts_the_code_jobs() -> None:
+    patterns = code_filter(CI_TEXT)
+
+    assert filter_matches("scripts/check_release.py", patterns)
+    assert filter_matches(".github/workflows/release.yml", patterns)
 
 
 # --- the local mirror --------------------------------------------------------------------------
@@ -195,6 +301,15 @@ def test_the_local_mirror_runs_the_core_suites_unchanged(monkeypatch: pytest.Mon
 
     assert ["uv", "run", "pytest", "tests/unit/"] in commands
     assert ["uv", "run", "pytest", "tests/integration/", "-m", "integration"] in commands
+
+
+def test_the_local_mirror_builds_and_inspects_the_packages_like_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands = recorded_commands(monkeypatch)
+
+    build = [cmd for cmd in commands if "--build-packages" in cmd]
+    assert len(build) == 1
+    assert build[0][1].endswith("check_release.py")
+    assert not Path(build[0][-1]).exists(), "the throwaway build directory is removed afterwards"
 
 
 def test_the_local_mirror_skips_the_module_test_command_when_there_is_no_module(

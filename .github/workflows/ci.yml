@@ -50,6 +50,8 @@ jobs:
               - 'Dockerfile'
               - '.dockerignore'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/release.yml'
+              - 'scripts/**'
 
   lint:
     needs: changes
@@ -60,6 +62,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -104,6 +107,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -197,6 +201,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -282,6 +287,42 @@ jobs:
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
 
+  # The release packages, built and installed together the way an operator gets them from a GitHub
+  # Release. Inside the workspace uv ignores a module's pin on the core, so this install is what proves
+  # the pins resolve; `uv lock --locked` catches a version sync that left the lock behind.
+  packages:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.22"
+          enable-cache: true
+      - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
+        run: uv python install 3.13
+      - name: Lock file is current
+        if: needs.changes.outputs.code == 'true'
+        run: uv lock --locked
+      - name: Build and inspect the packages
+        if: needs.changes.outputs.code == 'true'
+        run: uv run --no-project python scripts/check_release.py --build-packages dist
+      - name: Install the wheels into a clean environment
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/release-wheels"
+          uv venv --python 3.13 "$venv"
+          uv pip install --python "$venv/bin/python" dist/*.whl
+          "$venv/bin/python" scripts/check_release.py --check-installed
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
+
   docker:
     needs: changes
     runs-on: ubuntu-latest
@@ -327,6 +368,47 @@ jobs:
       - name: Runs as a non-root user
         if: needs.changes.outputs.code == 'true'
         run: test "$(docker run --rm --entrypoint id law-scrapper-mcp:ci -u)" != "0"
+      # The same comparison as the `packages` job, against the image's environment: the core and every
+      # released module at one version, never a never-released member such as reference.
+      - name: Every released module is installed, and nothing else
+        if: needs.changes.outputs.code == 'true'
+        run: docker run --rm -v "$PWD:/repo:ro" --entrypoint python law-scrapper-mcp:ci /repo/scripts/check_release.py --check-installed
+      # FR-002: installed but off by default; `-*,<name>` turns exactly one on. Starting a module only
+      # registers its hosts, so neither container contacts a journal host.
+      - name: Modules are off by default and one turns on with -*,<name>
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          health() {
+            local name="$1" port="$2"
+            shift 2
+            docker run -d --name "$name" -p "$port:7683" -e LAW_MCP_HOST=0.0.0.0 -e LAW_MCP_AUTH_MODE=bearer -e LAW_MCP_AUTH_TOKEN="$(openssl rand -base64 32)" "$@" law-scrapper-mcp:ci >/dev/null
+            for attempt in {1..40}; do
+              if body="$(curl --fail --silent "http://127.0.0.1:$port/health")"; then
+                printf '%s' "$body"
+                return 0
+              fi
+              sleep 0.25
+            done
+            echo "Container $name /health did not become ready in time" >&2
+            docker logs "$name" >&2 || true
+            return 1
+          }
+          trap 'docker rm -f lsm-default lsm-module >/dev/null 2>&1 || true' EXIT
+          default="$(health lsm-default 7684)"
+          if grep -q '"name":"POL_WOJ_PM"' <<<"$default"; then
+            echo "A module is active in the default image: /health lists POL_WOJ_PM"
+            echo "$default"
+            exit 1
+          fi
+          enabled="$(health lsm-module 7685 -e 'LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals')"
+          if ! grep -q '"name":"POL_WOJ_PM"' <<<"$enabled"; then
+            echo "-*,voivodeship-journals did not enable the module: /health lists no POL_WOJ_PM"
+            echo "$enabled"
+            exit 1
+          fi
+          echo "default image: every module off; -*,voivodeship-journals: on"
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
@@ -343,7 +425,8 @@ jobs:
           set -euo pipefail
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
-          if ! git diff "$base" "$head" -- pyproject.toml | grep -q '^[+-].*version'; then
+          # Only a changed `version =` line counts; a comment or a file name with the word "version" does not.
+          if ! git diff "$base" "$head" -- pyproject.toml | grep -qE '^[+-]version[[:space:]]*='; then
             echo "pyproject.toml version unchanged — skip changelog check"
             exit 0
           fi
@@ -365,13 +448,15 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
         run: uv python install 3.13
+      # --all-packages: dependencies that only a source module brings are audited too.
       - name: Security audit
         if: needs.changes.outputs.code == 'true'
-        run: uv run --extra dev pip-audit
+        run: uv run --extra dev --all-packages pip-audit
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

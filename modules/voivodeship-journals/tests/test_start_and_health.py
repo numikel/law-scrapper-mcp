@@ -176,7 +176,10 @@ def test_the_entry_point_of_the_installed_distribution_loads_this_descriptor() -
     assert len(found) == 1, "the member is not installed: run `uv sync --extra dev --all-packages`"
     assert found[0].value == "law_scrapper_mcp_voivodeship_journals:module"
     assert found[0].dist is not None
-    assert (found[0].dist.name, found[0].dist.version) == ("law-scrapper-mcp-voivodeship-journals", "0.0.0")
+    # One version for every package of a release, and the module refuses any other core.
+    core_version = importlib.metadata.version("law-scrapper-mcp")
+    assert (found[0].dist.name, found[0].dist.version) == ("law-scrapper-mcp-voivodeship-journals", core_version)
+    assert found[0].dist.requires == [f"law-scrapper-mcp=={core_version}"]
     assert found[0].load() is module
 
 

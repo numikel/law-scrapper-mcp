@@ -11,9 +11,14 @@ WORKDIR /app
 # refuses to build without every file the package metadata names.
 COPY pyproject.toml uv.lock* README.md ./
 COPY src/ src/
+# Every released source module. .dockerignore keeps the never-released ones
+# (modules/reference/) and the module tests out of the build context.
+COPY modules/ modules/
 
-# Install dependencies
-RUN uv sync --frozen --no-dev --no-editable
+# Install dependencies, the core and every released module. uv.lock still names
+# the never-released members, so --no-install-package must name them too; the
+# list equals check_release.NEVER_RELEASED_MODULES (tests/unit/test_deployment_files.py).
+RUN uv sync --frozen --no-dev --no-editable --all-packages --no-install-package law-scrapper-mcp-reference
 
 FROM python:3.13-slim
 
@@ -34,6 +39,10 @@ ENV LAW_MCP_TRANSPORT=streamable-http
 # setting together with an authentication mode. One place to configure
 # exposure, not two.
 ENV LAW_MCP_PORT=7683
+# Every source module is installed and every one is off (FR-002): the operator
+# enables a source with `-e LAW_MCP_SOURCE_MODULES=-*,<name>`. Never a bare
+# `<name>`: it replaces this value, and every other installed module turns on.
+ENV LAW_MCP_SOURCE_MODULES=-*
 
 # Switch to non-root user
 USER lawmcp

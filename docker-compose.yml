@@ -17,6 +17,9 @@ services:
       # Contact sent to every upstream host in the User-Agent. Unset, it is the project's repository,
       # so complaints about your traffic reach the project's authors: set a URL or e-mail of your own.
       # - LAW_MCP_CONTACT=ops@example.org
+      # Every source module is installed in the image and off. Enable one with `-*,<name>`,
+      # never a bare name (a bare name turns every other installed module on as well).
+      # - LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals
     restart: unless-stopped
     # Must stay >= 2 x LAW_MCP_SHUTDOWN_GRACE (default 15s). Nothing in the code
     # enforces the relation. The process needs its full graceful window before

@@ -54,8 +54,10 @@ names are unique across all modules, because CI collects `modules/*/tests` in on
 
 ## Release
 
-Run `/prepare-release X.Y.Z` (maintainers). The version lives in 7 places, listed in
-`scripts/check_release.py`; `--sync-version X.Y.Z` rewrites them all. One of them is the overview
+Run `/prepare-release X.Y.Z` (maintainers). The core version lives in 7 places, listed in
+`scripts/check_release.py`; every released module under `modules/` (all except `NEVER_RELEASED_MODULES`)
+carries the same version and pins `law-scrapper-mcp==X.Y.Z`. `--sync-version X.Y.Z` rewrites all of them,
+`uv.lock` included. One of them is the overview
 line above: a regex matches its "Law Scrapper MCP v" + version form, so keep that phrasing.
 A PR that bumps the version must add `docs/changelogs/vX.Y.Z.md` (CI `release-prep-check`);
 `release.yml` runs only on a pushed `v*` tag and publishes that file as the release body.

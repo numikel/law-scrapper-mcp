@@ -66,7 +66,10 @@ module = SourceModule(
         "Gdy chcesz tylko orzeczenia pracy, użyj search_saos_judgments z labour_only=true: serwer skanuje do 5 stron "
         "SAOS (do 5 żądań) i zwraca kursor scan.next_offset zamiast total_count; dla Sądu Najwyższego "
         "(court_type=SUPREME) wybiera Izbę Pracy, a dla pozostałych rodzajów sądów odmawia. "
-        "Fraza i sygnatura są wysyłane do serwisu saos.org.pl; awaria SAOS nie wpływa na inne źródła."
+        "Fraza i sygnatura są wysyłane do serwisu saos.org.pl; awaria SAOS nie wpływa na inne źródła.\n"
+        "- Zasięg SAOS (najnowsze orzeczenie i liczba orzeczeń dla każdego rodzaju sądu) podaje "
+        "get_system_metadata(category='coverage'); wskazówka o luce pojawia się tylko wtedy, gdy zapytanie "
+        "o rodzaj sądu sięga poza zasięg źródła."
     ),
     register_tools=register_all_tools,
     start=start,

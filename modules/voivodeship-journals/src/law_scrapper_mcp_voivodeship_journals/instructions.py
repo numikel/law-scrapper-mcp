@@ -36,5 +36,7 @@ def build_instructions() -> str:
         "sprawdzone na prawdziwym pliku, więc brak ostrzeżenia nie dowodzi, że tekst jest dobry.\n"
         "- analyze_act_relationships zwraca powiązania pod kluczami dziennika (opisami relacji), "
         "nie pod kluczami DU i MP.\n"
-        f"- Wyłączone z obsługi: {withheld}. Zapytanie o taki kod kończy się błędem z powodem."
+        f"- Wyłączone z obsługi: {withheld}. Zapytanie o taki kod kończy się błędem z powodem.\n"
+        "- Zasięg każdego dziennika (najnowsze ogłoszenie, roczniki) podaje get_system_metadata(category='coverage'); "
+        "wskazówka o luce pojawia się tylko wtedy, gdy zapytanie sięga poza zasięg dziennika."
     )

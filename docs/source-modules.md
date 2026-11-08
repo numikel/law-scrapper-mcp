@@ -90,6 +90,7 @@ The start hook receives one `ModuleHost`:
 | `caller` | A `CallerIdentity(module, version)` the core derives from the module's distribution; a module cannot forget or spoof it |
 | `settings` | The process settings |
 | `act_sources` | The `ActSourceRegistry` the core services consult by publisher code (see "Act sources" below) |
+| `coverage` | The `CoverageRegistry` the core consults to tell the agent what a source covers (see "Coverage" below); a module registers its provider in the start hook and unregisters it when the hook exits |
 
 A module that talks to an upstream host calls `host.egress.client_for(EgressHost(...), host.caller)`
 **inside its start hook**. That call registers the host with the hub: the host appears on `/health`
@@ -131,9 +132,14 @@ async def start(host: ModuleHost) -> AsyncIterator[State]:
 What the core guarantees:
 
 - **Empty registry, same behaviour.** The services ask the registry once per call. With nothing
-  registered, or for `DU` and `MP`, they issue exactly the upstream calls they always did;
-  `test_empty_registry_issues_the_same_upstream_calls` pins that. `DU` and `MP`, and any prefix that
-  would cover them, cannot be claimed; a code or prefix claimed twice stops startup.
+  registered, or for `DU` and `MP`, the routing is unchanged: the act request goes to the same upstream
+  calls as before (`test_empty_registry_issues_the_same_upstream_calls` pins that). This is not the same
+  as zero new traffic. A search or browse of `DU` or `MP` may also start the lazy coverage measurement
+  (section "Coverage" below): at most 3 paced requests to `api.sejm.gov.pl` per process per 24 h (one
+  `GET acts`, often served by the publisher cache, and one `acts/search` with `limit=1` for each of `DU`
+  and `MP`), sent through the same Sejm client, on the first query that needs them, and none at startup.
+  `DU` and `MP`, and any prefix that would cover them, cannot be claimed; a code or prefix claimed twice
+  stops startup.
 - **Exact code first, then a name, then the longest prefix.** A source that claims a prefix receives every
   code under it, including ones it does not serve, and must refuse those loudly rather than let the
   request fall through: raise `UnknownPublisherError(unknown_publisher_message(value, infos))`, the same
@@ -183,6 +189,73 @@ What the core guarantees:
 
 A module must never send `publisher` codes it does not serve to its host, and must build the canonical
 ELI (`{publisher}/{year}/{pos}`) from the request, not from fields the host returns.
+
+### Coverage: telling the agent what a source covers
+
+A source that holds only part of its records (a journal that starts in 2001, a court database that stops in
+2016) makes an empty result look like a fact about the law. A module describes its coverage with a
+`CoverageProvider` in `law_scrapper_mcp.services.coverage`; the core turns it into the metadata category
+`coverage` and into hints on act searches.
+
+The protocol is small:
+
+| Member | Purpose |
+|--------|---------|
+| `key` | Registry key, unique in the process. For an act publisher, its canonical code (`POL_WOJ_PM`) |
+| `source` | Name of the source, e.g. `saos` |
+| `async measure(today)` | Takes a live measurement and returns a `SourceCoverage`; may raise |
+| `fallback()` | Returns the last known values with `origin="fallback"`, without touching the network |
+
+A `SourceCoverage` has `source`, `segments` (one `CoverageSegment` per publisher, journal or court type:
+`key`, `label`, `newest`, `newest_ref`, `count`, `years`), `measured_on` and `origin`. A segment's `years`
+is `None` when the source cannot tell; `count` and `newest` may be `None` too.
+
+```python
+@asynccontextmanager
+async def start(host: ModuleHost) -> AsyncIterator[State]:
+    client = host.egress.client_for(EgressHost(name="POL_X_AB", base_url="https://..."), host.caller)
+    provider = MyCoverage(client)                                # implements CoverageProvider
+    host.coverage.register(provider)                             # refused if the key is taken
+    try:
+        yield State(...)
+    finally:
+        host.coverage.unregister(provider.key)                   # before the core closes its resources
+```
+
+What the registry guarantees:
+
+- **One provider per key.** `register` raises `CoverageConflictError` for a key another provider holds, and
+  changes nothing. A module that registers several providers (one per journal) unregisters each of them.
+- **Lazy.** Nothing is measured at startup, on `/health` or on a timer. The first question for a key
+  measures it; the answer is remembered for 24 hours. Concurrent questions for one key share one measurement.
+- **Fallback.** A failing `measure` is answered by `fallback()`, remembered for 15 minutes, so a dead host is
+  retried after that interval and not with every query. A fallback is marked `origin="fallback"`, and the
+  agent is told the current measurement failed. A provider whose fallback fails too gets no coverage for
+  that key, and nothing is raised.
+- **Fallback values live in the module's `src/`.** The sdist of the core and the container image carry no
+  tests, so a fallback must not read a recording at runtime. A module's tests tie each constant to the
+  recording it came from. A fallback without `years` never reports a missing year, because there is no year
+  list to compare with.
+
+How the core uses it:
+
+- **Metadata.** `get_system_metadata(category="coverage")` lists one entry per segment (`source`, `segment`,
+  `label`, `newest`, `newest_ref`, `count`, `years`, `measured_on`, `origin`). `category="all"` includes it.
+- **Act search and browse.** After a search or browse for a publisher code, the core asks the registry for
+  that code (a voivodeship name is resolved to its code first) and computes one gap hint. It goes into
+  `hints` only, never into `outputSchema`. Two gaps are checked in order and reported singly: the year is
+  given and the segment has years but not that one; or the upper bound of the query lies more than
+  **30 days** past the segment's `newest`. Exactly 30 days is not a gap; 31 is.
+- **Judgment modules.** A module whose records are not acts computes its own hints from the registry, with
+  its own wording. SAOS does this: it asks for its court-type segment only when a court type is chosen and
+  on the first page, and it adds the statement about administrative courts only while the measured count
+  is 0.
+
+Traffic. The measurement is an upstream request like any other, so it goes through the module's own client
+(pacing, breaker and `/health` entry unchanged). Each provider's measurement costs at most a fixed number of
+requests: DU and MP together at most 3 (see "Act sources" above), each served journal 3, SAOS 5. A failed
+measurement is retried after 15 minutes, so a failing host can see up to one measurement attempt per
+15 minutes until it recovers.
 
 ## 6. Activation: `LAW_MCP_SOURCE_MODULES`
 

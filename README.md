@@ -394,13 +394,14 @@ Every tool is read-only (`readOnlyHint=true`, `destructiveHint=false`, `idempote
 Retrieve system metadata for filtering and searching legal acts.
 
 **Parameters:**
-- `category` (string, default: "all") - Metadata category: "keywords", "publishers", "statuses", "types", "institutions", or "all"
+- `category` (string, default: "all") - Metadata category: "keywords", "publishers", "statuses", "types", "institutions", "coverage", or "all"
 
-**Returns:** Keywords, publishers, document types, statuses, and institutions available in the system
+**Returns:** Keywords, publishers, document types, statuses, and institutions available in the system; with "coverage", what each active source covers (newest document, count, years)
 
 **Examples:**
 ```
 - Get all available search keywords
+- Check what each source covers (newest document, years) - category "coverage"
 - Retrieve all legal document types
 - List all publishers (DU, MP)
 - Get all document statuses

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from law_scrapper_mcp.client.egress import EgressHost
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.context import AppContext
+from law_scrapper_mcp.services.coverage import CoverageRegistry
 from law_scrapper_mcp_saos.client import SaosClient
 
 MODULE_NAME = "saos"
@@ -43,6 +44,9 @@ class SaosState:
     client: SaosClient
     module: str
     version: str
+    # The core's coverage registry, which holds this module's provider under `coverage.COVERAGE_KEY`; the
+    # search service reads coverage through it (memo, lock and fallback included). `None` outside the start hook.
+    coverage: CoverageRegistry | None = None
 
 
 def saos_state(app_context: AppContext) -> SaosState:

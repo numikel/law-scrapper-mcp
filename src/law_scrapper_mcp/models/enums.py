@@ -37,6 +37,7 @@ class MetadataCategory(StrEnum):
     STATUSES = "statuses"
     TYPES = "types"
     INSTITUTIONS = "institutions"
+    COVERAGE = "coverage"
     ALL = "all"
 
 

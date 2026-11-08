@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from law_scrapper_mcp.client.egress import EgressHost
 from law_scrapper_mcp.source_modules.contract import ModuleHost, SourceModule
 from law_scrapper_mcp_voivodeship_journals.catalog import CODE_PREFIX, JOURNALS, PUBLISHER_INFO, SERVED
+from law_scrapper_mcp_voivodeship_journals.coverage import JournalCoverageProvider
 from law_scrapper_mcp_voivodeship_journals.instructions import build_instructions
 from law_scrapper_mcp_voivodeship_journals.source import JournalActSource
 from law_scrapper_mcp_voivodeship_journals.state import MODULE_NAME, JournalsState
@@ -29,8 +30,8 @@ async def start(host: ModuleHost) -> AsyncIterator[JournalsState]:
     """Register one egress client per served journal and the act source for all `POL_WOJ_*` codes.
 
     Clients are created here, not at import, so each host appears on `/health` under its publisher
-    code and its origin is reserved. No request is sent at start. The source is unregistered when
-    the hook exits, before the core closes its resources.
+    code and its origin is reserved. No request is sent at start. The source and the coverage
+    providers are unregistered when the hook exits, before the core closes its resources.
     """
     clients = {
         journal.code: host.egress.client_for(EgressHost(name=journal.code, base_url=journal.base_url), host.caller)
@@ -43,9 +44,17 @@ async def start(host: ModuleHost) -> AsyncIterator[JournalsState]:
         prefixes=(CODE_PREFIX,),
         info=PUBLISHER_INFO,
     )
+    registered: list[str] = []
     try:
+        # One provider per served journal, on that journal's own client; a withheld journal has none.
+        for journal in SERVED:
+            provider = JournalCoverageProvider(journal, clients[journal.code])
+            host.coverage.register(provider)
+            registered.append(provider.key)
         yield JournalsState(codes=tuple(clients))
     finally:
+        for key in registered:
+            host.coverage.unregister(key)
         host.act_sources.unregister(source)
 
 

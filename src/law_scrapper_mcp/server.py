@@ -35,12 +35,14 @@ from law_scrapper_mcp.services.changes_service import ChangesService
 from law_scrapper_mcp.services.comparison_service import ComparisonService
 from law_scrapper_mcp.services.content_processor import ContentProcessor
 from law_scrapper_mcp.services.content_service import ContentService
+from law_scrapper_mcp.services.coverage import CoverageRegistry
 from law_scrapper_mcp.services.date_service import DateService
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.metadata_service import MetadataService
 from law_scrapper_mcp.services.relationship_service import RelationshipService
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp.services.search_service import SearchService
+from law_scrapper_mcp.services.sejm_coverage import register_sejm_coverage
 from law_scrapper_mcp.source_modules.contract import LoadedModule, ModuleHost, SourceModule, SourceModuleError
 from law_scrapper_mcp.source_modules.discovery import Discovery, discover, registered_tool_names
 from law_scrapper_mcp.source_modules.instructions import compose_instructions
@@ -231,12 +233,17 @@ async def _start_source_modules(
     egress_hub: EgressHub,
     module_state: dict[str, object],
     act_sources: ActSourceRegistry,
+    coverage: CoverageRegistry,
 ) -> None:
     """Run each active module's start hook inside `stack`; the first failure aborts startup."""
     for loaded in discovery.active:
         name = loaded.module.name
         host = ModuleHost(
-            egress=egress_hub, caller=loaded.caller_identity(), settings=settings, act_sources=act_sources
+            egress=egress_hub,
+            caller=loaded.caller_identity(),
+            settings=settings,
+            act_sources=act_sources,
+            coverage=coverage,
         )
         if loaded.module.start is None:
             continue
@@ -317,8 +324,14 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     # One registry shared by the four services that route by publisher code; source modules
     # fill it from their start hooks. Empty, every service takes its original Sejm path.
     act_sources = ActSourceRegistry()
-    metadata_service = MetadataService(client, sources=act_sources)
-    search_service = SearchService(client, result_store, sources=act_sources)
+    # One registry of source coverage per process, next to the act sources: modules register a
+    # provider from their start hooks, the metadata and search services read it.
+    coverage = CoverageRegistry()
+    # The Sejm's own publishers (DU, MP) describe themselves before any module starts, over the
+    # one Sejm client; a module's provider cannot take their keys.
+    register_sejm_coverage(coverage, client)
+    metadata_service = MetadataService(client, sources=act_sources, coverage=coverage)
+    search_service = SearchService(client, result_store, sources=act_sources, coverage=coverage)
     act_service = ActService(client, document_store, content_processor, sources=act_sources)
     content_service = ContentService(document_store)
     changes_service = ChangesService(client, result_store, sources=act_sources)
@@ -348,7 +361,7 @@ async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
     try:
         # Modules start after every core resource exists and stop before any of them closes.
         async with AsyncExitStack() as module_stack:
-            await _start_source_modules(discovery, module_stack, egress_hub, module_state, act_sources)
+            await _start_source_modules(discovery, module_stack, egress_hub, module_state, act_sources, coverage)
             yield context
     finally:
         # Cleared first: if `client.close()` raised, a populated handle would

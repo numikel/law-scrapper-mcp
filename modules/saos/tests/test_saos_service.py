@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from saos_testing import TODAY, FakeSaos, HarnessFactory, corpus
+from saos_testing import TODAY, FakeSaos, Harness, HarnessFactory, corpus, supreme_chamber_items
 
 from law_scrapper_mcp.client.exceptions import SejmApiError
 from law_scrapper_mcp.models.tool_outputs import Hint
+from law_scrapper_mcp.services.coverage import FALLBACK_NOTE, CoverageRegistry, SourceCoverage
 from law_scrapper_mcp_saos import service as service_module
+from law_scrapper_mcp_saos.coverage import ADMINISTRATIVE_MESSAGE, COVERAGE_KEY, SaosCoverageProvider
 from law_scrapper_mcp_saos.service import (
-    COVERAGE_SENTENCE,
     LABOUR_DIVISION_PATTERN,
     TOOL_SEARCH,
+    SaosSearchService,
     build_query,
 )
 
@@ -166,7 +169,6 @@ class TestDates:
     async def test_the_real_clock_is_used_by_default(
         self, make_harness: HarnessFactory, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from law_scrapper_mcp_saos.service import SaosSearchService
 
         harness = make_harness()
         monkeypatch.setattr(service_module, "current_date", lambda: date(2031, 3, 4))
@@ -352,14 +354,230 @@ class TestHints:
         assert hint.parameters == {"signature": response.data.results[0].signature}
         assert "dwa osobne rekordy" in hint.message
 
-    async def test_the_coverage_sentence_is_on_the_first_page_only(self, make_harness: HarnessFactory) -> None:
+    async def test_the_old_static_coverage_sentence_is_gone_from_the_first_page(
+        self, make_harness: HarnessFactory
+    ) -> None:
         harness = make_harness()
 
         first = await harness.service.search(limit=5, offset=0)
-        later = await harness.service.search(limit=5, offset=5)
 
-        assert COVERAGE_SENTENCE in [hint.message for hint in first.hints]
-        assert COVERAGE_SENTENCE not in [hint.message for hint in later.hints]
+        assert all("Zasięg SAOS" not in hint.message for hint in first.hints)
+
+
+class _StubProvider:
+    """A provider that answers with fixed coverage (or fails), and counts its measurements."""
+
+    key = COVERAGE_KEY
+    source = "saos"
+
+    def __init__(self, coverage: SourceCoverage, *, failing: bool = False) -> None:
+        self._coverage = coverage
+        self._failing = failing
+        self.measurements = 0
+
+    async def measure(self, today: date) -> SourceCoverage:
+        self.measurements += 1
+        if self._failing:
+            raise SejmApiError("SAOS nie odpowiedział.", source="SAOS")
+        return self._coverage
+
+    def fallback(self) -> SourceCoverage:
+        return replace(self._coverage, measured_on=date(2026, 11, 2), origin="fallback")
+
+
+class _ExplodingRegistry(CoverageRegistry):
+    async def get(self, key: str) -> SourceCoverage | None:
+        raise RuntimeError("the registry is broken")
+
+
+def _recorded(harness: Harness) -> SourceCoverage:
+    """The recorded figures of 2026-11-02 presented as a measurement taken on the test's `TODAY`."""
+    return replace(SaosCoverageProvider(harness.client).fallback(), measured_on=TODAY, origin="measured")
+
+
+def _gap_service(harness: Harness, provider: _StubProvider | None = None) -> tuple[SaosSearchService, _StubProvider]:
+    registry = CoverageRegistry(today=lambda: TODAY)
+    stub = provider or _StubProvider(_recorded(harness))
+    registry.register(stub)
+    return SaosSearchService(harness.client, harness.store, today=lambda: TODAY, coverage=registry), stub
+
+
+def _gap_hints(hints: list[Hint]) -> list[str]:
+    return [h.message for h in hints if "w SAOS sięg" in h.message or h.message.startswith(ADMINISTRATIVE_MESSAGE)]
+
+
+SUPREME_GAP = (
+    "Sąd Najwyższy w SAOS sięga do 2016-06-22 (pomiar z 2026-11-03); orzeczeń z późniejszych dat w tym źródle "
+    "nie ma. Brak wyniku w SAOS nie dowodzi, że orzeczenie nie istnieje."
+)
+
+
+class TestCoverageGapHint:
+    async def test_the_supreme_court_without_dates_reaches_today_and_gets_the_gap(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, _ = _gap_service(make_harness())
+
+        response = await service.search(court_type="SUPREME", limit=5)
+
+        assert _gap_hints(response.hints) == [SUPREME_GAP]
+
+    async def test_the_supreme_court_from_2015_gets_the_gap_because_the_upper_bound_is_today(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, _ = _gap_service(make_harness())
+
+        response = await service.search(court_type="SUPREME", date_from="2015-01-01", limit=5)
+
+        assert _gap_hints(response.hints) == [SUPREME_GAP]
+
+    async def test_thirty_days_past_the_newest_is_no_gap_and_thirty_one_is(self, make_harness: HarnessFactory) -> None:
+        service, _ = _gap_service(make_harness())
+
+        at_limit = await service.search(court_type="SUPREME", date_to="2016-07-22", limit=5)
+        past_limit = await service.search(court_type="SUPREME", date_to="2016-07-23", limit=5)
+
+        assert _gap_hints(at_limit.hints) == []
+        assert _gap_hints(past_limit.hints) == [SUPREME_GAP]
+
+    async def test_a_search_that_ends_before_the_newest_judgment_gets_no_gap(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, _ = _gap_service(make_harness())
+
+        response = await service.search(court_type="CONSTITUTIONAL_TRIBUNAL", date_to="2015-06-30", limit=5)
+
+        assert _gap_hints(response.hints) == []
+
+    async def test_common_courts_are_current_so_there_is_no_gap(self, make_harness: HarnessFactory) -> None:
+        service, _ = _gap_service(make_harness())
+
+        response = await service.search(court_type="COMMON", limit=5)
+
+        assert _gap_hints(response.hints) == []
+
+    async def test_common_courts_use_the_plural_verb_once_the_search_outruns_them(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness()
+        recorded = _recorded(harness)
+        segments = tuple(
+            replace(segment, newest=date(2026, 9, 1)) if segment.key == "COMMON" else segment
+            for segment in recorded.segments
+        )
+        service, _ = _gap_service(harness, _StubProvider(replace(recorded, segments=segments)))
+
+        response = await service.search(court_type="COMMON", limit=5)
+
+        assert _gap_hints(response.hints) == [
+            "Sądy powszechne w SAOS sięgają do 2026-09-01 (pomiar z 2026-11-03); orzeczeń z późniejszych dat "
+            "w tym źródle nie ma. Brak wyniku w SAOS nie dowodzi, że orzeczenie nie istnieje."
+        ]
+
+    async def test_a_search_without_a_court_type_gets_no_gap_and_no_measurement(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, stub = _gap_service(make_harness())
+
+        response = await service.search(limit=5)
+
+        assert _gap_hints(response.hints) == []
+        assert stub.measurements == 0
+
+    async def test_administrative_courts_get_the_statement_while_the_measurement_counts_none(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, stub = _gap_service(make_harness())
+
+        response = await service.search(court_type="ADMINISTRATIVE", limit=5)
+
+        assert _gap_hints(response.hints) == ["SAOS nie zawiera orzeczeń sądów administracyjnych."]
+        assert stub.measurements == 1, "the statement rests on the measurement, not on an assumption"
+
+    async def test_administrative_courts_lose_the_statement_once_saos_counts_some(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness()
+        recorded = _recorded(harness)
+        segments = tuple(
+            replace(segment, count=12, newest=date(2026, 11, 1)) if segment.key == "ADMINISTRATIVE" else segment
+            for segment in recorded.segments
+        )
+        service, _ = _gap_service(harness, _StubProvider(replace(recorded, segments=segments)))
+
+        response = await service.search(court_type="ADMINISTRATIVE", limit=5)
+
+        assert _gap_hints(response.hints) == [], "a current, non-empty court type has no gap"
+
+    async def test_the_administrative_statement_from_a_fallback_carries_the_note(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness()
+        service, _ = _gap_service(harness, _StubProvider(_recorded(harness), failing=True))
+
+        response = await service.search(court_type="ADMINISTRATIVE", limit=5)
+
+        assert _gap_hints(response.hints) == [f"SAOS nie zawiera orzeczeń sądów administracyjnych. {FALLBACK_NOTE}"]
+
+    async def test_the_gap_is_on_the_first_page_only(self, make_harness: HarnessFactory) -> None:
+        service, _ = _gap_service(make_harness())
+
+        first = await service.search(court_type="SUPREME", limit=5, offset=0)
+        later = await service.search(court_type="SUPREME", limit=5, offset=5)
+
+        assert _gap_hints(first.hints) == [SUPREME_GAP]
+        assert _gap_hints(later.hints) == []
+
+    async def test_two_searches_share_one_measurement_because_the_service_reads_through_the_registry(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, stub = _gap_service(make_harness())
+
+        await service.search(court_type="SUPREME", limit=5)
+        await service.search(court_type="CONSTITUTIONAL_TRIBUNAL", limit=5)
+
+        assert stub.measurements == 1
+
+    async def test_a_labour_scan_of_the_supreme_court_gets_the_gap_on_its_first_window_only(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        service, _ = _gap_service(make_harness(FakeSaos(supreme_chamber_items())))
+
+        first = await service.search(court_type="SUPREME", labour_only=True, limit=5)
+        later = await service.search(court_type="SUPREME", labour_only=True, limit=5, offset=100)
+
+        assert first.data.scan is not None and first.data.scan.scanned_from == 0
+        assert _gap_hints(first.hints) == [SUPREME_GAP]
+        assert _gap_hints(later.hints) == []
+
+    async def test_a_fallback_value_carries_the_note_and_its_own_measurement_day(
+        self, make_harness: HarnessFactory
+    ) -> None:
+        harness = make_harness()
+        service, _ = _gap_service(harness, _StubProvider(_recorded(harness), failing=True))
+
+        response = await service.search(court_type="SUPREME", limit=5)
+
+        assert _gap_hints(response.hints) == [
+            SUPREME_GAP.replace("pomiar z 2026-11-03", "pomiar z 2026-11-02") + f" {FALLBACK_NOTE}"
+        ]
+
+    async def test_a_failing_coverage_lookup_never_costs_the_search_result(self, make_harness: HarnessFactory) -> None:
+        harness = make_harness()
+        service = SaosSearchService(
+            harness.client, harness.store, today=lambda: TODAY, coverage=_ExplodingRegistry(today=lambda: TODAY)
+        )
+
+        response = await service.search(court_type="SUPREME", limit=5)
+
+        assert response.data.returned_count == 5
+        assert _gap_hints(response.hints) == []
+
+    async def test_a_service_without_a_registry_gives_the_search_and_no_gap(self, make_harness: HarnessFactory) -> None:
+        response = await make_harness().service.search(court_type="SUPREME", limit=5)
+
+        assert response.data.returned_count == 5
+        assert _gap_hints(response.hints) == []
 
 
 class TestFilterLimitHint:

@@ -12,8 +12,6 @@ from saos_testing import saos_session
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp_saos.mapping import LABOUR_CHAMBER_PATTERN, LABOUR_DIVISION_PATTERN
 from law_scrapper_mcp_saos.service import (
-    COVERAGE_AS_OF,
-    COVERAGE_SENTENCE,
     PORTAL_LINK_CAP,
     REQUEST_BUDGET,
     SCAN_MAX_PAGES,
@@ -21,17 +19,21 @@ from law_scrapper_mcp_saos.service import (
 from law_scrapper_mcp_saos.state import RATE_BURST, RATE_PER_SECOND
 
 README = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
-FIGURE = re.compile(r"\d{4}-\d{2}-\d{2}|\d{1,3}(?: \d{3})+|\d+")
 RECORDED_LABOUR_CHAMBER = "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych"
 
 
-def test_every_figure_and_date_of_the_coverage_sentence_is_in_the_readme() -> None:
-    figures = [figure for figure in FIGURE.findall(COVERAGE_SENTENCE) if len(figure) > 1]
+def test_the_readme_points_at_the_coverage_category_and_quotes_no_frozen_figures() -> None:
+    from law_scrapper_mcp.services.coverage import STALE_AFTER_DAYS
+    from law_scrapper_mcp_saos.coverage import FALLBACK_MEASURED_ON
 
-    assert len(figures) >= 8
-    for figure in figures:
-        assert figure in README, figure
-    assert COVERAGE_AS_OF in README
+    flat = " ".join(README.split())
+
+    assert 'get_system_metadata(category="coverage")' in README
+    assert f"more than {STALE_AFTER_DAYS} days past the newest judgment" in flat
+    assert FALLBACK_MEASURED_ON.isoformat() in README
+    # The old static list of counts is gone: the numbers are measured, and the fallback lives in code.
+    for figure in ("474 859", "38 081", "9 503", "22 168"):
+        assert figure not in README, figure
 
 
 def test_the_pace_and_the_request_budgets_are_the_ones_in_code() -> None:

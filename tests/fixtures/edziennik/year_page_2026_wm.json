@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_WM/2026/4259",
+      "address": "POL_WOJ_WM/2026/4259",
+      "publisher": "POL_WOJ_WM",
+      "year": 2026,
+      "volume": 0,
+      "pos": 4259,
+      "type": "Zarządzenie",
+      "title": "Zarządzenie nr 304 Wojewody Warmińsko-Mazurskiego z dnia 6 listopada 2026 r. w sprawie wyborów uzupełniających do Rady Gminy Wydminy",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. WARM-MAZ 2026.4259",
+      "promulgation": "2026-11-06T00:00:00",
+      "announcementDate": "2026-11-06T13:25:17.517",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 4259
+}

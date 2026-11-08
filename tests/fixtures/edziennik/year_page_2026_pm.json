@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_PM/2026/4305",
+      "address": "POL_WOJ_PM/2026/4305",
+      "publisher": "POL_WOJ_PM",
+      "year": 2026,
+      "volume": 0,
+      "pos": 4305,
+      "type": "Uchwała",
+      "title": "Uchwała nr XLIV/114/26 Rady Gminy Puck z dnia 22 października 2026 r. w sprawie zmiany Wieloletniej Prognozy Finansowej Gminy Puck na lata 2026-2041",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. 2026.4305",
+      "promulgation": "2026-10-22T00:00:00",
+      "announcementDate": "2026-11-05T16:07:00.303",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 4305
+}

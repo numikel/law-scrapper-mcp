@@ -1,0 +1,88 @@
+{
+  "count": 1,
+  "items": [
+    {
+      "address": "WMP20260001100",
+      "announcementDate": "2026-10-29",
+      "changeDate": "2026-11-06T10:41:16",
+      "displayAddress": "M.P. 2026 poz. 1100",
+      "pos": 1100,
+      "promulgation": "2026-11-05",
+      "publisher": "MP",
+      "status": "akt jednorazowy",
+      "textHTML": false,
+      "textPDF": true,
+      "title": "Uchwała nr 220 Rady Ministrów z dnia 29 października 2026 r. zmieniająca uchwałę w sprawie ustanowienia programu inwestycyjnego pod nazwą \"Rozbudowa, modernizacja i doposażenie Oddziału Klinicznego Psychiatrii i Psychoterapii Wieku Rozwojowego w Centrum Zdrowia Dziecka i Rodziny im. Jana Pawła II w Sosnowcu\"",
+      "type": "Uchwała",
+      "volume": 0,
+      "year": 2026,
+      "authorizedBody": [],
+      "directives": [],
+      "entryIntoForce": "2026-11-06",
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "programy wieloletnie",
+        "inwestycje",
+        "ochrona zdrowia psychicznego"
+      ],
+      "keywordsNames": [],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Akty zmienione": [
+          {
+            "id": "MP/2026/105",
+            "date": "2026-11-06"
+          }
+        ],
+        "Podstawa prawna": [
+          {
+            "id": "DU/2020/1875"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2020/1875",
+            "art": "art. 5 ust. 1"
+          }
+        ]
+      },
+      "releasedBy": [
+        "RADA MINISTRÓW"
+      ],
+      "texts": [
+        {
+          "fileName": "M20261100.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "M20261100.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "MP/2026/1100"
+    }
+  ],
+  "offset": 0,
+  "totalCount": 1100,
+  "searchQuery": {
+    "comparator": {
+      "column": "publisher",
+      "dir": "asc"
+    },
+    "dateEffectType": "NONE",
+    "dateType": "NONE",
+    "exile": false,
+    "keyword": [],
+    "position": -1,
+    "pubDateType": "NONE",
+    "publisher": "MP",
+    "publisherName": "Monitor Polski",
+    "statusInForce": false,
+    "title": "",
+    "type": [],
+    "volume": -1,
+    "year": 2026
+  }
+}

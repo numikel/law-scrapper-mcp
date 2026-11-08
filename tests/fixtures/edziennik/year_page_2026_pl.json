@@ -1,0 +1,23 @@
+{
+  "Items": [
+    {
+      "Eli": "POL_WOJ_PL/2026/4436",
+      "Address": "POL_WOJ_PL/2026/4436",
+      "Publisher": "POL_WOJ_PL",
+      "Year": 2026,
+      "Volume": 0,
+      "Pos": 4436,
+      "Type": "Zarządzenie",
+      "Title": "Zarządzenie nr 45.2026 Wójta Gminy Sokoły z dnia 26 października 2026 r. w sprawie zmian w budżecie gminy na 2026 rok",
+      "Article": null,
+      "Status": "obowiązujący",
+      "DisplayAddress": "Dz. Urz. Woj. Podlaskiego 2026.4436",
+      "Promulgation": "2026-10-26T00:00:00",
+      "AnnouncementDate": "2026-11-06T15:16:41.863",
+      "ChangeDate": ""
+    }
+  ],
+  "Offset": 0,
+  "Count": 1,
+  "TotalCount": 4436
+}

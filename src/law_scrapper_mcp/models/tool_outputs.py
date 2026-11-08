@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from law_scrapper_mcp.models.pagination import DEFAULT_CONTEXT_CHARS, PageInfo
 
@@ -142,6 +142,19 @@ class SearchOutput(BaseModel):
         ),
     )
     page_info: PageInfo
+    # Private on purpose: a public field would change `outputSchema`, which is a contract change. The
+    # service sets it, the tool hands it to `search_hints`, and it never reaches `structuredContent`.
+    _coverage_gap: str | None = PrivateAttr(default=None)
+
+    @property
+    def coverage_gap(self) -> str | None:
+        """Polish sentence saying the query reaches past what the source covers; `None` for no gap."""
+        return self._coverage_gap
+
+    def with_coverage_gap(self, message: str | None) -> SearchOutput:
+        """Record the coverage gap message on this output and return it."""
+        self._coverage_gap = message
+        return self
 
 
 class ActDetailOutput(BaseModel):

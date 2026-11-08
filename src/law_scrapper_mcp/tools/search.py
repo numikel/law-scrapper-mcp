@@ -244,5 +244,6 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 offset=offset_int or 0,
                 returned_count=output.returned_count,
                 applied_limit=effective_limit,
+                coverage_gap=output.coverage_gap,
             ),
         )

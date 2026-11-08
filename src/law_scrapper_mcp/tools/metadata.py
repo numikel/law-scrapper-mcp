@@ -36,7 +36,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
                     "'publishers' (wydawcy: DU, MP oraz kody i nazwy dodane przez aktywne moduły źródeł), "
                     "'statuses' (statusy aktów), "
                     "'types' (typy dokumentów: Ustawa, Rozporządzenie itp.), "
-                    "'institutions' (instytucje wydające), 'all' (wszystkie kategorie). "
+                    "'institutions' (instytucje wydające), "
+                    "'coverage' (zasięg źródeł: najnowszy dokument, dostępne roczniki; pierwsze zapytanie dnia "
+                    "może potrwać dłużej, bo mierzy zasięg u źródła), "
+                    "'all' (wszystkie kategorie, także 'coverage'). "
                     "Domyślnie 'all'."
                 ),
             ),
@@ -56,13 +59,30 @@ def register(mcp: MCPServer[AppContext]) -> None:
         Pobierz metadane systemu aktów prawnych.
 
         Zwraca dostępne słowa kluczowe, wydawców, typy dokumentów, statusy i instytucje,
-        które można wykorzystać do filtrowania i wyszukiwania aktów prawnych.
+        które można wykorzystać do filtrowania i wyszukiwania aktów prawnych. Kategoria 'coverage'
+        mówi, co każde aktywne źródło faktycznie obejmuje (najnowszy dokument, liczba pozycji,
+        dostępne roczniki), więc brak wyniku można odróżnić od luki w danych.
+
+        Kiedy użyć:
+        - Potrzebujesz słów kluczowych, typów, statusów, instytucji lub listy wydawców do filtrów.
+        - Wyszukiwanie zwróciło mało lub zero wyników i chcesz sprawdzić, czy źródło w ogóle
+          obejmuje dany rocznik lub okres → category="coverage".
+        - Chcesz poznać świeżość źródła przed poleganiem na nim (data i odnośnik najnowszego dokumentu).
+        Uwaga: pierwsze zapytanie danego dnia o 'coverage' może potrwać dłużej, bo mierzy zasięg
+        u źródła (wynik jest pamiętany przez dobę). Pierwsze 'all' danego dnia kontaktuje hosty
+        wszystkich aktywnych źródeł (do ok. 44 żądań), więc gdy chodzi tylko o jedną kategorię,
+        podaj ją wprost zamiast 'all'.
+
+        Kiedy NIE używać:
+        - Szukasz konkretnego aktu → użyj search_legal_acts.
+        - Chcesz przeczytać treść aktu → użyj get_act_details i read_act_content.
 
         Przykłady:
         - get_system_metadata(category="keywords") - Dostępne słowa kluczowe do wyszukiwania
         - get_system_metadata(category="types") - Typy dokumentów (Ustawa, Rozporządzenie itp.)
         - get_system_metadata(category="publishers") - Wydawcy (DU, MP i dzienniki z aktywnych modułów źródeł)
         - get_system_metadata(category="statuses") - Statusy aktów (obowiązujący, uchylony itp.)
+        - get_system_metadata(category="coverage") - Zasięg źródeł (najnowszy dokument, roczniki)
         - get_system_metadata(category="all") - Wszystkie kategorie metadanych
         """
         metadata_service = get_app_context(ctx).metadata_service
@@ -84,5 +104,6 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 category_enum.value,
                 output.failed_categories,
                 publisher_sources=metadata_service.has_sources,
+                coverage_fallback=any(item.get("origin") == "fallback" for item in output.metadata.get("coverage", [])),
             ),
         )

@@ -100,6 +100,7 @@ async def _assert_tool_page_matrix(
                     "statuses",
                     "types",
                     "institutions",
+                    "coverage",
                 ]
 
 
@@ -138,6 +139,7 @@ async def test_metadata_all_has_one_global_limit(mcp_client) -> None:
         "statuses",
         "types",
         "institutions",
+        "coverage",
     ]
 
 

@@ -44,16 +44,17 @@ a module active in the `modules` job (same pinned command as the core-only one i
 | `modules/voivodeship-journals/tests/test_journals_isolation.py` | A 503 storm on one journal opens only its own breaker (read from the list `/health` serves), names that source and says the others are unaffected; another journal and DU still answer; an open breaker sends nothing; no limiter or breaker is shared with any other host |
 | `modules/voivodeship-journals/tests/test_journals_install_and_disable.py` | Real STDIO server: the module block is present for `unset`, `-*,voivodeship-journals`, a bare name and `-reference`, and the tool set equals the same configuration with this module off (it adds none); absent for `-voivodeship-journals`, `-*`, `voivodeship-journals,-*`; the package is never imported when off |
 | `modules/voivodeship-journals/tests/test_start_and_health.py` | The start hook: clients only through the hub, 12 hosts labelled by code, registration and unregistration (also on failure), a second start refused, module identity in the `User-Agent`, the entry point of the installed distribution, a positive control for the offline guard |
+| `modules/voivodeship-journals/tests/test_journal_coverage.py` | The coverage provider of each served journal on the recordings: the three requests of a measurement (years, year search `totalCount`, detail at `{year}/{totalCount}`), the derived shapes labelled as derived, the fallback, and the hints an agent reads |
 | `modules/voivodeship-journals/tests/test_journal_names.py` | The name index (16 names, unique after folding case, diacritics and separators; an empty or clashing name fails at import), the 16 registered descriptions (a reason only for the withheld), a name resolved to its own journal host for each served journal and no other, names read from the catalog the source is given, a value too long to be a name refused without being normalised, a withheld journal addressed by name, a name inside an ELI refused with the code on all four ELI operations, an unknown value refused with the same text the registry gives, the refusal within the tool error budget |
 | `modules/voivodeship-journals/tests/test_journals_discovery_end_to_end.py` | Discovery through an in-memory client over the real server with the module active: the listing (DU, MP and 16 journals, four unavailable with their reason, one Sejm request), the hint about names, a name in `publisher` for search, browse and change tracking reaching the journal and never the Sejm, a withheld journal by name, unknown values refused with the valid codes and names, a long value cut in the echo, a name inside an ELI refused for four tools, and parity with the module off |
 | `modules/saos/tests/saos_testing.py`, `conftest.py` | Not tests: the helpers (recordings, `derived_list` that cuts search items from them with fresh ids, the respx-backed `FakeSaos`, the in-memory `Session`) and the fixtures, among them the autouse `no_real_network` guard that makes a name lookup for a non-local host fail and the waits made instant |
 | `modules/saos/tests/test_saos_network_guard.py` | Positive controls for that guard: a public name is refused, the module's own client cannot reach `www.saos.org.pl` without a mock, loopback names and an in-process server still work |
 | `modules/saos/tests/test_saos_mapping.py` | Every recorded page shape (labour division, Supreme Court chambers, Tribunal and Chamber without a division, empty page, error body) maps onto the core judgment record; judges are never mapped |
 | `modules/saos/tests/test_saos_pagination.py` | Any `limit` and `offset`: one SAOS request when aligned, two when not, the cut window, the end of the list, the seam of two pages, the cache, the stored window and its scope |
-| `modules/saos/tests/test_saos_service.py` | The exact query sent to SAOS, the date clamp and bounds, input limits, the hints (next page, narrowing by division code or by chamber, the set above the filter limit), what the output never contains |
-| `modules/saos/tests/test_saos_coverage.py` | Every figure and date of the static coverage sentence comes from a recording |
+| `modules/saos/tests/test_saos_service.py` | The exact query sent to SAOS, the date clamp and bounds, input limits, the hints (next page, narrowing by division code or by chamber, the set above the filter limit, the coverage gap of a chosen court type and the administrative-courts statement resting on the measured count), what the output never contains |
+| `modules/saos/tests/test_saos_coverage.py` | The SAOS provider on the recordings (one request per court type, bounded by `judgmentDateTo`), its fallback constants tied to the 2026-11-02 recordings (the fallback reads no file), and its registration and unregistration in the start hook |
 | `modules/saos/tests/test_saos_egress_pacing.py` | The pace SAOS is asked for (2 requests per second, burst 4), the start hook, the limiter on a fake clock |
-| `modules/saos/tests/test_saos_search_tool.py` | `search_saos_judgments` through the MCP protocol: registration, input and output schema, description (decision tree, examples, dated coverage), structured content, filterability, errors |
+| `modules/saos/tests/test_saos_search_tool.py` | `search_saos_judgments` through the MCP protocol: registration, input and output schema, description (decision tree, examples, the pointer to the `coverage` metadata category instead of fixed figures), structured content, filterability, errors |
 | `modules/saos/tests/test_saos_judgment_details.py` | `get_saos_judgment_details`: the recorded detail, portal address validation, 404 as a Polish error, metadata only |
 | `modules/saos/tests/test_saos_portal_links.py` | `include_portal_links`: the first results get a detail each, the six-request budget over a grid, the failure policy (a failing detail, the first outage), links in the stored set |
 | `modules/saos/tests/test_saos_labour_scan.py` | `labour_only`: the cursor (stop on `limit`, resume without skipping or repeating), the five-page cap, the end of the list, an offset past it, interruption, a failing first page, common-court and Supreme Court rules on lists cut from recordings, the combination and court-type refusals, page scope and the inconclusive empty narrowing, the set above the filter limit, structured content |
@@ -100,13 +101,15 @@ tests/
 ├── mcp_helpers.py              # parse_tool_result() for structuredContent assertions; `EXPECTED_TOOLS`; `CORE_ONLY_ENV` (the `-*` value the root suite and its server subprocesses run with)
 ├── fake_source_modules.py      # In-memory source-module descriptors and spy entry points for the module-mechanism unit tests
 ├── fake_act_source.py          # In-memory `ActSource` that records its calls; drives the act-source routing tests
+├── fake_coverage_provider.py   # In-memory `CoverageProvider` that counts its measurements and never touches the network; drives the coverage tests
 ├── judgment_samples.py         # Hand-built `JudgmentSummaryOutput` records (our own model, invented placeholder values) for the core judgment tests
 ├── fixtures/                   # Recorded and derived Sejm API responses
 │   ├── act_detail.json, act_structure.json, act_references.json, publishers.json
 │   ├── search_results.json     # Derived search page (entryIntoForce keys)
 │   ├── browse_page.json        # Recorded acts/search page; browse_page.provenance.md says how
 │   ├── search_default_page.provenance.md   # Measurement behind the default page size
-│   ├── edziennik/              # 14 recorded e-Dziennik ELI files (JSON, HTML, PDF), three of them the keyword-list probe; one PROVENANCE.md for all sessions
+│   ├── edziennik/              # 30 recorded e-Dziennik ELI files (JSON, HTML, PDF) from four sessions: three are the keyword-list probe, 16 the coverage session of 2026-11-08 (the 2026 year page of each of the 12 served journals, two lone-`pubDateFrom` checks, two act details at position `totalCount`); one PROVENANCE.md for all sessions
+│   ├── sejm/                   # 3 recorded Sejm API files of 2026-11-08: publishers_live.json (GET acts), search_2026_limit1_du.json and search_2026_limit1_mp.json (acts/search, limit 1); one PROVENANCE.md
 │   ├── saos/                   # 33 recorded SAOS API files (search pages, counts, an error body, the court dictionary, a page past the end, a judgment detail reduced to metadata, a Supreme Court page reduced to chamber names, four skeletons of judgment details with every letter of the text masked, a case-number page with no reasons record) with personal names redacted; one PROVENANCE.md; no judgment text
 │   └── sample_act.html         # HTML act body for the content processor
 ├── unit/
@@ -118,6 +121,10 @@ tests/
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
 │   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
 │   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
+│   ├── test_coverage_fixtures.py       # Facts the DU/MP and journal coverage providers rest on, pinned to the 2026-11-08 recordings (`fixtures/sejm/`, the fourth session of `fixtures/edziennik/`): what a measurement reads, and that the journal provider never trusts the first item of a page
+│   ├── test_coverage_gap.py            # The act coverage-gap rule (year gap, freshness gap over 30 days, exactly 30 not a gap), its Polish texts and fallback note, and how the search path carries the message into the hints
+│   ├── test_coverage_registry.py       # CoverageRegistry: lazy measurement, the 24 h memory, one measurement at a time, the 15 min fallback memory, `register` refusing a duplicate key, `unregister`
+│   ├── test_coverage_tools.py          # Coverage through the real tools: a fake module's provider reaches the search and browse hints and the `coverage` metadata category, so unwiring a tool fails here
 │   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure; compose shows `LAW_MCP_CONTACT` only as a comment and the README documents it; the image bakes `LAW_MCP_SOURCE_MODULES=-*`, installs every member but `NEVER_RELEASED_MODULES` (`--no-install-package`), `.dockerignore` keeps those members and module tests out (in an order that still works with the README re-include), every shown `LAW_MCP_SOURCE_MODULES=` value starts with `-*`, the builder copies every released module's readme
 │   ├── test_document_kind.py           # A loaded document knows its kind (act by default); the content tools report `document_id` and `document_kind` for acts and judgments; the not-loaded error, the too-large error, the missing-section error and the content hint keep their exact text for an ELI and use neutral wording for another id (a mistyped ELI included, pinned on purpose); `is_eli_shaped`
@@ -141,6 +148,7 @@ tests/
 │   ├── test_release_scripts.py         # scripts/git_release_info.py and scripts/check_release.py; `--sync-version` rewrites the root and every released module (version, core pin, uv.lock line), never reference, and writes nothing when one module has no core requirement
 │   ├── test_response_enrichment.py     # Search/browse hint generation, pagination hints naming their tool
 │   ├── test_saos_fixtures.py           # Facts about the SAOS case-law API pinned to `fixtures/saos/`: dates that sort first, whole-name division filter, SENTENCE/REASONS pairs, court dictionary codes, 400 for pageSize 101, zero-based pages, an empty page past the end, the division-code filter, the judgment detail reduced to metadata, the Supreme Court chambers (the labour chamber under its long name, the spelling that matched nothing), judge names and names after role cues redacted, the skeletons of judgment details (only tags, court headings and `x` in the text; their facts and original hashes on record, a scan with a positive control), catalogue and stored-file hashes vs PROVENANCE.md
+│   ├── test_sejm_coverage.py           # The DU and MP coverage providers on the 2026-11-08 recordings: what a measurement reads and how many requests it costs, every request through the one injected `SejmApiClient`, the fallback needs no file at runtime
 │   ├── test_server.py                  # 13 tools registered, concrete output schemas, lifespan wiring and configured limits
 │   ├── test_server_bootstrap.py        # `build_http_app()` / `build_uvicorn_config()`: security kwargs, auth derived from live settings, grace window; `main()` calls the default-contact warning right after the bind warning
 │   ├── test_server_lifespan.py         # Lifespan cleanup survives cancellation and a client whose `close()` raises
@@ -182,12 +190,14 @@ tests/
 │   │   ├── test_content_service.py     # TOC/section/search pagination, naive-implementation equivalence, atomic against reload
 │   │   ├── test_date_service.py        # DateService: accepted formats, offsets, Polish error messages, clock seam
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
+│   │   ├── test_metadata_coverage.py   # The `coverage` metadata category: its shape alone and inside `all`, failure isolation, hints, paging
 │   │   ├── test_metadata_service.py    # MetadataService pages per category and for `all`
 │   │   ├── test_metadata_sources.py    # The `publishers` category with described publishers: merged after the Sejm's, copies, read at call time, paging and totals, the registry asked once per call, a Sejm outage keeping them (also for one category), the hint
 │   │   ├── test_pagination.py          # Shared paginators: effective limit, negative rejection, page metadata
 │   │   ├── test_pdf_inspection.py      # `inspect_pdf`: scan vs failed read vs text layer vs `(cid:N)`-dominated layer (flagged, never discarded)
 │   │   ├── test_source_dispatch.py     # Empty registry issues the 4.4.2 upstream calls; a registered code never reaches the Sejm: search (limit 101 rejected), browse, change tracking, details, relations, PDF-only loading and its outcomes
 │   │   ├── test_pattern_matching.py    # RE2 pattern compilation: supported subset, rejections, no stderr pollution
+│   │   ├── test_publisher_resolve_code.py # `ActSourceRegistry.resolve_code`: the publisher code a typed value stands for, used to key coverage lookups
 │   │   ├── test_relationship_service.py# RelationshipService: category filtering, response-shape normalisation
 │   │   ├── test_result_store_judgments.py # ResultStore with judgment sets: kind validation (no mixing), filtering, inherited scope, listing, call-compatibility of `store`
 │   │   ├── test_result_store.py        # ResultStore: ids, LRU, TTL, filtering, ReDoS regression, record cap, scope
@@ -202,6 +212,7 @@ tests/
     ├── test_tools_e2e.py               # In-memory Client, all 13 tools, success and `is_error` paths
     ├── test_content_failure_contract.py # Transient content-loading failures are protocol errors (`isError=true`), never a success body
     ├── test_content_pagination.py      # Section/TOC/search-in-act pagination over the wire
+    ├── test_coverage_search_integration.py # DU and MP coverage through the real tools over the real app, the Sejm mocked from its recordings, the 30-day window at a fixed clock and the year gap
     ├── test_result_pagination.py       # Search/browse/filter/changes pagination over the wire
     ├── test_listing_pagination.py      # `list_loaded_documents` / `list_result_sets` pages
     ├── test_pagination_contract.py     # Every tool classified against the shared pagination contract

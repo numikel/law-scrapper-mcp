@@ -95,6 +95,7 @@ def search_hints(
     returned_count: int = 0,
     applied_limit: int | None = None,
     max_result_limit: int | None = None,
+    coverage_gap: str | None = None,
 ) -> list[Hint]:
     """Generate hints for search and browse results.
 
@@ -103,6 +104,10 @@ def search_hints(
     produced pointed the model at a different tool than the one it had called (F48).
     A default would let that come back. Only the calling tool knows which parameters
     it accepts, so it builds `next_call_params` itself.
+
+    `coverage_gap` is the ready sentence the search service computed when the query reaches past
+    what the publisher's source covers; it becomes a hint of its own, ahead of the generic
+    "broaden the criteria" advice that an empty page would otherwise get alone.
     """
     hints = []
     if has_results and eli:
@@ -146,6 +151,9 @@ def search_hints(
                 max_result_limit,
             )
         )
+
+    if coverage_gap:
+        hints.append(Hint(message=coverage_gap))
 
     if not has_results:
         if next_call_params.get("keywords"):
@@ -307,12 +315,17 @@ def act_details_hints(
 
 
 def metadata_hints(
-    category: str, failed_categories: Sequence[str] = (), *, publisher_sources: bool = False
+    category: str,
+    failed_categories: Sequence[str] = (),
+    *,
+    publisher_sources: bool = False,
+    coverage_fallback: bool = False,
 ) -> list[Hint]:
     """Generate hints for metadata results.
 
     `publisher_sources` is set when registered sources describe their publishers: the listing then
-    holds more than DU and MP, and the agent is told how to address them.
+    holds more than DU and MP, and the agent is told how to address them. `coverage_fallback` is set
+    when some `coverage` entry has `origin="fallback"`.
     """
     hints = []
     if category in ("all", "keywords"):
@@ -337,6 +350,17 @@ def metadata_hints(
                     "track_legal_changes) kodem albo nazwą z listy; w ELI zawsze używaj kodu."
                 ),
                 tool="search_legal_acts",
+            )
+        )
+    if coverage_fallback and category in ("all", "coverage"):
+        hints.append(
+            Hint(
+                message=(
+                    'Pozycje zasięgu z origin="fallback" to ostatnie znane dane z dnia podanego w measured_on, '
+                    "a nie bieżący pomiar: pomiar źródła się nie udał. Ponów wywołanie później, aby go odświeżyć."
+                ),
+                tool="get_system_metadata",
+                parameters={"category": "coverage"},
             )
         )
     if failed_categories:

@@ -9,6 +9,7 @@ from law_scrapper_mcp.models.enums import DetailLevel
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import ActSummaryOutput, ResultSetScope, SearchOutput
 from law_scrapper_mcp.services.act_sources import ActSource, ActSourceRegistry, SourceSearchQuery
+from law_scrapper_mcp.services.coverage import CoverageRegistry, act_coverage_gap
 from law_scrapper_mcp.services.pagination import item_page_info
 from law_scrapper_mcp.services.result_store import ResultStore
 
@@ -24,10 +25,50 @@ class SearchService:
         result_store: ResultStore,
         *,
         sources: ActSourceRegistry | None = None,
+        coverage: CoverageRegistry | None = None,
     ) -> None:
         self._client = client
         self._result_store = result_store
         self._sources = sources if sources is not None else ActSourceRegistry()
+        self._coverage = coverage
+
+    async def _with_coverage_gap(
+        self,
+        output: SearchOutput,
+        publisher: str,
+        *,
+        year: int | None,
+        pub_date_from: str | None,
+        pub_date_to: str | None,
+    ) -> SearchOutput:
+        """Record on `output` whether the query reaches past what the publisher's source covers.
+
+        The registry key is the canonical publisher code, so a voivodeship name is resolved to its
+        code first. No provider for the publisher, or no segment of that code, means no message.
+        Measuring is best effort: whatever goes wrong here never costs the caller the search result.
+        """
+        if self._coverage is None:
+            return output
+        try:
+            code = self._sources.resolve_code(publisher)
+            coverage = await self._coverage.get(code)
+            segment = next((s for s in coverage.segments if s.key == code), None) if coverage is not None else None
+            if coverage is None or segment is None:
+                return output
+            return output.with_coverage_gap(
+                act_coverage_gap(
+                    segment,
+                    year=year,
+                    pub_date_from=pub_date_from,
+                    pub_date_to=pub_date_to,
+                    today=self._coverage.today(),
+                    origin=coverage.origin,
+                    measured_on=coverage.measured_on,
+                )
+            )
+        except Exception as error:
+            logger.warning("Coverage gap check for %s failed (%s: %s)", publisher, type(error).__name__, error)
+            return output
 
     @staticmethod
     def _trim(item: ActSummaryOutput, detail_level: DetailLevel) -> ActSummaryOutput:
@@ -158,7 +199,7 @@ class SearchService:
                 summary_parts.append(f"type={act_type}")
             if in_force is not None:
                 summary_parts.append(f"in_force={in_force}")
-            return await self._search_source(
+            output = await self._search_source(
                 source,
                 publisher,
                 SourceSearchQuery(
@@ -177,6 +218,9 @@ class SearchService:
                 summary_parts=summary_parts,
                 limit=limit,
                 detail_level=detail_level,
+            )
+            return await self._with_coverage_gap(
+                output, publisher, year=year, pub_date_from=pub_date_from, pub_date_to=pub_date_to
             )
 
         params: dict[str, Any] = {"publisher": publisher}
@@ -241,13 +285,16 @@ class SearchService:
         results = [self._format_act(item, detail_level) for item in items]
         query_summary = " | ".join(summary_parts)
 
-        return await self._output(
+        output = await self._output(
             results,
             total_count=total_count,
             query_summary=query_summary,
             limit=limit,
             offset=page_offset,
             window_offset=page_offset,
+        )
+        return await self._with_coverage_gap(
+            output, publisher, year=year, pub_date_from=pub_date_from, pub_date_to=pub_date_to
         )
 
     async def browse(
@@ -287,7 +334,7 @@ class SearchService:
         publisher = self._sources.canonical_publisher(publisher)
         source = self._sources.for_publisher(publisher)
         if source is not None:
-            return await self._search_source(
+            output = await self._search_source(
                 source,
                 publisher,
                 SourceSearchQuery(year=year, limit=min(max(page_limit, 1), MAX_ITEM_LIMIT), offset=page_offset),
@@ -295,6 +342,7 @@ class SearchService:
                 limit=limit,
                 detail_level=detail_level,
             )
+            return await self._with_coverage_gap(output, publisher, year=year, pub_date_from=None, pub_date_to=None)
         params: dict[str, Any] = {
             "publisher": publisher,
             "year": year,
@@ -317,7 +365,7 @@ class SearchService:
         results = [self._format_act(item, detail_level) for item in items]
         query_summary = f"publisher={publisher} | year={year}"
 
-        return await self._output(
+        output = await self._output(
             results,
             total_count=total_count,
             query_summary=query_summary,
@@ -327,6 +375,7 @@ class SearchService:
             # again — the same contract `search()` has used since pagination landed.
             window_offset=page_offset,
         )
+        return await self._with_coverage_gap(output, publisher, year=year, pub_date_from=None, pub_date_to=None)
 
     def _format_act(self, item: dict[str, Any], detail_level: DetailLevel) -> ActSummaryOutput:
         """Format an act item based on detail level."""

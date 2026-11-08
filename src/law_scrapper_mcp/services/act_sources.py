@@ -327,6 +327,22 @@ class ActSourceRegistry:
                 return reserved
         return code
 
+    def resolve_code(self, value: str) -> str:
+        """The publisher code `value` stands for: a registered code, the code behind a registered name, or `DU`/`MP`.
+
+        Unlike `canonical_publisher` this reads names too and does not depend on whether any source is
+        registered. A value that is none of those (a prefix match, an unknown value) is returned
+        unchanged. It never raises, so it is safe to call after `for_publisher` has validated the value.
+        """
+        if value in self._by_code:
+            return value
+        if len(value) <= MAX_PUBLISHER_NAME_LENGTH:
+            alias_target = self._aliases.get(fold_publisher_name(value))
+            if alias_target is not None:
+                return alias_target
+        reserved = value.strip().upper()
+        return reserved if reserved in RESERVED_PUBLISHERS else value
+
     def publishers(self) -> tuple[str, ...]:
         """Exact publisher codes currently registered, sorted."""
         return tuple(sorted(self._by_code))

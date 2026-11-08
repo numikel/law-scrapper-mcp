@@ -142,6 +142,7 @@ class TestMetadataService:
             "statuses",
             "types",
             "institutions",
+            "coverage",
         ]
         assert sum(len(values) for values in output.metadata.values()) == 2
         assert output.page_info.total_count == 6

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mcp.server import MCPServer
 
@@ -13,6 +13,7 @@ from law_scrapper_mcp.client.exceptions import EgressConfigError
 from law_scrapper_mcp.config import Settings
 from law_scrapper_mcp.context import AppContext
 from law_scrapper_mcp.services.act_sources import ActSourceRegistry
+from law_scrapper_mcp.services.coverage import CoverageRegistry
 
 ENTRY_POINT_GROUP = "law_scrapper_mcp.source_modules"
 
@@ -41,12 +42,16 @@ class ModuleHost:
         act_sources: The registry the core services consult to route a publisher code to a
             source. A module that serves acts registers its `ActSource` here inside the start
             hook and unregisters it when the hook exits.
+        coverage: The registry the core consults to tell the agent what a source covers. A module
+            registers its `CoverageProvider` inside the start hook and unregisters it when the hook
+            exits. Defaulted, so a host built without it simply has an empty registry of its own.
     """
 
     egress: EgressHub
     caller: CallerIdentity
     settings: Settings
     act_sources: ActSourceRegistry
+    coverage: CoverageRegistry = field(default_factory=CoverageRegistry)
 
 
 @dataclass(frozen=True, slots=True)

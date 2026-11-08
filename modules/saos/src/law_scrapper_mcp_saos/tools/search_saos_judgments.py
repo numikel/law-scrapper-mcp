@@ -127,9 +127,10 @@ def register(mcp: MCPServer[AppContext]) -> None:
         od razu (include_portal_links=true).
 
         Uwagi o danych: wyrok (SENTENCE) i jego uzasadnienie (REASONS) to dwa osobne rekordy tej samej sprawy,
-        każdy z własną datą. Zasięg SAOS (pomiar z 2026-11-02): sądy powszechne 474 859 orzeczeń (najnowsze
-        z 2026-10-27), Sąd Najwyższy 38 081 (najnowsze z 2016-06-22), Trybunał Konstytucyjny 9 503 (najnowsze
-        z 2015-12-09), Krajowa Izba Odwoławcza 22 168 (najnowsze z 2018-09-06), sądy administracyjne 0.
+        każdy z własną datą. Zasięg SAOS jest różny dla każdego rodzaju sądu (część kończy się na latach
+        2015-2018, sądów administracyjnych nie ma wcale): aktualne liczby i daty najnowszych orzeczeń podaje
+        get_system_metadata(category="coverage"). Na pierwszej stronie wyniku pojawia się ostrzeżenie tylko
+        wtedy, gdy zapytanie z court_type sięga dalej niż najnowsze orzeczenie tego rodzaju sądu.
         Brak wyniku nie dowodzi, że orzeczenie nie istnieje. Fraza i sygnatura są wysyłane do saos.org.pl.
 
         Wydziały pracy sądów powszechnych: po wyszukaniu użyj filter_results z pattern="(15|18|21)$"

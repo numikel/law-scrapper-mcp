@@ -180,16 +180,18 @@ request goes to the Sejm for a SAOS tool.
 
 ## What SAOS holds
 
-The coverage was measured on 2026-11-02 and is static text, not a live count:
+SAOS covers its five court types very unevenly: the common courts are current, the Supreme Court,
+the Constitutional Tribunal and the National Appeal Chamber stop between 2015 and 2018, and the
+administrative courts are not in the service at all. The module measures this instead of quoting it:
+`get_system_metadata(category="coverage")` lists, for every court type, the number of judgments and the
+date of the newest one (five requests, measured on the first question and remembered for a day; when a
+measurement fails, the last known values of 2026-11-02 are shown and marked as a fallback).
 
-- common courts: 474 859 judgments, the newest from 2026-10-27;
-- Supreme Court: 38 081, the newest from 2016-06-22;
-- Constitutional Tribunal: 9 503, the newest from 2015-12-09;
-- National Appeal Chamber: 22 168, the newest from 2018-09-06;
-- administrative courts: none.
-
-No result in SAOS does not prove that a judgment does not exist. The recordings behind these figures
-and the other facts above are in `tests/fixtures/saos/PROVENANCE.md`, with their capture times.
+A search shows a warning on its first page only when it names a `court_type` and its upper date bound lies
+more than 30 days past the newest judgment of that type, and always for `ADMINISTRATIVE`. A search without
+a `court_type` shows none. No result in SAOS does not prove that a judgment does not exist. The recordings
+behind the fallback values and the other facts above are in `tests/fixtures/saos/PROVENANCE.md`, with
+their capture times.
 
 ## Terms of use and personal data
 

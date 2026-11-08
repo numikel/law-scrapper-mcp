@@ -1,6 +1,6 @@
 ---
 name: prepare-release
-description: Prepare a law-scrapper-mcp release — write Keep a Changelog files, bump version across 7 locations, run release checks, and commit. Use when the user asks to prepare release vX.Y.Z or run /prepare-release.
+description: Prepare a law-scrapper-mcp release — write Keep a Changelog files, bump the version across the core's 7 locations and every released source module, run release checks, and commit. Use when the user asks to prepare release vX.Y.Z or run /prepare-release.
 ---
 
 # Prepare release
@@ -76,6 +76,11 @@ Verify that the following 7 locations have been updated to `X.Y.Z`:
 6. `uv.lock` (the root package entry: `name = "law-scrapper-mcp"` followed by `version = "X.Y.Z"`)
 7. `tests/TEST_SUITE_SUMMARY.md` (`Test suite for Law Scrapper MCP vX.Y.Z, ...`)
 
+The same command also rewrites every released source module (every member of `modules/` except
+`NEVER_RELEASED_MODULES` in `scripts/check_release.py`): its `modules/<name>/pyproject.toml` `version`
+and its core pin `law-scrapper-mcp==X.Y.Z`, and its entry in `uv.lock`. One version for every package:
+a module never gets its own number.
+
 ### 6. Self-check (must pass before commit)
 
 Run automated release verification and quality checks:
@@ -91,7 +96,8 @@ MCP conformance, the Docker smoke tests and `pip-audit` run only in CI.
 
 Checklist validation:
 - [ ] `docs/changelogs/vX.Y.Z.md` exists and contains no placeholder text (`TODO`, `TBD`).
-- [ ] Version `X.Y.Z` is strictly consistent across all 7 files.
+- [ ] Version `X.Y.Z` is strictly consistent across all 7 files and every released module (version, core pin, `uv.lock`).
+- [ ] `uv run python scripts/check_release.py --build-packages <empty dir>` builds the core and every released module (one sdist and one wheel each).
 - [ ] Release date matches today UTC.
 - [ ] All linting, typing, and tests pass clean.
 
@@ -101,6 +107,8 @@ Stage changed release artifacts and create a single commit:
 
 ```bash
 git add pyproject.toml src/law_scrapper_mcp/config.py tests/unit/test_config.py README.md CLAUDE.md uv.lock tests/TEST_SUITE_SUMMARY.md CHANGELOG.md docs/changelogs/vX.Y.Z.md
+# plus the pyproject.toml of every released module, e.g.:
+git add modules/saos/pyproject.toml modules/voivodeship-journals/pyproject.toml
 git commit -m "chore(release): prepare vX.Y.Z"
 ```
 
@@ -113,7 +121,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-CI `release.yml` will validate the tag, build sdist/wheel artifacts, and publish the GitHub release with `docs/changelogs/vX.Y.Z.md` as the release notes.
+CI `release.yml` will validate the tag against the core and every released module (`check_release.py --version`), build one sdist and one wheel per released package (`check_release.py --build-packages dist`), and publish them with `checksums.txt` on the GitHub release, with `docs/changelogs/vX.Y.Z.md` as the release notes. The changelog template's "Install" block gives the wheel URLs.
 
 ## Error Handling
 

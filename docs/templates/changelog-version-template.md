@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [vX.Y.Z] - YYYY-MM-DD
 
+### Install
+
+The release attaches the core and every source module as wheels, all version X.Y.Z; a module requires
+the core of exactly its own version.
+
+```bash
+RELEASE=https://github.com/numikel/law-scrapper-mcp/releases/download/vX.Y.Z
+pip install "$RELEASE/law_scrapper_mcp-X.Y.Z-py3-none-any.whl" \
+            "$RELEASE/law_scrapper_mcp_voivodeship_journals-X.Y.Z-py3-none-any.whl"
+```
+
+In the container image every module is installed and off; enable one with
+`LAW_MCP_SOURCE_MODULES=-*,<name>`.
+
 ### Added
 
 - New feature description

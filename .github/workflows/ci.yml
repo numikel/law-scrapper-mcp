@@ -50,6 +50,8 @@ jobs:
               - 'Dockerfile'
               - '.dockerignore'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/release.yml'
+              - 'scripts/**'
 
   lint:
     needs: changes
@@ -60,6 +62,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -104,6 +107,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -197,6 +201,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
@@ -278,6 +283,42 @@ jobs:
             --spec-version "$SDK_SPEC_VERSION" \
             --expected-failures ./conformance-baseline.yml
 
+      - name: Skip (no code changes)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "skipped"
+
+  # The release packages, built and installed together the way an operator gets them from a GitHub
+  # Release. Inside the workspace uv ignores a module's pin on the core, so this install is what proves
+  # the pins resolve; `uv lock --locked` catches a version sync that left the lock behind.
+  packages:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        if: needs.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.22"
+          enable-cache: true
+      - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
+        run: uv python install 3.13
+      - name: Lock file is current
+        if: needs.changes.outputs.code == 'true'
+        run: uv lock --locked
+      - name: Build and inspect the packages
+        if: needs.changes.outputs.code == 'true'
+        run: uv run --no-project python scripts/check_release.py --build-packages dist
+      - name: Install the wheels into a clean environment
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/release-wheels"
+          uv venv --python 3.13 "$venv"
+          uv pip install --python "$venv/bin/python" dist/*.whl
+          "$venv/bin/python" scripts/check_release.py --check-installed
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"
@@ -365,13 +406,15 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          version: "0.12.22"
           enable-cache: true
       - name: Set up Python
         if: needs.changes.outputs.code == 'true'
         run: uv python install 3.13
+      # --all-packages: dependencies that only a source module brings are audited too.
       - name: Security audit
         if: needs.changes.outputs.code == 'true'
-        run: uv run --extra dev pip-audit
+        run: uv run --extra dev --all-packages pip-audit
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

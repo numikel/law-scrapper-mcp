@@ -11,11 +11,15 @@ Validates release readiness for law-scrapper-mcp by:
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import tomllib
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -315,6 +319,149 @@ def check_changelog(version: str) -> bool:
     return True
 
 
+# Top-level directories of the repository that must never reach the core sdist.
+SDIST_FORBIDDEN_DIRS = (".claude", "modules", "tests", "docs")
+ENTRY_POINT_GROUP = "law_scrapper_mcp.source_modules"
+
+
+def core_version() -> str:
+    """The root project's version, read from pyproject.toml."""
+    data = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version: str = data["project"]["version"]
+    return version
+
+
+def released_distributions() -> list[str]:
+    """The core followed by every released module's distribution name."""
+    return [CORE_DISTRIBUTION, *(module.distribution for module in released_modules())]
+
+
+def _file_stem(distribution: str) -> str:
+    """The normalized name build backends use in artefact file names (PEP 625 / wheel spec)."""
+    return re.sub(r"[-_.]+", "_", distribution).lower()
+
+
+def expected_artefacts(version: str) -> set[str]:
+    """The exact file names a release of `version` consists of: one sdist and one wheel per distribution."""
+    names: set[str] = set()
+    for distribution in released_distributions():
+        stem = _file_stem(distribution)
+        names.add(f"{stem}-{version}.tar.gz")
+        names.add(f"{stem}-{version}-py3-none-any.whl")
+    return names
+
+
+def _wheel_requirements(wheel: Path) -> list[str]:
+    """The `Requires-Dist` values in a wheel's METADATA."""
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode("utf-8")
+    return [line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.startswith("Requires-Dist:")]
+
+
+def inspect_packages(out_dir: Path, version: str) -> list[str]:
+    """Every way the built artefacts in `out_dir` differ from a correct release of `version`."""
+    failures: list[str] = []
+    found = {path.name for path in out_dir.iterdir() if not path.name.startswith(".")}
+    expected = expected_artefacts(version)
+    for name in sorted(found - expected):
+        failures.append(f"{name}: not part of the release")
+    for name in sorted(expected - found):
+        failures.append(f"{name}: missing")
+    for name in sorted(found):
+        if "reference" in name:
+            failures.append(f"{name}: the reference module is never released")
+
+    expected_pin = f"{CORE_DISTRIBUTION}=={version}"
+    for module in released_modules():
+        wheel = out_dir / f"{_file_stem(module.distribution)}-{version}-py3-none-any.whl"
+        if wheel.exists():
+            core = _core_requirements(_wheel_requirements(wheel))
+            if core != [expected_pin]:
+                failures.append(f"{wheel.name}: Requires-Dist on the core is {core}, expected ['{expected_pin}']")
+
+    sdist = out_dir / f"{_file_stem(CORE_DISTRIBUTION)}-{version}.tar.gz"
+    if sdist.exists():
+        with tarfile.open(sdist) as archive:
+            members = archive.getnames()
+        for member in members:
+            parts = member.split("/")
+            if len(parts) > 1 and parts[1] in SDIST_FORBIDDEN_DIRS:
+                failures.append(f"{sdist.name}: contains {member}")
+    return failures
+
+
+def build_packages(out_dir: Path) -> bool:
+    """Build the core and every released module into an empty `out_dir`, then inspect the result."""
+    if out_dir.exists() and any(out_dir.iterdir()):
+        print(f"[FAIL] {out_dir} is not empty; build into a fresh directory so no stale file is released")
+        return False
+    out_dir.mkdir(parents=True, exist_ok=True)
+    version = core_version()
+    print(f"Building release packages v{version} into {out_dir}:")
+    print("-" * 60)
+    for distribution in released_distributions():
+        command = ["uv", "build", "--package", distribution, "--out-dir", str(out_dir)]
+        if not run_command(command, f"Build {distribution}"):
+            return False
+
+    failures = inspect_packages(out_dir, version)
+    for failure in failures:
+        print(f"  [FAIL] {failure}")
+    if failures:
+        return False
+    for name in sorted(expected_artefacts(version)):
+        print(f"  [OK] {name}")
+    print("-" * 60)
+    return True
+
+
+def _declared_entry_points() -> set[str]:
+    """The source-module entry point names the released modules declare in their pyprojects."""
+    names: set[str] = set()
+    for module in released_modules():
+        project = tomllib.loads(module.pyproject.read_text(encoding="utf-8"))["project"]
+        names.update(project.get("entry-points", {}).get(ENTRY_POINT_GROUP, {}))
+    return names
+
+
+def compare_installed(installed: dict[str, str], entry_points: set[str], version: str) -> list[str]:
+    """Every way an environment's law-scrapper distributions and module entry points differ from a release.
+
+    `installed` maps distribution names that start with the core's name to their versions.
+    """
+    failures: list[str] = []
+    expected = set(released_distributions())
+    for name in sorted(set(installed) - expected):
+        failures.append(f"{name} is installed but is not part of the release")
+    for name in sorted(expected - set(installed)):
+        failures.append(f"{name} is not installed")
+    for name, installed_version in sorted(installed.items()):
+        if name in expected and installed_version != version:
+            failures.append(f"{name} {installed_version} (expected {version})")
+    declared = _declared_entry_points()
+    if entry_points != declared:
+        failures.append(f"entry points {sorted(entry_points)} (expected {sorted(declared)})")
+    return failures
+
+
+def check_installed() -> bool:
+    """Run in the environment the released wheels were installed into; compare it with the release."""
+    installed: dict[str, str] = {}
+    for dist in importlib.metadata.distributions():
+        name = re.sub(r"[-_.]+", "-", dist.metadata["Name"] or "").lower()
+        if name.startswith(CORE_DISTRIBUTION):
+            installed[name] = dist.version
+    entry_points = {ep.name for ep in importlib.metadata.entry_points(group=ENTRY_POINT_GROUP)}
+    failures = compare_installed(installed, entry_points, core_version())
+    for failure in failures:
+        print(f"  [FAIL] {failure}")
+    if failures:
+        return False
+    print(f"  [OK] installed: {sorted(installed.items())}; entry points: {sorted(entry_points)}")
+    return True
+
+
 def run_command(cmd: list[str], description: str) -> bool:
     """Execute command via subprocess and print status."""
     print(f"Running: {' '.join(cmd)}")
@@ -369,7 +516,18 @@ def run_checks_and_tests() -> bool:
         # `--all-packages` installs the workspace members, which registers their entry points.
         commands.append((["uv", "run", "--all-packages", "pytest", *module_tests], "Pytest module tests"))
 
-    return all(run_command(cmd, desc) for cmd, desc in commands)
+    # The CI `packages` job's build and inspection, into a throwaway directory.
+    dist_dir = Path(tempfile.mkdtemp(prefix="law-mcp-dist-"))
+    commands.append(
+        (
+            [sys.executable, str(PROJECT_ROOT / "scripts" / "check_release.py"), "--build-packages", str(dist_dir)],
+            "Build and inspect release packages",
+        )
+    )
+    try:
+        return all(run_command(cmd, desc) for cmd, desc in commands)
+    finally:
+        shutil.rmtree(dist_dir, ignore_errors=True)
 
 
 def main() -> None:
@@ -382,8 +540,23 @@ def main() -> None:
     parser.add_argument("--version", help="Version to check (e.g. 2.4.0 or v2.4.0)")
     parser.add_argument("--sync-version", help="Automatically update every version file to specified version")
     parser.add_argument("--skip-tests", action="store_true", help="Skip the ruff, mypy and pytest gates")
+    parser.add_argument(
+        "--build-packages",
+        metavar="DIR",
+        help="Only build the core and every released module into DIR and inspect the files",
+    )
+    parser.add_argument(
+        "--check-installed",
+        action="store_true",
+        help="Only compare this environment's law-scrapper packages and module entry points with the release",
+    )
 
     args = parser.parse_args()
+
+    if args.build_packages:
+        sys.exit(0 if build_packages(Path(args.build_packages)) else 1)
+    if args.check_installed:
+        sys.exit(0 if check_installed() else 1)
 
     if args.sync_version:
         sync_ok = sync_version_across_files(args.sync_version)

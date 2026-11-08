@@ -20,18 +20,13 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
       - name: Require per-version changelog
         run: test -f "docs/changelogs/v${VERSION}.md"
-      - name: Require version match
-        run: |
-          set -euo pipefail
-          toml_version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          if [ "$toml_version" != "$VERSION" ]; then
-            echo "ERROR: pyproject.toml version ($toml_version) != tag ($VERSION)"
-            exit 1
-          fi
-          echo "Version OK: $VERSION"
+      # Every version location of the core, every released module's version, its pin on the core
+      # and its uv.lock line must equal the tag. Standard library only, so the runner's python3 is enough.
+      - name: Require version match across every released package
+        run: python3 scripts/check_release.py --version "$VERSION" --skip-tests
 
   build:
-    name: Build package
+    name: Build packages
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -42,13 +37,18 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
+          # Same uv as the Dockerfile; tests/unit/test_ci_module_gates.py keeps them equal.
+          version: "0.12.22"
           enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.13
 
-      - name: Build sdist and wheel
-        run: uv build
+      # The core and every released module (all of modules/ but check_release.NEVER_RELEASED_MODULES),
+      # one sdist and one wheel each; the script refuses a missing or extra file, a module wheel without
+      # its exact core pin, and a core sdist that packs anything outside its allowlist.
+      - name: Build sdists and wheels
+        run: uv run --no-project python scripts/check_release.py --build-packages dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

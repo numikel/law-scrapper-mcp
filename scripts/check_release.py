@@ -2,7 +2,8 @@
 """Pre-release verification and version synchronization script.
 
 Validates release readiness for law-scrapper-mcp by:
-1. Synchronizing or checking version strings across project files.
+1. Synchronizing or checking version strings across project files, including every released
+   source module's version and its pin on the core.
 2. Checking existence and completeness of per-version changelogs.
 3. Running linters, type checkers, and unit test suite via uv.
 """
@@ -14,6 +15,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 # Project root directory
@@ -59,6 +62,137 @@ VERSION_FILES: dict[str, tuple[Path, str, str]] = {
     ),
 }
 
+CORE_DISTRIBUTION = "law-scrapper-mcp"
+
+# Workspace members under modules/ (directory names) that are never built into release assets
+# and never installed in the container image. Every other member is released with the core.
+NEVER_RELEASED_MODULES: frozenset[str] = frozenset({"reference"})
+
+# A requirement's distribution name: the leading name token of a PEP 508 string.
+_REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+
+@dataclass(frozen=True)
+class ReleasedModule:
+    """A source module that ships with the core: its directory, distribution name and pyproject."""
+
+    directory: str
+    distribution: str
+    pyproject: Path
+
+
+def released_modules() -> list[ReleasedModule]:
+    """Every member under `modules/` that is not in NEVER_RELEASED_MODULES, sorted by directory."""
+    modules_dir = PROJECT_ROOT / "modules"
+    found: list[ReleasedModule] = []
+    if not modules_dir.is_dir():
+        return found
+    for pyproject in sorted(modules_dir.glob("*/pyproject.toml")):
+        directory = pyproject.parent.name
+        if directory in NEVER_RELEASED_MODULES:
+            continue
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        found.append(ReleasedModule(directory, data["project"]["name"], pyproject))
+    return found
+
+
+def _lock_path() -> Path:
+    """The lock file the root entry is synced in; member entries live in the same file."""
+    return VERSION_FILES["uv.lock"][0]
+
+
+def _lock_entry_pattern(distribution: str) -> str:
+    return rf'(^name = "{re.escape(distribution)}"\nversion = ")([^"]+)(")'
+
+
+def _core_requirements(dependencies: list[str]) -> list[str]:
+    """The entries of a dependency list that name the core distribution."""
+    core: list[str] = []
+    for requirement in dependencies:
+        match = _REQUIREMENT_NAME.match(requirement)
+        if match and match.group(1).lower().replace("_", "-") == CORE_DISTRIBUTION:
+            core.append(requirement.strip())
+    return core
+
+
+def check_member_versions(expected_version: str) -> bool:
+    """Every released module carries `expected_version` and pins the core to exactly it.
+
+    Checks the module's `[project].version`, its single core requirement and its `uv.lock`
+    version line. Inside the uv workspace a wrong pin is ignored, so this is the guard that
+    keeps the built wheels installable together.
+    """
+    clean_expected = expected_version.lstrip("v")
+    expected_pin = f"{CORE_DISTRIBUTION}=={clean_expected}"
+    lock_text = _lock_path().read_text(encoding="utf-8") if _lock_path().exists() else ""
+    modules = released_modules()
+    all_ok = True
+
+    print(f"   Released source modules ({len(modules)}):")
+    for module in modules:
+        project = tomllib.loads(module.pyproject.read_text(encoding="utf-8"))["project"]
+        failures: list[str] = []
+        version = project.get("version")
+        if version != clean_expected:
+            failures.append(f"version {version} (expected {clean_expected})")
+        core = _core_requirements(project.get("dependencies", []))
+        if core != [expected_pin]:
+            failures.append(f"core requirement {core} (expected ['{expected_pin}'])")
+        lock_match = re.search(_lock_entry_pattern(module.distribution), lock_text, re.MULTILINE)
+        locked = lock_match.group(2) if lock_match else None
+        if locked != clean_expected:
+            failures.append(f"uv.lock version {locked} (expected {clean_expected})")
+        for failure in failures:
+            print(f"  [FAIL] {module.distribution}: {failure}")
+        if failures:
+            all_ok = False
+        else:
+            print(f"  [OK] {module.distribution}: {clean_expected}, pins {expected_pin}")
+    return all_ok
+
+
+def _sync_member_versions(clean_version: str) -> bool:
+    """Rewrite each released module's version, core pin and uv.lock version line.
+
+    Every rewrite is computed first; nothing is written unless all of them found exactly one target.
+    """
+    lock = _lock_path()
+    lock_text = lock.read_text(encoding="utf-8") if lock.exists() else ""
+    pending: list[tuple[ReleasedModule, str]] = []
+    success = True
+    for module in released_modules():
+        content = module.pyproject.read_text(encoding="utf-8")
+        content, versions = re.subn(
+            r'(^version\s*=\s*")[^"]+(")', r"\g<1>" + clean_version + r"\g<2>", content, count=1, flags=re.MULTILINE
+        )
+        # Matches the bare or the pinned core requirement, never a longer name such as law-scrapper-mcp-saos.
+        content, pins = re.subn(
+            rf'"{re.escape(CORE_DISTRIBUTION)}(?:==[^"]*)?"', f'"{CORE_DISTRIBUTION}=={clean_version}"', content
+        )
+        lock_text, locked = re.subn(
+            _lock_entry_pattern(module.distribution),
+            r"\g<1>" + clean_version + r"\g<3>",
+            lock_text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if versions != 1 or pins != 1 or locked != 1:
+            print(
+                f"  [FAIL] {module.distribution}: expected one version line, one core requirement and one "
+                f"uv.lock entry, found {versions}, {pins} and {locked}"
+            )
+            success = False
+        pending.append((module, content))
+
+    if not success:
+        return False
+    for module, content in pending:
+        module.pyproject.write_text(content, encoding="utf-8")
+        print(f"  [OK] {module.distribution}: version and core pin updated to {clean_version}")
+    if pending:
+        lock.write_text(lock_text, encoding="utf-8")
+    return True
+
 
 def sync_version_across_files(target_version: str) -> bool:
     """Update every file in VERSION_FILES to target_version."""
@@ -92,6 +226,10 @@ def sync_version_across_files(target_version: str) -> bool:
 
         file_path.write_text(new_content, encoding="utf-8")
         print(f"  [OK] {key}: Updated to {clean_version}")
+
+    # After the loop: the member entries share uv.lock with the root entry written above.
+    if not _sync_member_versions(clean_version):
+        success = False
 
     print("-" * 60)
     print("Version synchronization complete.\n")
@@ -129,9 +267,12 @@ def check_version_sync(expected_version: str | None = None) -> tuple[bool, str |
             versions[key] = None
             all_ok = False
 
+    found_versions = set(v for v in versions.values() if v is not None)
+    if all_ok and len(found_versions) == 1:
+        all_ok = check_member_versions(clean_expected or next(iter(found_versions)))
+
     print("-" * 60)
 
-    found_versions = set(v for v in versions.values() if v is not None)
     if not all_ok or len(found_versions) != 1:
         print("[FAIL] Version sync check FAILED: Mismatched or missing versions detected.")
         if clean_expected:

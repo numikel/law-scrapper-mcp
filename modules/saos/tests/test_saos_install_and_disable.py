@@ -83,7 +83,10 @@ def test_the_entry_point_is_installed_in_the_module_group() -> None:
     assert found[0].value == "law_scrapper_mcp_saos:module"
     assert found[0].dist is not None
     assert found[0].dist.name == "law-scrapper-mcp-saos"
-    assert found[0].dist.version == "0.1.0"
+    # One version for every package of a release, and the module refuses any other core.
+    core_version = importlib.metadata.version("law-scrapper-mcp")
+    assert found[0].dist.version == core_version
+    assert found[0].dist.requires == [f"law-scrapper-mcp=={core_version}"]
 
 
 def test_the_descriptor_name_equals_the_entry_point_name_and_declares_both_tools() -> None:

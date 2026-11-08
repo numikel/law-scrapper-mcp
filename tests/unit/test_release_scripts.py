@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add scripts directory to sys.path so we can import helper modules
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
@@ -111,8 +113,13 @@ class TestCheckRelease:
         assert ver == expected_version
         assert "uv.lock" in check_release.VERSION_FILES
 
-    def test_sync_version_writes_only_the_uv_lock_root_entry(self, tmp_path, monkeypatch):
-        """--sync-version bumps the root package entry in uv.lock and no other `version =` line."""
+    def test_sync_version_writes_the_root_and_released_module_entries_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--sync-version bumps the root and every released module, in their pyprojects and uv.lock.
+
+        The reference module, which is never released, and every other `version =` line stay as they are.
+        """
         import re
         import shutil
 
@@ -122,20 +129,60 @@ class TestCheckRelease:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, target)
             rerooted[key] = (target, replace_pattern, search_pattern)
+        for pyproject in (check_release.PROJECT_ROOT / "modules").glob("*/pyproject.toml"):
+            target = tmp_path / "modules" / pyproject.parent.name / "pyproject.toml"
+            target.parent.mkdir(parents=True)
+            shutil.copyfile(pyproject, target)
         lock = tmp_path / "uv.lock"
-        shutil.copyfile(check_release.PROJECT_ROOT / "uv.lock", lock)
         monkeypatch.setattr(check_release, "VERSION_FILES", rerooted)
+        monkeypatch.setattr(check_release, "PROJECT_ROOT", tmp_path)
+
+        released = check_release.released_modules()
+        assert {module.directory for module in released} >= {"saos", "voivodeship-journals"}
+        reference = tmp_path / "modules" / "reference" / "pyproject.toml"
+        reference_before = reference.read_text(encoding="utf-8")
 
         original = lock.read_text(encoding="utf-8")
-        root_entry = re.search(r'^name = "law-scrapper-mcp"\nversion = "[^"]+"$', original, re.MULTILINE)
-        assert root_entry is not None, "uv.lock has no root package entry"
+        expected = original
+        for name in ["law-scrapper-mcp", *(module.distribution for module in released)]:
+            entry = re.search(rf'^name = "{re.escape(name)}"\nversion = "[^"]+"$', original, re.MULTILINE)
+            assert entry is not None, f"uv.lock has no entry for {name}"
+            expected = expected.replace(entry.group(0), f'name = "{name}"\nversion = "9.9.9"')
 
         assert check_release.sync_version_across_files("9.9.9") is True
-        assert lock.read_text(encoding="utf-8") == original.replace(
-            root_entry.group(0), 'name = "law-scrapper-mcp"\nversion = "9.9.9"'
-        )
+        assert lock.read_text(encoding="utf-8") == expected
+        for module in released:
+            text = module.pyproject.read_text(encoding="utf-8")
+            assert re.search(r'^version = "9\.9\.9"$', text, re.MULTILINE), module.distribution
+            assert '"law-scrapper-mcp==9.9.9"' in text, module.distribution
+        assert reference.read_text(encoding="utf-8") == reference_before
         assert check_release.check_version_sync("9.9.9") == (True, "9.9.9")
 
         # A lock left behind by the bump fails the check.
         lock.write_text(original, encoding="utf-8")
         assert check_release.check_version_sync("9.9.9") == (False, None)
+
+    def test_sync_version_writes_nothing_when_a_module_has_no_core_requirement(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import shutil
+
+        module_dir = tmp_path / "modules" / "saos"
+        module_dir.mkdir(parents=True)
+        shutil.copyfile(
+            check_release.PROJECT_ROOT / "modules" / "saos" / "pyproject.toml", module_dir / "pyproject.toml"
+        )
+        broken = (module_dir / "pyproject.toml").read_text(encoding="utf-8")
+        broken = broken.replace('"law-scrapper-mcp==', '"other-package==')
+        (module_dir / "pyproject.toml").write_text(broken, encoding="utf-8")
+        shutil.copyfile(check_release.PROJECT_ROOT / "uv.lock", tmp_path / "uv.lock")
+        lock_before = (tmp_path / "uv.lock").read_text(encoding="utf-8")
+        rerooted = dict(check_release.VERSION_FILES)
+        _, replace_pattern, search_pattern = rerooted["uv.lock"]
+        rerooted["uv.lock"] = (tmp_path / "uv.lock", replace_pattern, search_pattern)
+        monkeypatch.setattr(check_release, "VERSION_FILES", rerooted)
+        monkeypatch.setattr(check_release, "PROJECT_ROOT", tmp_path)
+
+        assert check_release._sync_member_versions("9.9.9") is False
+        assert (module_dir / "pyproject.toml").read_text(encoding="utf-8") == broken
+        assert (tmp_path / "uv.lock").read_text(encoding="utf-8") == lock_before

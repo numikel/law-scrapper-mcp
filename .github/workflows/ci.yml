@@ -368,6 +368,47 @@ jobs:
       - name: Runs as a non-root user
         if: needs.changes.outputs.code == 'true'
         run: test "$(docker run --rm --entrypoint id law-scrapper-mcp:ci -u)" != "0"
+      # The same comparison as the `packages` job, against the image's environment: the core and every
+      # released module at one version, never a never-released member such as reference.
+      - name: Every released module is installed, and nothing else
+        if: needs.changes.outputs.code == 'true'
+        run: docker run --rm -v "$PWD:/repo:ro" --entrypoint python law-scrapper-mcp:ci /repo/scripts/check_release.py --check-installed
+      # FR-002: installed but off by default; `-*,<name>` turns exactly one on. Starting a module only
+      # registers its hosts, so neither container contacts a journal host.
+      - name: Modules are off by default and one turns on with -*,<name>
+        if: needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          health() {
+            local name="$1" port="$2"
+            shift 2
+            docker run -d --name "$name" -p "$port:7683" -e LAW_MCP_HOST=0.0.0.0 -e LAW_MCP_AUTH_MODE=bearer -e LAW_MCP_AUTH_TOKEN="$(openssl rand -base64 32)" "$@" law-scrapper-mcp:ci >/dev/null
+            for attempt in {1..40}; do
+              if body="$(curl --fail --silent "http://127.0.0.1:$port/health")"; then
+                printf '%s' "$body"
+                return 0
+              fi
+              sleep 0.25
+            done
+            echo "Container $name /health did not become ready in time" >&2
+            docker logs "$name" >&2 || true
+            return 1
+          }
+          trap 'docker rm -f lsm-default lsm-module >/dev/null 2>&1 || true' EXIT
+          default="$(health lsm-default 7684)"
+          if grep -q '"name":"POL_WOJ_PM"' <<<"$default"; then
+            echo "A module is active in the default image: /health lists POL_WOJ_PM"
+            echo "$default"
+            exit 1
+          fi
+          enabled="$(health lsm-module 7685 -e 'LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals')"
+          if ! grep -q '"name":"POL_WOJ_PM"' <<<"$enabled"; then
+            echo "-*,voivodeship-journals did not enable the module: /health lists no POL_WOJ_PM"
+            echo "$enabled"
+            exit 1
+          fi
+          echo "default image: every module off; -*,voivodeship-journals: on"
       - name: Skip (no code changes)
         if: needs.changes.outputs.code != 'true'
         run: echo "skipped"

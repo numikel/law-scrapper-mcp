@@ -20,6 +20,13 @@ tests/
 docs/
 *.md
 !README.md
+# Source modules. Each module's README.md is package metadata its build needs, and module tests stay out.
+modules/*/tests/
+!modules/*/README.md
+# Never-released members (check_release.NEVER_RELEASED_MODULES), last: the rule that matches last wins,
+# and a README re-included above would leave a member directory without its pyproject.toml, which uv
+# refuses ("Workspace member ... is missing a pyproject.toml").
+modules/reference/
 .env
 .env.*
 !.env.example

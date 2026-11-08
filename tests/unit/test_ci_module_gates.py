@@ -235,6 +235,20 @@ def test_the_release_workflow_validates_and_builds_every_released_package() -> N
     assert "files: |" in job_block(RELEASE_TEXT, "release") and "dist/*" in job_block(RELEASE_TEXT, "release")
 
 
+def test_the_docker_job_proves_the_image_ships_every_module_installed_and_off() -> None:
+    block = job_block(CI_TEXT, "docker")
+    installed = step_block(block, "Every released module is installed, and nothing else")
+    activation = step_block(block, "Modules are off by default and one turns on with -*,<name>")
+
+    for step in ("Build the image", "Smoke-test the HTTP transport", "Smoke-test the STDIO transport"):
+        step_block(block, step)  # the earlier smoke tests stay
+    assert "/repo/scripts/check_release.py --check-installed" in installed
+    assert 'if grep -q \'"name":"POL_WOJ_PM"\'' in activation, "the default image must be shown to have it off"
+    assert 'if ! grep -q \'"name":"POL_WOJ_PM"\'' in activation, "-*,<name> must be shown to turn it on"
+    assert "LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals" in activation
+    assert "LAW_MCP_AUTH_MODE=bearer" in activation, "an exposed container is never unauthenticated"
+
+
 def test_the_audit_covers_module_dependencies() -> None:
     assert "uv run --extra dev --all-packages pip-audit" in run_lines(job_block(CI_TEXT, "audit"))
 

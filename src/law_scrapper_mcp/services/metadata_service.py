@@ -12,6 +12,7 @@ from law_scrapper_mcp.models.enums import MetadataCategory
 from law_scrapper_mcp.models.pagination import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT
 from law_scrapper_mcp.models.tool_outputs import MetadataOutput
 from law_scrapper_mcp.services.act_sources import ActSourceRegistry, PublisherInfo
+from law_scrapper_mcp.services.coverage import CoverageRegistry
 from law_scrapper_mcp.services.pagination import effective_limit, paginate_items, parse_non_negative
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,10 @@ class MetadataService:
     With a registry of act sources, the `publishers` category also lists the publishers those
     sources describe, after the Sejm's own. The registry is read at call time, because source
     modules fill it after this service is built.
+
+    With a coverage registry, the `coverage` category lists what each registered source covers. The
+    registry measures lazily and remembers for a day, so that category (and `all`, which includes it)
+    may contact a source's host on the first call of the day.
     """
 
     METADATA_ORDER = (
@@ -31,11 +36,19 @@ class MetadataService:
         MetadataCategory.STATUSES,
         MetadataCategory.TYPES,
         MetadataCategory.INSTITUTIONS,
+        MetadataCategory.COVERAGE,
     )
 
-    def __init__(self, client: SejmApiClient, *, sources: ActSourceRegistry | None = None):
+    def __init__(
+        self,
+        client: SejmApiClient,
+        *,
+        sources: ActSourceRegistry | None = None,
+        coverage: CoverageRegistry | None = None,
+    ):
         self._client = client
         self._sources = sources
+        self._coverage = coverage
 
     def _described(self) -> tuple[PublisherInfo, ...]:
         """The publishers registered sources describe, read from the registry now."""
@@ -139,8 +152,30 @@ class MetadataService:
             failed_categories=list(failed),
         )
 
+    async def _coverage_items(self) -> list[dict[str, Any]]:
+        """One entry per segment of every registered provider that could answer (it never raises)."""
+        if self._coverage is None:
+            return []
+        return [
+            {
+                "source": coverage.source,
+                "segment": segment.key,
+                "label": segment.label,
+                "newest": segment.newest.isoformat() if segment.newest is not None else None,
+                "newest_ref": segment.newest_ref,
+                "count": segment.count,
+                "years": list(segment.years) if segment.years is not None else None,
+                "measured_on": coverage.measured_on.isoformat(),
+                "origin": coverage.origin,
+            }
+            for coverage in await self._coverage.all()
+            for segment in coverage.segments
+        ]
+
     async def _fetch_category(self, category: MetadataCategory, ttl: int) -> Any:
         """Fetch a specific metadata category from the API."""
+        if category is MetadataCategory.COVERAGE:
+            return await self._coverage_items()
         endpoint_map = {
             MetadataCategory.KEYWORDS: "keywords",
             MetadataCategory.PUBLISHERS: "acts",

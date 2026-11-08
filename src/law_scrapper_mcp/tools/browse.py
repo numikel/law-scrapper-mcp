@@ -148,5 +148,6 @@ def register(mcp: MCPServer[AppContext]) -> None:
                 returned_count=output.returned_count,
                 applied_limit=applied_limit,
                 max_result_limit=MAX_ITEM_LIMIT,
+                coverage_gap=output.coverage_gap,
             ),
         )

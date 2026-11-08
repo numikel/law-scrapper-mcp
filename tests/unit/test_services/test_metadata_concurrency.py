@@ -17,7 +17,7 @@ from law_scrapper_mcp.services.metadata_service import MetadataService
 pytestmark = pytest.mark.asyncio
 
 ENDPOINTS = ("keywords", "acts", "statuses", "types", "institutions")
-CATEGORY_ORDER = ("keywords", "publishers", "statuses", "types", "institutions")
+CATEGORY_ORDER = ("keywords", "publishers", "statuses", "types", "institutions", "coverage")
 
 
 def _url(endpoint: str) -> str:

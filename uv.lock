@@ -528,7 +528,7 @@ wheels = [
 
 [[package]]
 name = "law-scrapper-mcp"
-version = "4.4.2"
+version = "4.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-re2" },
@@ -595,7 +595,7 @@ requires-dist = [{ name = "law-scrapper-mcp", editable = "." }]
 
 [[package]]
 name = "law-scrapper-mcp-saos"
-version = "4.4.2"
+version = "4.5.0"
 source = { editable = "modules/saos" }
 dependencies = [
     { name = "law-scrapper-mcp" },
@@ -606,7 +606,7 @@ requires-dist = [{ name = "law-scrapper-mcp", editable = "." }]
 
 [[package]]
 name = "law-scrapper-mcp-voivodeship-journals"
-version = "4.4.2"
+version = "4.5.0"
 source = { editable = "modules/voivodeship-journals" }
 dependencies = [
     { name = "law-scrapper-mcp" },

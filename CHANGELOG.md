@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-11-08
+
+See [docs/changelogs/v4.5.0.md](docs/changelogs/v4.5.0.md) for details.
+
+- **Source modules** — legal sources beyond DU and MP install as separate packages and are switched on
+  with `LAW_MCP_SOURCE_MODULES`: the voivodeship official journals through the existing tools, and
+  Polish court judgments from SAOS (search, details, and reading a judgment with its reasoning). The
+  release publishes the core and every module as version-pinned wheels; the image ships them off.
+- **Coverage, identity and isolation** — `get_system_metadata(category="coverage")` and gap-only hints
+  report how far each source reaches; `LAW_MCP_CONTACT` sets the contact in the `User-Agent`; every
+  upstream host has its own pacing, circuit breaker and cache space. Without a module, the 13 core
+  tools behave as in 4.4.2.
+
 ## [4.4.2] - 2026-10-25
 
 See [docs/changelogs/v4.4.2.md](docs/changelogs/v4.4.2.md) for details.

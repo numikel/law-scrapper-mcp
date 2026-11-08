@@ -249,6 +249,20 @@ def test_the_docker_job_proves_the_image_ships_every_module_installed_and_off() 
     assert "LAW_MCP_AUTH_MODE=bearer" in activation, "an exposed container is never unauthenticated"
 
 
+def test_the_changelog_check_reacts_to_a_changed_version_line_only() -> None:
+    """The first F-05 run tripped on a pyproject comment naming test_package_versions.py."""
+    block = job_block(CI_TEXT, "release-prep-check")
+    match = re.search(r"grep -qE '([^']+)'", block)
+    assert match is not None, "release-prep-check no longer greps the pyproject diff"
+    pattern = re.compile(match[1].replace("[[:space:]]", r"\s"))
+
+    assert pattern.search('+version = "4.5.0"')
+    assert pattern.search('-version = "4.4.2"')
+    assert not pattern.search("+# Pinned by tests/unit/test_package_versions.py.")
+    assert not pattern.search('+    "law-scrapper-mcp==4.4.2", # same version as the core')
+    assert not pattern.search('+required-version = "==0.12.22"')
+
+
 def test_the_audit_covers_module_dependencies() -> None:
     assert "uv run --extra dev --all-packages pip-audit" in run_lines(job_block(CI_TEXT, "audit"))
 

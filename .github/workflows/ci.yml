@@ -425,7 +425,8 @@ jobs:
           set -euo pipefail
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
-          if ! git diff "$base" "$head" -- pyproject.toml | grep -q '^[+-].*version'; then
+          # Only a changed `version =` line counts; a comment or a file name with the word "version" does not.
+          if ! git diff "$base" "$head" -- pyproject.toml | grep -qE '^[+-]version[[:space:]]*='; then
             echo "pyproject.toml version unchanged — skip changelog check"
             exit 0
           fi

@@ -72,7 +72,7 @@ def test_a_year_in_the_hole_of_the_journal_is_a_gap_and_the_text_lists_the_range
     pm = segment("POL_WOJ_PM", label="Dziennik Urzędowy Województwa Pomorskiego", years=PM_YEARS)
 
     assert _gap(pm, year=2007) == (
-        "Źródło Dziennik Urzędowy Województwa Pomorskiego nie ma rocznika 2007 "
+        "Źródło „Dziennik Urzędowy Województwa Pomorskiego” nie ma rocznika 2007 "
         "(dostępne: 2001–2006, 2008–2026; pomiar z 2026-11-08)."
     )
 
@@ -119,7 +119,7 @@ def test_thirty_one_days_past_the_newest_is_a_gap_with_the_reference() -> None:
     newest = TODAY - timedelta(days=STALE_AFTER_DAYS + 1)
 
     assert _gap(segment(newest=newest, newest_ref="2026/5811")) == (
-        "Najnowsze ogłoszenie w Dziennik Ustaw pochodzi z 2026-10-08 (2026/5811); "
+        "Najnowsze ogłoszenie w źródle „Dziennik Ustaw” pochodzi z 2026-10-08 (2026/5811); "
         "zapytanie sięga dalej (pomiar z 2026-11-08)."
     )
 
@@ -326,7 +326,7 @@ async def test_a_sejm_search_past_the_newest_announcement_carries_the_gap(
     output = await service.search(publisher="DU")
 
     assert output.coverage_gap is not None
-    assert "Najnowsze ogłoszenie w Dziennik Ustaw pochodzi z 2026-05-01 (2026/1000)" in output.coverage_gap
+    assert "Najnowsze ogłoszenie w źródle „Dziennik Ustaw” pochodzi z 2026-05-01 (2026/1000)" in output.coverage_gap
 
 
 @respx.mock

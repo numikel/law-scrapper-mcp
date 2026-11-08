@@ -76,7 +76,7 @@ async def test_du_in_a_year_it_never_had_names_the_missing_year(client: Any) -> 
 
     hints = coverage_hints(parse_tool_result(result))
     assert len(hints) == 1
-    assert "Dziennik Ustaw nie ma rocznika 1900" in hints[0]
+    assert "Źródło „Dziennik Ustaw” nie ma rocznika 1900" in hints[0]
     assert "1918–1939, 1944–2026" in hints[0], "the sentence lists the years the Sejm reported, in ranges"
 
 
@@ -85,7 +85,7 @@ async def test_mp_in_a_year_it_never_had_names_the_missing_year_too(client: Any)
 
     hints = coverage_hints(parse_tool_result(result))
     assert len(hints) == 1
-    assert "Monitor Polski nie ma rocznika 1900" in hints[0]
+    assert "Źródło „Monitor Polski” nie ma rocznika 1900" in hints[0]
 
 
 async def test_a_query_reaching_a_month_past_the_newest_du_act_gets_the_freshness_hint(client: Any) -> None:

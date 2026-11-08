@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from law_scrapper_mcp.source_modules.contract import ModuleHost, SourceModule
 from law_scrapper_mcp_saos.client import SaosClient
+from law_scrapper_mcp_saos.coverage import COVERAGE_KEY, SaosCoverageProvider
 from law_scrapper_mcp_saos.state import MODULE_NAME, SaosState, saos_host
 from law_scrapper_mcp_saos.tools import register_all_tools
 
@@ -20,17 +21,27 @@ __all__ = ["module"]
 
 @asynccontextmanager
 async def start(host: ModuleHost) -> AsyncIterator[SaosState]:
-    """Register the SAOS host and leave the client for the tools; the hub closes it at shutdown."""
+    """Register the SAOS host and its coverage provider, and leave the client for the tools.
+
+    The hub closes the client at shutdown; the provider is unregistered when the hook exits, before the
+    core closes its resources. No request is sent at start: coverage is measured on the first question.
+    """
     egress = host.egress.client_for(saos_host(host.settings), host.caller)
-    yield SaosState(
-        client=SaosClient(
-            egress,
-            search_ttl=host.settings.cache_search_ttl,
-            detail_max_bytes=host.settings.doc_store_max_size_bytes,
-        ),
-        module=host.caller.module,
-        version=host.caller.version,
+    client = SaosClient(
+        egress,
+        search_ttl=host.settings.cache_search_ttl,
+        detail_max_bytes=host.settings.doc_store_max_size_bytes,
     )
+    host.coverage.register(SaosCoverageProvider(client))
+    try:
+        yield SaosState(
+            client=client,
+            module=host.caller.module,
+            version=host.caller.version,
+            coverage=host.coverage,
+        )
+    finally:
+        host.coverage.unregister(COVERAGE_KEY)
 
 
 module = SourceModule(

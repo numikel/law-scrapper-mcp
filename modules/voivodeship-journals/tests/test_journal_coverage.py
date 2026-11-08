@@ -145,7 +145,7 @@ async def test_a_year_pomorskie_never_published_gets_the_year_gap_hint(router: r
 
     hints = [m for m in hint_messages(result) if "nie ma rocznika" in m]
     assert len(hints) == 1
-    assert "Dz. Urz. Woj. Pomorskiego nie ma rocznika 2007" in hints[0]
+    assert "Źródło „Dz. Urz. Woj. Pomorskiego” nie ma rocznika 2007" in hints[0]
     assert "2001–2003, 2005, 2009–2026" in hints[0]
     assert "pomiar z 2026-11-09" in hints[0]
 

@@ -64,7 +64,8 @@ async def test_search_legal_acts_puts_the_gap_in_its_hints(search_results: dict)
 
     payload = parse_tool_result(result)
     assert any(
-        "Najnowsze ogłoszenie w Dziennik Ustaw pochodzi z 2020-01-01 (2020/1)" in m for m in _hint_messages(payload)
+        "Najnowsze ogłoszenie w źródle „Dziennik Ustaw” pochodzi z 2020-01-01 (2020/1)" in m
+        for m in _hint_messages(payload)
     )
     assert "coverage_gap" not in payload["data"], "the gap travels in the hints only"
 

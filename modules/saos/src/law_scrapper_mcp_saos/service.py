@@ -29,10 +29,12 @@ from law_scrapper_mcp.models.tool_outputs import (
     ResultSetScope,
     SetScope,
 )
+from law_scrapper_mcp.services.coverage import FALLBACK_NOTE, CoverageRegistry
 from law_scrapper_mcp.services.document_store import DocumentStore
 from law_scrapper_mcp.services.pagination import item_page_info, parse_non_negative
 from law_scrapper_mcp.services.result_store import ResultStore
 from law_scrapper_mcp_saos.client import SaosClient
+from law_scrapper_mcp_saos.coverage import ADMINISTRATIVE, ADMINISTRATIVE_MESSAGE, COVERAGE_KEY, court_gap_message
 from law_scrapper_mcp_saos.mapping import (
     COURT_TYPES,
     JUDGMENT_TYPE_LABELS,
@@ -92,17 +94,6 @@ SIGNATURE_MAX_LENGTH = 100
 SCAN_PAGE_SIZE = 100
 SCAN_MAX_PAGES = 5
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-
-# What SAOS held on the day it was measured (tests/fixtures/saos/PROVENANCE.md). Static on purpose and
-# dated, so the sentence cannot pass for a live count; `modules/saos/tests/test_saos_coverage.py` ties every
-# number and date to the recording it came from.
-COVERAGE_AS_OF = "2026-11-02"
-COVERAGE_SENTENCE = (
-    f"Zasięg SAOS (pomiar z {COVERAGE_AS_OF}): sądy powszechne 474 859 orzeczeń (najnowsze z 2026-10-27), "
-    "Sąd Najwyższy 38 081 (najnowsze z 2016-06-22), Trybunał Konstytucyjny 9 503 (najnowsze z 2015-12-09), "
-    "Krajowa Izba Odwoławcza 22 168 (najnowsze z 2018-09-06), sądy administracyjne 0. "
-    "Brak wyniku w SAOS nie dowodzi, że orzeczenie nie istnieje."
-)
 
 
 def current_date() -> date:
@@ -300,8 +291,9 @@ def search_hints(
     next_offset: int | None,
     filter_max_records: int,
     portal_links: PortalLinks | None = None,
+    coverage_gap: str | None = None,
 ) -> list[Hint]:
-    """Next steps for a page of search results."""
+    """Next steps for a page of search results; `coverage_gap` is the first-page hint about what SAOS lacks."""
     hints: list[Hint] = []
     if not records:
         if total and offset >= total:
@@ -361,8 +353,8 @@ def search_hints(
             repeat_parameters={"limit": filter_max_records, "offset": offset},
         )
     )
-    if offset == 0:
-        hints.append(Hint(message=COVERAGE_SENTENCE))
+    if offset == 0 and coverage_gap:
+        hints.append(Hint(message=coverage_gap))
     return hints
 
 
@@ -450,6 +442,7 @@ def labour_hints(
     result_set_id: str | None,
     scope: ResultSetScope | None,
     filter_max_records: int,
+    coverage_gap: str | None = None,
 ) -> list[Hint]:
     """Next steps for a labour scan: the exact call that continues it, and what the rule leaves out."""
     hints: list[Hint] = []
@@ -512,8 +505,8 @@ def labour_hints(
             repeat_parameters={"labour_only": True, "limit": filter_max_records, "offset": scan.scanned_from},
         )
     )
-    if scan.scanned_from == 0:
-        hints.append(Hint(message=COVERAGE_SENTENCE))
+    if scan.scanned_from == 0 and coverage_gap:
+        hints.append(Hint(message=coverage_gap))
     return hints
 
 
@@ -539,11 +532,41 @@ class SaosSearchService:
         *,
         today: Callable[[], date] | None = None,
         filter_max_records: int | None = None,
+        coverage: CoverageRegistry | None = None,
     ) -> None:
         self._client = client
         self._result_store = result_store
         self._today = today
         self._filter_max_records = filter_max_records
+        self._coverage = coverage
+
+    async def _coverage_gap(self, query: SearchQuery, *, first_page: bool) -> str | None:
+        """The hint about a gap in SAOS for the court type of `query`, on the first page of a search only.
+
+        Coverage is read through the registry (memo, lock and fallback), never from the provider. It is best
+        effort: whatever goes wrong here never costs the caller the search result.
+        """
+        if not first_page or query.court_type is None or self._coverage is None:
+            return None
+        try:
+            coverage = await self._coverage.get(COVERAGE_KEY)
+            segment = next((s for s in coverage.segments if s.key == query.court_type), None) if coverage else None
+            if coverage is None or segment is None:
+                return None
+            # Measured, not assumed: the "no administrative judgments" sentence holds only while the
+            # measurement (or its fallback) still counts none.
+            if query.court_type == ADMINISTRATIVE and segment.count == 0:
+                return (
+                    ADMINISTRATIVE_MESSAGE
+                    if coverage.origin == "measured"
+                    else f"{ADMINISTRATIVE_MESSAGE} {FALLBACK_NOTE}"
+                )
+            return court_gap_message(
+                segment, date_to=query.date_to, origin=coverage.origin, measured_on=coverage.measured_on
+            )
+        except Exception as error:
+            logger.warning("SAOS coverage check failed (%s: %s)", type(error).__name__, error)
+            return None
 
     async def _window(self, query: SearchQuery, *, limit: int, offset: int) -> tuple[list[SaosSearchItem], int, int]:
         """Fetch the records at `offset..offset+limit` of the SAOS list, the list's size and the request count.
@@ -669,6 +692,7 @@ class SaosSearchService:
             result_set_id=result_set_id,
             scope=scope,
             filter_max_records=self._filter_max_records or settings.effective_filter_max_records,
+            coverage_gap=await self._coverage_gap(query, first_page=scan.scanned_from == 0),
         )
         return EnrichedResponse[SearchSaosJudgmentsOutput](data=output, hints=hints)
 
@@ -800,6 +824,7 @@ class SaosSearchService:
             next_offset=page_info.next_offset,
             filter_max_records=self._filter_max_records or settings.effective_filter_max_records,
             portal_links=portal_links,
+            coverage_gap=await self._coverage_gap(query, first_page=page_offset == 0),
         )
         return EnrichedResponse[SearchSaosJudgmentsOutput](data=output, hints=hints)
 
@@ -819,7 +844,8 @@ async def search_saos_judgments(
     labour_only: bool | str | None = False,
 ) -> EnrichedResponse[SearchSaosJudgmentsOutput]:
     """Entry point of the tool: builds the service from the module state and the shared result store."""
-    service = SaosSearchService(saos_state(app_context).client, app_context.result_store)
+    state = saos_state(app_context)
+    service = SaosSearchService(state.client, app_context.result_store, coverage=state.coverage)
     return await service.search(
         phrase=phrase,
         signature=signature,

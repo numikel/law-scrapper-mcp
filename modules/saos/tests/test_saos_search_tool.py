@@ -11,8 +11,6 @@ import respx
 from mcp import Client
 from saos_testing import FakeSaos, connected, corpus, loaded
 
-from law_scrapper_mcp_saos.service import COVERAGE_SENTENCE
-
 CORE_TOOLS = 13
 MODULE_TOOLS = 2
 TOOL = "search_saos_judgments"
@@ -84,7 +82,7 @@ async def test_the_input_schema_has_exactly_the_documented_parameters_with_descr
 
 
 @pytest.mark.asyncio
-async def test_the_description_carries_the_decision_tree_five_examples_and_the_dated_coverage(
+async def test_the_description_carries_the_decision_tree_five_examples_and_points_at_the_coverage_category(
     saos_router: respx.MockRouter,
 ) -> None:
     async with connected(saos_router) as client:
@@ -98,10 +96,11 @@ async def test_the_description_carries_the_decision_tree_five_examples_and_the_d
         assert "(15|21)$" in description
         assert "labour_only" in description
         assert "Kiedy NIE używać labour_only:" in description
-        # The docstring repeats the coverage figures of the hint; both must stay one set of numbers.
-        for figure in re.findall(r"\d{1,3}(?: \d{3})+", COVERAGE_SENTENCE):
-            assert figure in description, figure
-        assert "2026-11-02" in description
+        # The figures live in the coverage category and in the fallback, not in the docstring.
+        assert 'get_system_metadata(category="coverage")' in description
+        assert "tylko wtedy, gdy zapytanie z court_type sięga dalej" in " ".join(description.split())
+        assert not re.findall(r"\d{1,3}(?: \d{3})+ orzeczeń", description)
+        assert "2026-11-02" not in description
 
 
 def test_the_instructions_name_the_tool_and_count_it() -> None:

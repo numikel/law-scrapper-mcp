@@ -279,13 +279,16 @@ def act_coverage_gap(
     measured_tail = f" (pomiar z {measured_on})" if measured_on is not None else ""
     message: str | None = None
     if year is not None and segment.years is not None and year not in segment.years:
-        message = f"Źródło {segment.label} nie ma rocznika {year} (dostępne: {format_years(segment.years)}{measured})."
+        # The label is quoted, not declined: names such as "Dz. Urz. Woj. Pomorskiego" cannot be inflected.
+        message = (
+            f"Źródło „{segment.label}” nie ma rocznika {year} (dostępne: {format_years(segment.years)}{measured})."
+        )
     elif segment.newest is not None:
         upper = _upper_bound(year, pub_date_to, today)
         if upper is not None and upper > segment.newest + timedelta(days=STALE_AFTER_DAYS):
             ref = f" ({segment.newest_ref})" if segment.newest_ref else ""
             message = (
-                f"Najnowsze ogłoszenie w {segment.label} pochodzi z {segment.newest}{ref}; "
+                f"Najnowsze ogłoszenie w źródle „{segment.label}” pochodzi z {segment.newest}{ref}; "
                 f"zapytanie sięga dalej{measured_tail}."
             )
     if message is not None and origin == "fallback":

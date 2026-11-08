@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_WP/2026/5811",
+      "address": "POL_WOJ_WP/2026/5811",
+      "publisher": "POL_WOJ_WP",
+      "year": 2026,
+      "volume": 0,
+      "pos": 5811,
+      "type": "Zarządzenie",
+      "title": "Zarządzenie nr 438/2026 Wojewody Wielkopolskiego z dnia 29 lipca 2026 r. w sprawie zarządzenia wyborów uzupełniających do Rady Miasta i Gminy Wysoka",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. 2026.5811",
+      "promulgation": "2026-07-29T00:00:00",
+      "announcementDate": "2026-07-30T11:55:22.523",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 151839
+}

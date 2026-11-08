@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_SK/2026/2412",
+      "address": "POL_WOJ_SK/2026/2412",
+      "publisher": "POL_WOJ_SK",
+      "year": 2026,
+      "volume": 0,
+      "pos": 2412,
+      "type": "Obwieszczenie",
+      "title": "Obwieszczenie  Wojewody Świętokrzyskiego z dnia 15 lipca 2026 r. w sprawie przyjęcia Wojewódzkiego Planu Transformacji dla województwa świętokrzyskiego na lata 2027-2031",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. 2026.2412",
+      "promulgation": "2026-07-15T00:00:00",
+      "announcementDate": "2026-07-15T14:27:18.593",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 3577
+}

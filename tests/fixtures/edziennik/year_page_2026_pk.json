@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_PK/2026/4337",
+      "address": "POL_WOJ_PK/2026/4337",
+      "publisher": "POL_WOJ_PK",
+      "year": 2026,
+      "volume": 0,
+      "pos": 4337,
+      "type": "Informacja",
+      "title": "Informacja  Starosty Krośnieńskiego z dnia 9 listopada 2026 r. w sprawie modernizacji operatu ewidencji gruntów i budynków obrębu ewidencyjnego Sieniawa w jednostce ewidencyjnej Rymanów",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. 2026.4337",
+      "promulgation": "2026-11-09T00:00:00",
+      "announcementDate": "2026-11-06T14:09:20.987",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 4337
+}

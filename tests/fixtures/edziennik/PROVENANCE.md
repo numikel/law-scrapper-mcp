@@ -154,6 +154,42 @@ re-indenting described above.
 | `keyword=budżety,finanse publiczne`, `year=2025` | `totalCount` 1 694; the body is byte-identical to the one for `b` alone |
 | Reading | Not an intersection: an AND would be at most 0. Whether the host treats the list as OR or reads only one of the values cannot be told apart from this data, because `a` matched nothing. Either way a comma-joined list does not narrow the result |
 
+### Newest act per journal (fourth session, 2026-11-08, 11:10 - 11:23 UTC)
+
+How fresh is each served journal, and which request tells? Sixteen requests to the twelve served
+hosts, inside a 19-request session whose other three went to `api.sejm.gov.pl` (`../sejm/`). Same
+rules as the third session: sequential, at least 1.5 s apart, the project's `User-Agent` with the
+module suffix (`law-scrapper-mcp-voivodeship-journals/0.0.0`), `Accept: application/json`, redirects
+off, TLS verification on, no retries, the budget enforced before each send (15 approved, then 2 and
+2 more, each pair approved separately). All answered 200; the bodies are stored re-indented as above.
+The response `Content-Type` was not recorded.
+
+| File | Request | Status | Bytes (original) | SHA-256 (original) | Captured (UTC) |
+|---|---|---|---|---|---|
+| `year_page_2026_ds.json` | https://edzienniki.duw.pl/api/eli/search?year=2026&limit=1 | 200 | 535 | 0de8f69fdbb92ffb907359a470b645f767f2385ab0021dee402107683ff4aa57 | 2026-11-08 11:10:58 |
+| `year_page_2026_kp.json` | https://edzienniki.bydgoszcz.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 755 | 33fe2edbf89bd2b8e9621a41842a324aa085ee7133d4865c9e6c468b0ec280ce | 2026-11-08 11:11:00 |
+| `year_page_2026_lb.json` | https://edziennik.lublin.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 541 | 27b5d0340f8fd3867bf3686afff7b1dde0c46dfabf164cee54973689beb31870 | 2026-11-08 11:11:01 |
+| `year_page_2026_op.json` | https://duwo.opole.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 796 | 79b1d059d7390521104b6f793b29dc6a8fcc2372e5b1d1aff7db41312d1b4c67 | 2026-11-08 11:11:03 |
+| `year_page_2026_pk.json` | https://edziennik.rzeszow.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 579 | 26fe20d3654b49b969b01dcbf629d3837a84f5960ecdb8b3e6da166dc3041333 | 2026-11-08 11:11:04 |
+| `year_page_2026_pl.json` | https://edziennik.bialystok.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 532 | c42a81d5e4ba26d243192095648352a2daf909d2ffbaeaecc89fcd9a42f9afd3 | 2026-11-08 11:11:06 |
+| `year_page_2026_pm.json` | https://edziennik.gdansk.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 534 | 9279eb484c2adf9489cf522272724ab838e5b70e00e3c872c886226796a29be4 | 2026-11-08 11:11:07 |
+| `year_page_2026_sl.json` | https://dzienniki.slask.eu/api/eli/search?year=2026&limit=1 | 200 | 822 | 815b2627145048ceecf65b16161969f1a17712fe8c1dae475005f62a890580af | 2026-11-08 11:11:09 |
+| `year_page_2026_sk.json` | https://edziennik.kielce.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 565 | 0b93d12056cdf03e4b3e2d08f354d163a8d61f314476b0ff1505aa2eb128dca3 | 2026-11-08 11:11:10 |
+| `year_page_2026_wm.json` | https://edzienniki.olsztyn.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 534 | 0b25fb29b106b2a5c53b7b228a782ec126d5b1b4910575765743ca8bc9259f5e | 2026-11-08 11:11:12 |
+| `year_page_2026_wp.json` | https://edziennik.poznan.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 754 | 705716bd7d799bba78bc914f42b40975c12701114bb223737cbfcb3fb44b7784 | 2026-11-08 11:11:13 |
+| `year_page_2026_zp.json` | https://e-dziennik.szczecin.uw.gov.pl/api/eli/search?year=2026&limit=1 | 200 | 593 | ce795b79ae0d314220fcdb23d67597182d552fbb1992f77035767ca96abf421c | 2026-11-08 11:11:15 |
+| `pubdatefrom_only_sk.json` | https://edziennik.kielce.uw.gov.pl/api/eli/search?pubDateFrom=2026-10-09&limit=1 | 200 | 522 | 97786d04abff024c793a63907a6d872a18603afc6938be613e992526dc8b66b4 | 2026-11-08 11:20:18 |
+| `pubdatefrom_only_wp.json` | https://edziennik.poznan.uw.gov.pl/api/eli/search?pubDateFrom=2026-10-09&limit=1 | 200 | 544 | cd065d11cc7d41ae08b52c32727c874a6018322e8512a9d0093ed667d72b6813 | 2026-11-08 11:20:21 |
+| `act_detail_last_position_sk.json` | https://edziennik.kielce.uw.gov.pl/api/eli/acts/POL_WOJ_SK/2026/3577 | 200 | 847 | 981b56f51431b3c651359a822f432cc193c806df9d729e22c44d8ea656e8ec09 | 2026-11-08 11:23:32 |
+| `act_detail_last_position_wp.json` | https://edziennik.poznan.uw.gov.pl/api/eli/acts/POL_WOJ_WP/2026/8206 | 200 | 851 | f40ea8da5156e1a1b18953f060f0e3e5ffec8077b072af60bf3fd71e1473c97e | 2026-11-08 11:23:34 |
+
+| Fact | Measured |
+|---|---|
+| First item of the 2026 page is the newest | true on 10 hosts: `pos` equals `totalCount` (KP: `pos` 5 381, `totalCount` 5 380) and `announcementDate` is 2026-11-05 or 2026-11-06. **False on two**: SK (`totalCount` 3 577, first item 2026/2412 announced 2026-07-15) and WP (`totalCount` 8 206, first item 2026/5517 announced 2026-07-15). The default order is not newest-first everywhere, and `sortBy`/`sortDir` are ignored (second table above) |
+| `pubDateFrom` alone, no `pubDateTo`, no `year` (SK, WP) | **ignored**: `totalCount` is the whole journal (SK 80 489, WP 151 839) and the first item was announced 2026-07-30, before the bound. The range that the second table shows honoured had both bounds and a year, on another host |
+| Act at position `totalCount` of the newest year (SK, WP) | exists and is recent: SK 2026/3577 and WP 2026/8206, both published 2026-11-06 (in the act detail `promulgation` is the publication timestamp, as described above). Positions are assigned in publication order, so this is the freshness probe that does not depend on the host's order |
+| Q-11 (WP's newest announcement 2026-07-30 in the first session) | an artefact of the order: that session read the first item of an unordered page. WP published through 2026-11-06 |
+
 ## Refreshing these recordings
 
 Refresh by hand when an upstream change is suspected, never on a schedule and never in CI.

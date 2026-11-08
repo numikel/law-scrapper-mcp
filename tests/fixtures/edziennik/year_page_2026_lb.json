@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "eli": "POL_WOJ_LB/2026/5343",
+      "address": "POL_WOJ_LB/2026/5343",
+      "publisher": "POL_WOJ_LB",
+      "year": 2026,
+      "volume": 0,
+      "pos": 5343,
+      "type": "Uchwała",
+      "title": "Uchwała nr XXIX/172/2026 Rady Gminy Baranów z dnia 27 października 2026 r. w sprawie zmiany Statutu Gminnego Ośrodka Pomocy Społecznej w Baranowie",
+      "article": null,
+      "status": "obowiązujący",
+      "displayAddress": "DZ. URZ. WOJ. LUB. 2026.5343",
+      "promulgation": "2026-10-27T00:00:00",
+      "announcementDate": "2026-11-06T12:18:56.143",
+      "changeDate": ""
+    }
+  ],
+  "offset": 0,
+  "count": 1,
+  "totalCount": 5343
+}

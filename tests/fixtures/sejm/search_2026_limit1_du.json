@@ -1,0 +1,90 @@
+{
+  "count": 1,
+  "items": [
+    {
+      "address": "WDU20260001465",
+      "announcementDate": "2026-11-02",
+      "changeDate": "2026-11-06T10:35:09",
+      "displayAddress": "Dz.U. 2026 poz. 1465",
+      "pos": 1465,
+      "promulgation": "2026-11-05",
+      "publisher": "DU",
+      "status": "obowiązujący",
+      "textHTML": false,
+      "textPDF": true,
+      "title": "Rozporządzenie Ministra Zdrowia z dnia 2 listopada 2026 r. zmieniające rozporządzenie w sprawie kształcenia podyplomowego pielęgniarek i położnych",
+      "type": "Rozporządzenie",
+      "volume": 0,
+      "year": 2026,
+      "authorizedBody": [],
+      "comments": "par. 1 pkt 1 wchodzi w życie z dniem 6 listopada 2026 r.",
+      "directives": [],
+      "entryIntoForce": "2027-01-01",
+      "inForce": "IN_FORCE",
+      "keywords": [
+        "położne",
+        "kwalifikacje",
+        "szkolnictwo medyczne",
+        "pielęgniarstwo"
+      ],
+      "keywordsNames": [],
+      "obligated": [],
+      "previousTitle": [],
+      "prints": [],
+      "references": {
+        "Akty zmienione": [
+          {
+            "id": "DU/2026/57",
+            "date": "2027-01-01"
+          }
+        ],
+        "Podstawa prawna": [
+          {
+            "id": "DU/2011/1039"
+          }
+        ],
+        "Podstawa prawna z art.": [
+          {
+            "id": "DU/2011/1039",
+            "art": "art. 74 ust. 1"
+          }
+        ]
+      },
+      "releasedBy": [
+        "MIN. ZDROWIA"
+      ],
+      "texts": [
+        {
+          "fileName": "D20261465.pdf",
+          "type": "O"
+        },
+        {
+          "fileName": "D20261465.pdf",
+          "type": "I"
+        }
+      ],
+      "ELI": "DU/2026/1465"
+    }
+  ],
+  "offset": 0,
+  "totalCount": 1465,
+  "searchQuery": {
+    "comparator": {
+      "column": "publisher",
+      "dir": "asc"
+    },
+    "dateEffectType": "NONE",
+    "dateType": "NONE",
+    "exile": false,
+    "keyword": [],
+    "position": -1,
+    "pubDateType": "NONE",
+    "publisher": "DU",
+    "publisherName": "Dziennik Ustaw",
+    "statusInForce": false,
+    "title": "",
+    "type": [],
+    "volume": -1,
+    "year": 2026
+  }
+}

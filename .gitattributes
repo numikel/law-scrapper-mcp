@@ -2,3 +2,4 @@
 # Recorded payloads are compared byte for byte; no checkout may rewrite their line endings.
 tests/fixtures/edziennik/** -text
 tests/fixtures/saos/** -text
+tests/fixtures/sejm/** -text

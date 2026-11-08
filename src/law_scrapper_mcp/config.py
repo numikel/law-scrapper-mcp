@@ -397,7 +397,7 @@ class Settings(BaseSettings):
 
     # Server info
     server_name: str = "law-scrapper-mcp"
-    server_version: str = "4.4.2"
+    server_version: str = "4.5.0"
     # The operator's contact in the identity header (FR-016). The default is the project
     # repository; `log_default_contact_warning` nudges HTTP deployments to replace it.
     contact: str = USER_AGENT_CONTACT

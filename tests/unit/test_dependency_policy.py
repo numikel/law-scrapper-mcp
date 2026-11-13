@@ -18,6 +18,13 @@ SECURITY_FLOORS = {
     "soupsieve": "4.0",
 }
 
+# The floors among them whose advisory can be triggered through this server. An override protects
+# only a uv resolution of this repository (`uv sync`, the container image); a wheel carries
+# `[project] dependencies` and nothing else, and `pip install` of a new wheel keeps every
+# dependency that still satisfies it. Without the floor in the package metadata an operator who
+# upgrades an installed wheel keeps the vulnerable version.
+FLOORS_SHIPPED_IN_THE_WHEEL = ("opentelemetry-api",)
+
 
 def _release(version: str) -> tuple[int, ...]:
     """`1.45.2` -> `(1, 45, 2, 0)`: numeric release segments, padded so `4.0` equals `4.0.0`."""
@@ -108,3 +115,13 @@ def test_documented_sdk_pin_matches_pyproject(document: str) -> None:
     quoted = re.findall(r"Built with[^\n]*?`mcp\[cli\]==([^`]+)`", text)
 
     assert quoted == [_sdk_pin()], f"{document} says the server is built with mcp {quoted}"
+
+
+@pytest.mark.parametrize("package", FLOORS_SHIPPED_IN_THE_WHEEL)
+def test_reachable_security_floor_is_a_package_dependency(package: str) -> None:
+    """The wheel must refuse the vulnerable version on its own, wherever it is installed."""
+    dependencies = _pyproject()["project"]["dependencies"]  # type: ignore[index]
+    declared = [entry.split(">=", 1)[1] for entry in dependencies if entry.lower().startswith(f"{package}>=")]
+
+    assert len(declared) == 1, f"{package} needs a `>=` floor in [project] dependencies, found {declared}"
+    assert _release(declared[0]) >= _release(SECURITY_FLOORS[package])

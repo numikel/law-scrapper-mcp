@@ -15,6 +15,11 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "pyjwt[crypto]>=2.10.1",
     "uvicorn>=0.31.1",
+    # Not imported here: mcp brings it and asks only for >=1.28.0. The floor from
+    # [tool.uv] is repeated because a wheel carries this list and nothing else,
+    # and pip keeps an installed 1.45.1 when a newer wheel is installed over it.
+    # GHSA-mf5v-w3w3-f6cg is reachable through `params._meta`.
+    "opentelemetry-api>=1.45.2",
 ]
 
 [project.optional-dependencies]

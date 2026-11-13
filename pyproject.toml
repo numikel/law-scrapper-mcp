@@ -65,8 +65,14 @@ override-dependencies = [
     # 2026.10.19 drops the emSign ECC Root CA - G3 (GHSA-6q48-6c7w-9gw2).
     "certifi>=2026.10.19",
     # mcp asks only for opentelemetry-api>=1.28.0; 1.45.1 fixes the tracestate
-    # header ReDoS (GHSA-xcq7-p3pf-p88h).
-    "opentelemetry-api>=1.45.1",
+    # header ReDoS (GHSA-xcq7-p3pf-p88h) and 1.45.2 the traceparent one
+    # (GHSA-mf5v-w3w3-f6cg), which mcp reaches with a value from `params._meta`.
+    "opentelemetry-api>=1.45.2",
+    # beautifulsoup4 (through markdownify) asks only for soupsieve>=1.6.1; 4.0 is
+    # the first release clear of GHSA-mmhr-3c5m-f64f, GHSA-7g44-g9rc-x53w and
+    # GHSA-6655-6qjp-jx7x. The converter matches no CSS selector, so the major
+    # version changes nothing here (tests/unit/test_content_processor.py).
+    "soupsieve>=4.0",
 ]
 
 # Source modules live in modules/<source>/ as workspace members. A plain `uv sync` installs only the

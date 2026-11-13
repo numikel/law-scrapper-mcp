@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from law_scrapper_mcp.services.content_processor import ContentProcessor, Section
 
 
@@ -53,6 +55,48 @@ class TestHtmlToMarkdown:
         md = content_processor.html_to_markdown(html)
         assert "First item" in md
         assert "Second item" in md
+
+
+class TestNoCssSelectors:
+    """`soupsieve` is installed only because `beautifulsoup4` depends on it: the converter walks
+    the tree and never matches a CSS selector. That is why a `soupsieve` major release (4.0 changed
+    how selectors treat `template` and `iframe`) cannot change the Markdown, and why its selector
+    advisories are not reachable through an act's HTML."""
+
+    SELECTOR_ENTRY_POINTS = ("compile", "select", "select_one", "iselect", "match", "filter", "closest")
+
+    @pytest.fixture
+    def selectors_forbidden(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import soupsieve
+
+        def refuse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("a CSS selector was matched during HTML to Markdown conversion")
+
+        for name in self.SELECTOR_ENTRY_POINTS:
+            monkeypatch.setattr(soupsieve, name, refuse)
+
+    @pytest.mark.usefixtures("selectors_forbidden")
+    def test_the_guard_refuses_a_selector(self) -> None:
+        """Positive control: with the guard on, Beautiful Soup's own `select` must fail."""
+        from bs4 import BeautifulSoup
+
+        with pytest.raises(AssertionError, match="a CSS selector was matched"):
+            BeautifulSoup("<p>x</p>", "html.parser").select("p")
+
+    @pytest.mark.usefixtures("selectors_forbidden")
+    def test_html_to_markdown_matches_no_selector(self, content_processor: ContentProcessor, sample_act_html: str):
+        md = content_processor.html_to_markdown(sample_act_html)
+
+        assert "Art. 1." in md
+
+    @pytest.mark.usefixtures("selectors_forbidden")
+    def test_template_and_iframe_content_is_converted_without_selectors(self, content_processor: ContentProcessor):
+        html = "<h1>T</h1><template><p>in template</p></template><iframe><p>in iframe</p></iframe><p>after</p>"
+
+        md = content_processor.html_to_markdown(html)
+
+        assert md.startswith("# T")
+        assert "after" in md
 
 
 class TestPdfToText:

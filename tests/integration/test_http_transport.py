@@ -57,7 +57,13 @@ def asgi_app(monkeypatch: pytest.MonkeyPatch):
     return server_module.build_http_app()
 
 
-def _rpc(client: TestClient, method: str, params: dict[str, object], request_id: int):
+def _rpc(
+    client: TestClient,
+    method: str,
+    params: dict[str, object],
+    request_id: int,
+    extra_meta: dict[str, object] | None = None,
+):
     headers = {
         "Accept": "application/json, text/event-stream",
         "Content-Type": "application/json",
@@ -79,6 +85,7 @@ def _rpc(client: TestClient, method: str, params: dict[str, object], request_id:
                 "_meta": {
                     PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
                     CLIENT_CAPABILITIES_META_KEY: {},
+                    **(extra_meta or {}),
                 },
             },
         },
@@ -145,6 +152,57 @@ def test_stateless_http_protocol_matrix(asgi_app) -> None:
     ]
     assert failure_messages
     assert any("Nieprawidłowy format ELI" in message for message in failure_messages)
+
+
+# The SDK reads W3C trace context from `params._meta` on every request, so the propagator of
+# `opentelemetry-api` parses a string the caller chooses. Unlike an HTTP header, a JSON string
+# may hold a newline, which is what the two cases below depend on.
+WELL_FORMED_TRACEPARENT = "00-" + "ab" * 16 + "-" + "cd" * 8 + "-01"
+# Seconds. `opentelemetry-api` 1.45.1 spent about 8 s of event-loop time on this value on a
+# developer machine (quadratic in the padding, GHSA-mf5v-w3w3-f6cg); a fixed release answers in
+# milliseconds, so the bound has two orders of magnitude of slack on a slow runner.
+TRACEPARENT_TIME_BOUND = 2.0
+TRACEPARENT_PADDING = 48_000
+
+
+def _call_with_traceparent(client: TestClient, traceparent: str) -> tuple[dict[str, object], float]:
+    started = time.perf_counter()
+    response = _rpc(
+        client,
+        "tools/call",
+        {"name": "calculate_legal_date", "arguments": {"days": 1, "base_date": "2026-01-01"}},
+        1,
+        extra_meta={"traceparent": traceparent},
+    )
+    elapsed = time.perf_counter() - started
+    assert response.status_code == 200
+    return response.json()["result"], elapsed
+
+
+def test_well_formed_traceparent_in_meta_is_accepted(asgi_app) -> None:
+    """Positive control for the test below: trace context in `_meta` is read, and a valid one changes nothing."""
+    with TestClient(asgi_app) as client:
+        result, _ = _call_with_traceparent(client, WELL_FORMED_TRACEPARENT)
+
+    assert result["isError"] is False
+    assert result["structuredContent"]["data"]["calculated_date"] == "2026-01-02"  # type: ignore[index]
+
+
+def test_malformed_traceparent_in_meta_does_not_stall_the_server(asgi_app) -> None:
+    """One request must not buy seconds of the event loop with a 48 kB `traceparent`.
+
+    The value is a valid prefix, a long run of spaces, a newline and one more character:
+    the shape that made the propagator's regular expression backtrack quadratically. The
+    server is single-threaded per event loop, so every other client waited for as long.
+    """
+    crafted = WELL_FORMED_TRACEPARENT + "-" + " " * TRACEPARENT_PADDING + "\nx"
+
+    with TestClient(asgi_app) as client:
+        result, elapsed = _call_with_traceparent(client, crafted)
+
+    # The malformed context is ignored, not answered with an error: the call itself is fine.
+    assert result["isError"] is False
+    assert elapsed < TRACEPARENT_TIME_BOUND, f"a crafted traceparent held the server for {elapsed:.1f} s"
 
 
 def test_tools_list_serializes_annotation_hints_in_camel_case(asgi_app) -> None:

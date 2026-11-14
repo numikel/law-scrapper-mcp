@@ -14,6 +14,19 @@ import pytest
 from saos_testing import make_saos_client
 
 SAOS_HOST = "www.saos.org.pl"
+PROXY_VARIABLES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
+
+
+def _causes(error: BaseException) -> list[str]:
+    """The error and everything it was raised from, outermost first."""
+    chain = [error]
+    while chain[-1].__cause__ or chain[-1].__context__:
+        chain.append(chain[-1].__cause__ or chain[-1].__context__)  # type: ignore[arg-type]
+    return [repr(link) for link in chain]
+
+
+def _stopped_at_the_name_lookup(error: BaseException) -> bool:
+    return any("never reach the network" in link for link in _causes(error))
 
 
 def test_a_lookup_of_the_saos_host_is_refused() -> None:
@@ -42,10 +55,38 @@ async def test_the_module_client_cannot_reach_the_saos_host_without_a_mock() -> 
     finally:
         await hub.close()
 
-    chain = [excinfo.value]
-    while chain[-1].__cause__ or chain[-1].__context__:
-        chain.append(chain[-1].__cause__ or chain[-1].__context__)  # type: ignore[arg-type]
-    assert any("never reach the network" in str(error) for error in chain), [repr(error) for error in chain]
+    assert _stopped_at_the_name_lookup(excinfo.value), _causes(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_a_configured_proxy_is_not_a_way_around_the_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A proxy resolves the name itself, so a request handed to one never reaches the lookup the guard refuses.
+
+    Developer machines and build sandboxes often export `HTTPS_PROXY`. The proxy here is a server of this
+    process, so the test can see whether anything was sent to it: nothing may be, and the request must still
+    die at the name lookup.
+    """
+    reached: list[bool] = []
+
+    async def proxy(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        reached.append(True)
+        writer.close()
+
+    server = await asyncio.start_server(proxy, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    for variable in PROXY_VARIABLES:
+        monkeypatch.setenv(variable, f"http://127.0.0.1:{port}")
+    client, hub = make_saos_client()
+    try:
+        with pytest.raises(Exception) as excinfo:
+            await client.search({"pageSize": 1, "pageNumber": 0})
+    finally:
+        await hub.close()
+        server.close()
+        await server.wait_closed()
+
+    assert not reached, "the request was handed to the proxy"
+    assert _stopped_at_the_name_lookup(excinfo.value), _causes(excinfo.value)
 
 
 @pytest.mark.asyncio

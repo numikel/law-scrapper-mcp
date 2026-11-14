@@ -192,3 +192,40 @@ def test_the_offline_guard_refuses_to_resolve_a_journal_host() -> None:
 
     with pytest.raises(RuntimeError, match="never reach the network"):
         socket.getaddrinfo("edziennik.gdansk.uw.gov.pl", 443)
+
+
+@pytest.mark.asyncio
+async def test_a_configured_proxy_is_not_a_way_around_the_offline_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A proxy resolves the name itself, so a request handed to one never reaches the lookup the guard refuses.
+
+    The proxy is a server of this process, so the test can see whether anything was sent to it. The module is
+    started inside the test, after the proxy is configured, because a client reads the proxy settings when
+    it is built.
+    """
+    import asyncio
+
+    reached: list[bool] = []
+
+    async def proxy(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        reached.append(True)
+        writer.close()
+
+    server = await asyncio.start_server(proxy, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    for variable in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(variable, f"http://127.0.0.1:{port}")
+    host, hub, registry = _fresh_host()
+    try:
+        async with start(host):
+            with pytest.raises(Exception) as excinfo:
+                await registry.for_publisher("POL_WOJ_PM").search("POL_WOJ_PM", SourceSearchQuery(year=2025))
+    finally:
+        await hub.close()
+        server.close()
+        await server.wait_closed()
+
+    chain: list[BaseException] = [excinfo.value]
+    while chain[-1].__cause__ or chain[-1].__context__:
+        chain.append(chain[-1].__cause__ or chain[-1].__context__)  # type: ignore[arg-type]
+    assert not reached, "the request was handed to the proxy"
+    assert any("never reach the network" in str(link) for link in chain), [repr(link) for link in chain]

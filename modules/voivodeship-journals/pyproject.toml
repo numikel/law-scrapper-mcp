@@ -2,14 +2,14 @@
 name = "law-scrapper-mcp-voivodeship-journals"
 # Always the core's version: every package of a release shares one version, and
 # `scripts/check_release.py --sync-version` rewrites this line and the pin below.
-version = "4.5.1"
+version = "4.5.2"
 description = "Source module for law-scrapper-mcp: acts of the voivodeship official journals (e-Dziennik ELI), through the existing tools."
 readme = "README.md"
 requires-python = ">=3.13"
 # Pinned to the identical core version, so installing this wheel next to another core fails.
 # Inside the workspace uv ignores the specifier (the source below wins); tests/unit/test_package_versions.py
 # is what keeps it right.
-dependencies = ["law-scrapper-mcp==4.5.1"]
+dependencies = ["law-scrapper-mcp==4.5.2"]
 
 [project.entry-points."law_scrapper_mcp.source_modules"]
 voivodeship-journals = "law_scrapper_mcp_voivodeship_journals:module"

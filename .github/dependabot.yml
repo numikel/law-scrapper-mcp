@@ -1,10 +1,16 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # uv, not pip: the pip ecosystem edits pyproject.toml and never uv.lock, so its pull
+  # requests fail the `packages` job (`uv lock --locked`).
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # A requirement that already allows the new release is left alone and only uv.lock
+    # moves; the exact `mcp[cli]==` pin is rewritten. The default would raise every `>=`
+    # floor to the newest release, and those floors are what the published wheels declare.
+    versioning-strategy: increase-if-necessary
     groups:
       python-minor-patch:
         patterns: ["*"]

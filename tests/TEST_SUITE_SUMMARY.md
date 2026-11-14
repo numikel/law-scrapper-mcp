@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.5.0, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.5.1, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -119,13 +119,13 @@ tests/
 │   ├── test_ci_module_gates.py         # Module code gets core's gates: the `changes` filter covers `modules/**`, `lint` and `modules` jobs in ci.yml, the `test` job stays core-only, every action SHA-pinned (ci.yml and release.yml), `check_release.py` mirrors the module commands and the package build; the `packages` job builds, installs and checks the release wheels, release.yml validates and builds through `check_release.py`, every setup-uv step pins the Dockerfile's uv, `audit` covers module dependencies, the filter starts on `scripts/**` and release.yml, the `docker` job checks the installed packages and that modules are off by default and turn on with `-*,<name>`
 │   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits; `LAW_MCP_CONTACT` (URL or e-mail, ASCII, 200 characters, empty refused, input never echoed) and the default-contact startup warning
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
-│   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing
+│   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing; the converter matches no CSS selector (every `soupsieve` entry point refused, with a positive control), so a `soupsieve` release cannot change the Markdown
 │   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_coverage_fixtures.py       # Facts the DU/MP and journal coverage providers rest on, pinned to the 2026-11-08 recordings (`fixtures/sejm/`, the fourth session of `fixtures/edziennik/`): what a measurement reads, and that the journal provider never trusts the first item of a page
 │   ├── test_coverage_gap.py            # The act coverage-gap rule (year gap, freshness gap over 30 days, exactly 30 not a gap), its Polish texts and fallback note, and how the search path carries the message into the hints
 │   ├── test_coverage_registry.py       # CoverageRegistry: lazy measurement, the 24 h memory, one measurement at a time, the 15 min fallback memory, `register` refusing a duplicate key, `unregister`
 │   ├── test_coverage_tools.py          # Coverage through the real tools: a fake module's provider reaches the search and browse hints and the `coverage` metadata category, so unwiring a tool fails here
-│   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly
+│   ├── test_dependency_policy.py       # Runtime deps: only the official MCP SDK, pyjwt and uvicorn declared directly; the locked `mcp` and `mcp-types` equal the pin; README.md and CLAUDE.md name the pinned SDK; each security floor (`opentelemetry-api`, `soupsieve`) is a `[tool.uv]` override that the lock honours, and the reachable one (`opentelemetry-api`) is also a `[project]` dependency, so the wheel carries it
 │   ├── test_deployment_files.py        # Dockerfile/compose/README never reintroduce an unauthenticated exposure; compose shows `LAW_MCP_CONTACT` only as a comment and the README documents it; the image bakes `LAW_MCP_SOURCE_MODULES=-*`, installs every member but `NEVER_RELEASED_MODULES` (`--no-install-package`), `.dockerignore` keeps those members and module tests out (in an order that still works with the README re-include), every shown `LAW_MCP_SOURCE_MODULES=` value starts with `-*`, the builder copies every released module's readme
 │   ├── test_document_kind.py           # A loaded document knows its kind (act by default); the content tools report `document_id` and `document_kind` for acts and judgments; the not-loaded error, the too-large error, the missing-section error and the content hint keep their exact text for an ELI and use neutral wording for another id (a mistyped ELI included, pinned on purpose); `is_eli_shaped`
 │   ├── test_document_kind_additivity.py# `ContentOutput`, `SearchInActOutput` and `LoadedDocumentInfo` keep their required lists and gain only the two optional fields; the old shape still builds
@@ -218,7 +218,7 @@ tests/
     ├── test_pagination_contract.py     # Every tool classified against the shared pagination contract
     ├── test_output_contract.py         # structuredContent validates against outputSchema for all 13 tools (jsonschema, Draft 2020-12); the text block is the full JSON copy (spec D6); `openWorldHint` matches upstream traffic on a cold and a warm server
     ├── test_stdio_transport.py         # Real STDIO subprocess
-    ├── test_http_transport.py          # ASGI app from `build_http_app()`, DNS-rebinding guards, loopback subprocess, /health under load
+    ├── test_http_transport.py          # ASGI app from `build_http_app()`, DNS-rebinding guards, loopback subprocess, /health under load, a 2025-11-25 handshake with its whole capabilities, a crafted `traceparent` in `_meta` that must not hold the event loop
     └── test_http_auth.py               # Bearer mode over HTTP: 401 without a token, MCP with one, /health stays open
 ```
 
@@ -268,6 +268,11 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
   `build_http_app()` assembles it, bound to `host="0.0.0.0"` (the production default), so these
   fail if `build_http_app()` ever stops passing the explicit `transport_security`
 - `/health` stays answerable while a document is converting off the event loop
+- Handshake era: a 2025-11-25 client's `initialize` (protocol version, server info, the whole
+  `capabilities` object), then `tools/list` with the 13 tools and one tool call, each answered as
+  a single SSE event
+- Trace context: a well-formed `traceparent` in `params._meta` is accepted; a 48 kB malformed one
+  (GHSA-mf5v-w3w3-f6cg) is ignored and answered within 2 s instead of holding the event loop
 
 **Authenticated HTTP** (`test_http_auth.py`):
 - `bearer` mode through `build_http_app()`: `/mcp` is 401 without or with a wrong token, lists 13

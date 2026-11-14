@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.1] - 2026-11-13
+
+See [docs/changelogs/v4.5.1.md](docs/changelogs/v4.5.1.md) for details.
+
+- **Security** — `opentelemetry-api` 1.45.2 fixes a `traceparent` ReDoS that was reachable here: one
+  request with a crafted `_meta` held the event loop for seconds (GHSA-mf5v-w3w3-f6cg). The core
+  package declares that floor itself, so installing the new wheel over an older install upgrades it.
+  `soupsieve` 4.1 clears three selector advisories that were not reachable. `pip-audit` reports
+  nothing against the new lock.
+- **Dependencies** — MCP Python SDK 2.3.0, `astral-sh/setup-uv` 10.3.3 and
+  `softprops/action-gh-release` 3.0.4, replacing Dependabot PRs #73, #104 and #107. The only change
+  a client sees: the `initialize` result of a 2025-11-25 client no longer carries an empty
+  `experimental` capability.
+
 ## [4.5.0] - 2026-11-08
 
 See [docs/changelogs/v4.5.0.md](docs/changelogs/v4.5.0.md) for details.

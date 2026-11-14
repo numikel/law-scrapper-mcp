@@ -26,6 +26,10 @@ def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
     `respx` answers below the socket layer and never resolves a name, so a mocked request is
     unaffected; an unmocked one dies here, before a single byte leaves the machine. The journals
     are public institutions and no test may send them traffic.
+
+    A proxy would skip the lookup: the client connects to the proxy, usually on loopback, and the
+    proxy resolves the name. `NO_PROXY=*` makes `httpx` ignore every proxy setting, those of the
+    environment and those of the operating system, so the request is sent directly and stops here.
     """
     real = socket.getaddrinfo
 
@@ -35,6 +39,8 @@ def no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError(f"Test tried to resolve {host!r}: the module tests never reach the network.")
 
     monkeypatch.setattr(socket, "getaddrinfo", guarded)
+    for variable in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(variable, "*")
 
 
 @pytest_asyncio.fixture

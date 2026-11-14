@@ -351,7 +351,9 @@ uv run python scripts/check_release.py --version X.Y.Z
 - A module's tests never reach the network. Mock the upstream host with `respx` and add an autouse
   guard that makes a name lookup for a non-local host fail (see `no_real_network` in
   `modules/voivodeship-journals/tests/conftest.py`): a test that forgets its mock then fails instead of
-  sending traffic to a public institution.
+  sending traffic to a public institution. The guard also sets `NO_PROXY=*`, because a request handed
+  to a proxy is resolved by the proxy and never reaches that lookup. Give the guard a positive control
+  for both: a refused lookup, and a request that is not handed to a proxy configured in the environment.
 - The CI `modules` job also runs the MCP conformance suite with a module active
   (`LAW_MCP_SOURCE_MODULES=-*,voivodeship-journals`), next to the core-only run in the `test` job.
 - `mypy` runs with `disallow_untyped_defs`: every function in a module, tests included, is annotated.

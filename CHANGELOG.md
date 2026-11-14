@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.2] - 2026-11-14
+
+See [docs/changelogs/v4.5.2.md](docs/changelogs/v4.5.2.md) for details.
+
+- **Maintenance** — nothing under `src/` changes and the dependency lock is the same; the packages
+  differ from 4.5.1 only in their version number.
+- **Development** — Dependabot updates Python dependencies through the `uv` ecosystem, so its pull
+  requests carry `uv.lock`; the offline guard of the module tests can no longer be bypassed by a
+  proxy.
+
 ## [4.5.1] - 2026-11-13
 
 See [docs/changelogs/v4.5.1.md](docs/changelogs/v4.5.1.md) for details.

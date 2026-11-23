@@ -57,6 +57,53 @@ class TestHtmlToMarkdown:
         assert "Second item" in md
 
 
+class TestLineBreaks:
+    """`<br>` is how act texts and common-court judgments (SAOS `textContent`) separate lines, and
+    `markdownify` owns that conversion. Its 1.2.3 release reworked `convert_br`, so these pin the exact
+    Markdown the document store receives: a dropped line or a merged heading would shift every section
+    boundary that `read_act_content` and `search_in_act` rely on."""
+
+    def test_judgment_header_keeps_every_line(self, content_processor: ContentProcessor) -> None:
+        html = "<p>Sygn. akt I CSK 1/20<br>WYROK<br>W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ</p>"
+
+        md = content_processor.html_to_markdown(html)
+
+        assert md == "Sygn. akt I CSK 1/20  \nWYROK  \nW IMIENIU RZECZYPOSPOLITEJ POLSKIEJ"
+
+    def test_self_closing_break_splits_an_article_line(self, content_processor: ContentProcessor) -> None:
+        md = content_processor.html_to_markdown("<p>Art. 1.<br/>Ustawa reguluje</p>")
+
+        assert md == "Art. 1.  \nUstawa reguluje"
+
+    def test_consecutive_breaks_keep_the_text_after_them(self, content_processor: ContentProcessor) -> None:
+        md = content_processor.html_to_markdown("<div>UZASADNIENIE<br><br>Powód wniósł</div>")
+
+        assert md == "UZASADNIENIE  \n  \nPowód wniósł"
+
+    def test_text_wrapped_in_a_stray_closing_break_is_kept(self, content_processor: ContentProcessor) -> None:
+        """Malformed `<br>…</br>` markup: the stray closing tag is dropped without a line break (1.2.2 and
+        1.2.3 agree), and the text around it must survive."""
+        md = content_processor.html_to_markdown("<p>Sąd Najwyższy<br>w składzie:</br>SSN Jan Kowalski</p>")
+
+        assert md == "Sąd Najwyższy  \nw składzie:SSN Jan Kowalski"
+
+    def test_break_inside_a_heading_stays_one_section(self, content_processor: ContentProcessor) -> None:
+        """A heading is inline context: the break becomes a space, so the chapter title stays whole."""
+        md = content_processor.html_to_markdown("<h2>Rozdział 1<br>Przepisy ogólne</h2><p>Art. 1. Ustawa określa</p>")
+
+        assert md == "## Rozdział 1 Przepisy ogólne\n\nArt. 1. Ustawa określa"
+        sections = content_processor.index_sections(md)
+        assert [(section.title, section.level) for section in sections] == [
+            ("Rozdział 1 Przepisy ogólne", 2),
+            ("Art. 1. Ustawa określa", 2),
+        ]
+
+    def test_break_inside_a_table_cell_keeps_the_row_intact(self, content_processor: ContentProcessor) -> None:
+        md = content_processor.html_to_markdown("<table><tr><td>poz. 1<br>DU/2024/1</td><td>x</td></tr></table>")
+
+        assert md == "|  |  |\n| --- | --- |\n| poz. 1 DU/2024/1 | x |"
+
+
 class TestNoCssSelectors:
     """`soupsieve` is installed only because `beautifulsoup4` depends on it: the converter walks
     the tree and never matches a CSS selector. That is why a `soupsieve` major release (4.0 changed

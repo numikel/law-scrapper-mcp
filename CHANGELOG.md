@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.3] - 2026-11-23
+
+See [docs/changelogs/v4.5.3.md](docs/changelogs/v4.5.3.md) for details.
+
+- **Dependencies** — the three Dependabot updates #110, #111 and #112 in one change: `uvicorn` 0.54.0,
+  `pydantic` 2.14.3, `pydantic-settings` 2.16.2, `python-dateutil` 4.0.0, `markdownify` 1.2.3,
+  `httpx2` 2.16.0, and in the development tools `mypy` 2.4.1, `ruff` 0.17.4 and `pytest` 9.2.0.
+  Nothing under `src/` changes, and `tools/list` and tool results are byte-identical before and after.
+- **Tests** — regression tests for the paths these libraries own: legal deadlines at calendar edges,
+  the Markdown of `<br>` in acts and judgments, and a forged `X-Forwarded-For` against the live HTTP
+  process.
+
 ## [4.5.2] - 2026-11-14
 
 See [docs/changelogs/v4.5.2.md](docs/changelogs/v4.5.2.md) for details.

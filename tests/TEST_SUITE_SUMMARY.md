@@ -2,7 +2,7 @@
 
 ## Overview
 
-Test suite for Law Scrapper MCP v4.5.2, covering models, services, stores, the Sejm API
+Test suite for Law Scrapper MCP v4.5.3, covering models, services, stores, the Sejm API
 client and its egress controls, authentication, the HTTP surface, the 13 tools, pagination
 contracts, and the real MCP transports.
 
@@ -119,7 +119,7 @@ tests/
 │   ├── test_ci_module_gates.py         # Module code gets core's gates: the `changes` filter covers `modules/**`, `lint` and `modules` jobs in ci.yml, the `test` job stays core-only, every action SHA-pinned (ci.yml and release.yml), `check_release.py` mirrors the module commands and the package build; the `packages` job builds, installs and checks the release wheels, release.yml validates and builds through `check_release.py`, every setup-uv step pins the Dockerfile's uv, `audit` covers module dependencies, the filter starts on `scripts/**` and release.yml, the `docker` job checks the installed packages and that modules are off by default and turn on with `-*,<name>`
 │   ├── test_config.py                  # Settings defaults, env parsing, validation bounds (rate, pause, log_level, shutdown_grace), pattern limits; `LAW_MCP_CONTACT` (URL or e-mail, ASCII, 200 characters, empty refused, input never echoed) and the default-contact startup warning
 │   ├── test_config_helpers.py          # `_host_of` and `is_loopback_entry`: schemes, ports, bracketed IPv6
-│   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing; the converter matches no CSS selector (every `soupsieve` entry point refused, with a positive control), so a `soupsieve` release cannot change the Markdown
+│   ├── test_content_processor.py       # HTML→Markdown, PDF→text, section indexing; exact Markdown for `<br>` in judgments, headings and table cells; the converter matches no CSS selector (every `soupsieve` entry point refused, with a positive control), so a `soupsieve` release cannot change the Markdown
 │   ├── test_context.py                 # Typed AppContext: every lifespan dependency declared, frozen, reachable via `get_app_context`; `module_state` is the last, defaulted field
 │   ├── test_coverage_fixtures.py       # Facts the DU/MP and journal coverage providers rest on, pinned to the 2026-11-08 recordings (`fixtures/sejm/`, the fourth session of `fixtures/edziennik/`): what a measurement reads, and that the journal provider never trusts the first item of a page
 │   ├── test_coverage_gap.py            # The act coverage-gap rule (year gap, freshness gap over 30 days, exactly 30 not a gap), its Polish texts and fallback note, and how the search path carries the message into the hints
@@ -188,7 +188,7 @@ tests/
 │   │   ├── test_comparison_service.py  # ComparisonService: concurrent fetches, sibling cancellation, comparison mapping
 │   │   ├── test_content_load_failures.py # Transient loading failures propagate; permanent absence (no format, 404, empty extraction) is a documented `unavailable`, not a placeholder
 │   │   ├── test_content_service.py     # TOC/section/search pagination, naive-implementation equivalence, atomic against reload
-│   │   ├── test_date_service.py        # DateService: accepted formats, offsets, Polish error messages, clock seam
+│   │   ├── test_date_service.py        # DateService: accepted formats, offsets, Polish error messages, clock seam, `relativedelta` deadlines at month ends, leap days and year boundaries
 │   │   ├── test_metadata_concurrency.py# Metadata categories fetched concurrently, bounded by the client semaphore, ordered, cached
 │   │   ├── test_metadata_coverage.py   # The `coverage` metadata category: its shape alone and inside `all`, failure isolation, hints, paging
 │   │   ├── test_metadata_service.py    # MetadataService pages per category and for `all`
@@ -262,6 +262,9 @@ Uses the official MCP Python SDK `Client` against the in-process server with `re
 - Loopback subprocess on an ephemeral port with a real `mcp.Client` over Streamable HTTP; the
   subprocess runs with `LAW_MCP_RATE_LIMIT_ENABLED=false` so the per-client bucket never answers a
   protocol probe with a 429
+- Throttled subprocess (burst 2, no refill): three requests from loopback, each with a different
+  forged `X-Forwarded-For`, must end in `[200, 200, 429]`. It proves on the real uvicorn process that
+  `build_uvicorn_config()`'s `proxy_headers=False` holds, so a forged header cannot mint a bucket
 - Asserts `stateless_http=True`, path `/mcp`, protocol version floor
 - DNS-rebinding regression tests: `Host` outside the loopback allowlist → `421`, `Origin` outside
   it → `403`, legitimate loopback `Origin` → `200`. The `asgi_app` fixture is the app exactly as
@@ -327,9 +330,7 @@ sleeping.
 ```python
 @respx.mock
 async def test_search_basic(self, service: SearchService):
-    respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-        return_value=Response(200, json=search_results)
-    )
+    respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 ```
 
 ### Structured content assertions

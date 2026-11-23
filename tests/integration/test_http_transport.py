@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 
@@ -410,8 +411,8 @@ def _wait_for_http_server(
     return False
 
 
-@pytest.fixture
-def live_http_server(tmp_path: Path):
+def _serve_live(tmp_path: Path, overrides: dict[str, str] | None = None) -> Iterator[str]:
+    """Run `python -m law_scrapper_mcp` over HTTP and yield its `/mcp` URL; `overrides` wins over the defaults."""
     log_path = tmp_path / "http-server.log"
     startup_errors: list[str] = []
 
@@ -435,6 +436,7 @@ def live_http_server(tmp_path: Path):
             # bucket on (burst 10) would turn a future extra call into a 429 that
             # reads like a transport failure; throttling keeps its own unit tests.
             "LAW_MCP_RATE_LIMIT_ENABLED": "false",
+            **(overrides or {}),
         }
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(
@@ -456,6 +458,25 @@ def live_http_server(tmp_path: Path):
     pytest.fail(
         "HTTP server did not bind and become ready after "
         f"{MAX_PORT_BIND_ATTEMPTS} attempts:\n" + "\n---\n".join(startup_errors)
+    )
+
+
+@pytest.fixture
+def live_http_server(tmp_path: Path) -> Iterator[str]:
+    yield from _serve_live(tmp_path)
+
+
+@pytest.fixture
+def throttled_live_http_server(tmp_path: Path) -> Iterator[str]:
+    """The live server with the per-client limiter on: two requests, no refill within the test."""
+    yield from _serve_live(
+        tmp_path,
+        {
+            "LAW_MCP_RATE_LIMIT_ENABLED": "true",
+            "LAW_MCP_RATE_LIMIT_BURST": "2",
+            "LAW_MCP_RATE_LIMIT_REQUESTS": "1",
+            "LAW_MCP_RATE_LIMIT_WINDOW": "3600",
+        },
     )
 
 
@@ -526,6 +547,49 @@ async def test_live_server_enforces_allowlist_and_statelessness(live_http_server
     assert forged_origin.status_code == 403
     assert legitimate.status_code == 200
     assert "Mcp-Session-Id" not in legitimate.headers
+
+
+@pytest.mark.anyio
+async def test_live_server_does_not_let_a_forged_forwarded_for_mint_buckets(throttled_live_http_server: str) -> None:
+    """A caller rotating `X-Forwarded-For` must still share one bucket when no proxy is trusted.
+
+    The limiter keys on `scope["client"]`, and uvicorn is what fills it in. `build_uvicorn_config()`
+    switches uvicorn's ProxyHeadersMiddleware off because that middleware would rewrite the peer from
+    the forged header before the limiter runs — and uvicorn trusts loopback by default (0.53 added
+    `::1` to that default). The unit tests only read the `uvicorn.Config` attributes; this drives the
+    real process, so a uvicorn release that stopped honouring them would surface here as three
+    successes in a row instead of a 429.
+    """
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {
+            "_meta": {
+                PROTOCOL_VERSION_META_KEY: LATEST_PROTOCOL_VERSION,
+                CLIENT_CAPABILITIES_META_KEY: {},
+            },
+        },
+    }
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "Mcp-Method": "tools/list",
+        "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
+        "Authorization": f"Bearer {LIVE_SERVER_TOKEN}",
+    }
+    statuses: list[int] = []
+    async with httpx.AsyncClient(timeout=10) as client:
+        for forged in ("203.0.113.1", "203.0.113.2", "203.0.113.3"):
+            response = await client.post(
+                throttled_live_http_server,
+                headers={**headers, "X-Forwarded-For": forged},
+                json=body,
+            )
+            statuses.append(response.status_code)
+
+    assert statuses == [200, 200, 429]
+    assert response.headers["Retry-After"].isdigit()
 
 
 @pytest.mark.asyncio

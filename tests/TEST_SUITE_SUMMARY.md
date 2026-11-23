@@ -330,9 +330,7 @@ sleeping.
 ```python
 @respx.mock
 async def test_search_basic(self, service: SearchService):
-    respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(
-        return_value=Response(200, json=search_results)
-    )
+    respx.get("https://api.sejm.gov.pl/eli/acts/search").mock(return_value=Response(200, json=search_results))
 ```
 
 ### Structured content assertions
